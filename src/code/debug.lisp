@@ -428,7 +428,8 @@ thread, NIL otherwise."
 
 ;;;; frame printing
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 
 ;;; This is a convenient way to express what to do for each type of
 ;;; lambda-list element.
@@ -1153,7 +1154,8 @@ and LDB (the low-level debugger).  See also ENABLE-DEBUGGER."
 ;;; These commands are functions, not really commands, so that users
 ;;; can get their hands on the values returned.
 
-(eval-when (:execute :compile-toplevel)
+(eval-when (:execute :compile-toplevel
+            #!+sb-devel :load-toplevel)
 
 (sb!xc:defmacro define-var-operation (ref-or-set &optional value-var)
   `(let* ((temp (etypecase name

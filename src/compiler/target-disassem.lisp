@@ -758,7 +758,8 @@
     (tab0 (+ location-column-width 1 label-column-width) stream)
     ))
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
   (sb!xc:defmacro with-print-restrictions (&rest body)
     `(let ((*print-pretty* t)
            (*print-lines* 2)

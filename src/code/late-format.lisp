@@ -349,7 +349,8 @@
 
 ;;;; format directive machinery
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 (#+sb-xc-host defmacro #-sb-xc-host sb!xc:defmacro def-complex-format-directive (char lambda-list &body body)
   (let ((defun-name (intern (format nil
                                     "~:@(~:C~)-FORMAT-DIRECTIVE-EXPANDER"

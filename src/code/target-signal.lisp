@@ -190,7 +190,8 @@
 ;;; *DEBUGGER-HOOK*, but we want SIGINT's BREAK to respect it, so that
 ;;; SIGINT in --disable-debugger mode will cleanly terminate the system
 ;;; (by respecting the *DEBUGGER-HOOK* established in that mode).
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
   (sb!xc:defmacro define-signal-handler (name what &optional (function 'error))
     `(defun ,name (signal info context)
        (declare (ignore signal info))

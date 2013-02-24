@@ -12,7 +12,8 @@
 
 (in-package "SB!KERNEL")
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 
 (defun compute-one-setter (name type)
   (let* ((args (second type))

@@ -534,7 +534,8 @@
 
 ;;;; disassembler instruction formats
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
   (defun swap-if (direction field1 separator field2)
     `(:if (,direction :constant 0)
           (,field1 ,separator ,field2)
@@ -1929,7 +1930,8 @@
      (t
       (error "bogus operands to ~A" name)))))
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
   (defun arith-inst-printer-list (subop)
     `((accum-imm ((op ,(dpb subop (byte 3 2) #b0000010))))
       (reg/mem-imm ((op (#b1000000 ,subop))))
@@ -2139,7 +2141,8 @@
       (when immed
         (emit-byte segment amount)))))
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
   (defun shift-inst-printer-list (subop)
     `((reg/mem ((op (#b1101000 ,subop)))
                (:name :tab reg/mem ", 1"))
@@ -2203,7 +2206,8 @@
     (unless (eq amt :cl)
       (emit-byte segment amt))))
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
   (defun double-shift-inst-printer-list (op)
     `((ext-reg-reg/mem-no-width ((op ,(logior op #b100))
                                  (imm nil :type imm-byte)))
@@ -2393,7 +2397,8 @@
            (emit-byte segment (dpb opcode (byte 3 3) #b10000011))
            (emit-ea segment src (reg-tn-encoding index))))))
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
   (defun bit-test-inst-printer-list (subop)
     `((ext-reg/mem-imm ((op (#b1011101 ,subop))
                         (reg/mem nil :type reg/mem)
@@ -2770,7 +2775,8 @@
 ;; The one-element list is used in the cases where the REX prefix is
 ;; really a prefix and thus automatically supported, the two-element
 ;; list is used when the REX prefix is used in an infix position.
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
   (defun sse-inst-printer-list (inst-format-stem prefix opcode
                                 &key more-fields printer)
     (let ((fields `(,@(when prefix

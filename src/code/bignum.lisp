@@ -333,7 +333,8 @@
 
 ;;;; subtraction
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 
 ;;; This subtracts b from a plugging result into res. Return-fun is the
 ;;; function to call that fixes up the result returning any useful values, such
@@ -463,7 +464,8 @@
 
 ;;;; BIGNUM-REPLACE and WITH-BIGNUM-BUFFERS
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 
 (sb!xc:defmacro bignum-replace (dest
                                 src
@@ -890,7 +892,8 @@
 
 ;;;; negation
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 
 ;;; This negates bignum-len digits of bignum, storing the resulting digits into
 ;;; result (possibly EQ to bignum) and returning whatever end-carry there is.
@@ -953,7 +956,8 @@
 
 ;;;; shifting
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 
 ;;; This macro is used by BIGNUM-ASHIFT-RIGHT, BIGNUM-BUFFER-ASHIFT-RIGHT, and
 ;;; BIGNUM-LDB-BIGNUM-RES. They supply a termination form that references

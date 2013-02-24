@@ -332,7 +332,8 @@
 
 ;;;; dissassem:define-instruction-formats
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
   (defmacro ppc-byte (startbit &optional (endbit startbit))
     (unless (and (typep startbit '(unsigned-byte 32))
                  (typep endbit '(unsigned-byte 32))
@@ -642,7 +643,8 @@
       (#.object-not-instance-trap
        (nt "Object not instance trap")))))
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 
 (defun classify-dependencies (deplist)
   (collect ((reads) (writes))

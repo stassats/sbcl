@@ -9,7 +9,8 @@
 
 (in-package "SB!IMPL")
 
-(eval-when (:compile-toplevel)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
   (sb!xc:defmacro %string (x) `(if (stringp ,x) ,x (string ,x))))
 
 (defun string (x)
@@ -35,7 +36,8 @@
 (defun %check-vector-sequence-bounds (vector start end)
   (%check-vector-sequence-bounds vector start end))
 
-(eval-when (:compile-toplevel)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 ;;; WITH-ONE-STRING is used to set up some string hacking things. The
 ;;; keywords are parsed, and the string is hacked into a
 ;;; simple-string.
@@ -96,7 +98,8 @@
                                           string2 start2 end2)))
       (if comparison (- (the fixnum comparison) offset1)))))
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 
 ;;; LESSP is true if the desired expansion is for STRING<* or STRING<=*.
 ;;; EQUALP is true if the desired expansion is for STRING<=* or STRING>=*.
@@ -188,7 +191,8 @@
   of the two strings. Otherwise, returns ()."
   (string/=* string1 string2 start1 end1 start2 end2))
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 
 ;;; STRING-NOT-EQUAL-LOOP is used to generate character comparison loops for
 ;;; STRING-EQUAL and STRING-NOT-EQUAL.
@@ -245,7 +249,8 @@
             (t
              (string-not-equal-loop 2 (- index1 offset1)))))))
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 
 ;;; STRING-LESS-GREATER-EQUAL-TESTS returns a test on the lengths of string1
 ;;; and string2 and a test on the current characters from string1 and string2

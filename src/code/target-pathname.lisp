@@ -286,7 +286,8 @@
 ;;;
 ;;; FIXME: was rewritten, should be tested (or rewritten again, this
 ;;; time using ONCE-ONLY, *then* tested)
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 (sb!xc:defmacro with-pathname ((pathname pathname-designator) &body body)
   (let ((pd0 (gensym)))
     `(let* ((,pd0 ,pathname-designator)

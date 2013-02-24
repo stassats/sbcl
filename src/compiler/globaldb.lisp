@@ -225,7 +225,8 @@
 ;;; and the calls to it) could/should go in a separate file,
 ;;; perhaps info-classes.lisp?
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 
 ;;; Set up the data structures to support an info class.
 ;;;
@@ -661,7 +662,8 @@
 
 ;;; Given a volatile environment ENV, bind TABLE-VAR the environment's table
 ;;; and INDEX-VAR to the index of NAME's bucket in the table.
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
   (#+sb-xc-host cl:defmacro
    #-sb-xc-host sb!xc:defmacro
       with-info-bucket ((table-var index-var name env) &body body)

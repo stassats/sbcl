@@ -1501,7 +1501,8 @@ register."
 ;;; its elements to a resulting simple-vector, nil's out elements, and
 ;;; restarts the buffer at element zero. RESULT returns the
 ;;; simple-vector.
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 (sb!xc:defmacro with-parsing-buffer ((buffer-var &optional other-var)
                                      &body body)
   (let ((len (gensym))

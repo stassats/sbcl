@@ -61,7 +61,8 @@
       (values array index)))
 
 ;;;; MAKE-ARRAY
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
   (sb!xc:defmacro pick-vector-type (type &rest specs)
     `(cond ,@(mapcar (lambda (spec)
                        `(,(if (eq (car spec) t)

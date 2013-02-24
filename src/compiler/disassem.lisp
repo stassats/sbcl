@@ -88,7 +88,8 @@
             (opcode-column-width nil opcode-column-width-p))
       args
     `(progn
-       (eval-when (:compile-toplevel :execute)
+       (eval-when (:compile-toplevel :execute
+                   #!+sb-devel :load-toplevel)
          ;; these are not in the params because they only exist at compile time
          (defparameter ,(format-table-name) (make-hash-table))
          (defparameter ,(arg-type-table-name) nil)
@@ -642,7 +643,8 @@
     (let ((args-var (gensym))
           (length-var (gensym))
           (all-wrapper-defs nil)
-          (arg-count 0))
+          (arg-count 0)
+          (args))
       (collect ((arg-def-forms))
         (dolist (descrip descrips)
           (let ((name (pop descrip)))
@@ -651,18 +653,26 @@
                  descrip evalp t (format nil "~:@(~A~)-~D" name arg-count))
               (arg-def-forms
                (update-args-form args-var `',name descrip evalp length-var))
+              (setf args
+                    (apply #'modify-or-add-arg name args
+                           *disassem-arg-types*
+                           :format-length length
+                           (loop for (a b) on descrip by #'cddr
+                                 collect a
+                                 collect (eval b))))
               (setf all-wrapper-defs
                     (nconc wrapper-defs all-wrapper-defs)))
             (incf arg-count)))
         `(progn
            ,@all-wrapper-defs
-           (eval-when (:compile-toplevel :execute)
+           (eval-when (:compile-toplevel :execute
+                       #!+sb-devel :load-toplevel)
              (let ((,length-var ,length)
                    (,args-var
-                    ,(and include
-                          `(copy-list
-                            (format-args
-                             (format-or-lose ,include))))))
+                     ,(and include
+                           `(copy-list
+                             (format-args
+                              (format-or-lose ,include))))))
                ,@(arg-def-forms)
                (setf (gethash ',name *disassem-inst-formats*)
                      (make-instruction-format
@@ -670,13 +680,11 @@
                       :length (bits-to-bytes ,length-var)
                       :default-printer ,(maybe-quote evalp default-printer)
                       :args ,args-var))
-               (eval
-                `(progn
-                   ,@(mapcar (lambda (arg)
-                               (when (arg-fields arg)
-                                 (gen-arg-access-macro-def-form
-                                  arg ,args-var ',name)))
-                             ,args-var))))))))))
+               ,@(mapcar (lambda (arg)
+                           (when (arg-fields arg)
+                             (gen-arg-access-macro-def-form
+                              arg args name)))
+                         args))))))))
 
 ;;; FIXME: probably needed only at build-the-system time, not in
 ;;; final target system
@@ -882,7 +890,8 @@
       (munge-fun-refs args evalp t name)
     `(progn
        ,@wrapper-defs
-       (eval-when (:compile-toplevel :execute)
+       (eval-when (:compile-toplevel :execute
+                   #!+sb-devel :load-toplevel)
          ,(update-args-form '*disassem-arg-types* `',name args evalp))
        ',name)))
 

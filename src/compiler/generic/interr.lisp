@@ -22,7 +22,8 @@
 ;;; Perhaps we could just make a single error-handling function with a
 ;;; big CASE statement inside it? Or at least implement the error handling
 ;;; functions as closures instead of DEFUNs?
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
   (def!macro define-internal-errors (&rest errors)
              (let ((info (mapcar (lambda (x)
                                    (cons (symbolicate (first x) "-ERROR")

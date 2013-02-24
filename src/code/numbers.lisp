@@ -177,7 +177,8 @@
 
 ;;;; binary operation dispatching utilities
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 
 ;;; Return NUMBER-DISPATCH forms for rational X float.
 (defun float-contagion (op x y &optional (rat-types '(fixnum bignum ratio)))
@@ -404,7 +405,8 @@
   "Return NUMBER - 1."
   (1- number))
 
-(eval-when (:compile-toplevel)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 
 (sb!xc:defmacro two-arg-+/- (name op big-op)
   `(defun ,name (x y)
@@ -871,7 +873,8 @@ the first."
         (when (< arg n)
           (setf n arg))))))
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 
 ;;; The INFINITE-X-FINITE-Y and INFINITE-Y-FINITE-X args tell us how
 ;;; to handle the case when X or Y is a floating-point infinity and

@@ -53,7 +53,8 @@
 ;;; The result value is cached in the LVAR-%DERIVED-TYPE slot. If the
 ;;; slot is true, just return that value, otherwise recompute and
 ;;; stash the value there.
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
   (#+sb-xc-host cl:defmacro
    #-sb-xc-host sb!xc:defmacro
         lvar-type-using (lvar accessor)

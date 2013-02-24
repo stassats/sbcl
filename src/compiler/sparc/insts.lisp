@@ -861,7 +861,8 @@ about function addresses and register values.")
                                 (if extended 1 0) src2))))
 
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 
 ;;; have to do this because def!constant is evalutated in the null lex env.
 (defmacro with-ref-format (printer)

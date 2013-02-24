@@ -59,7 +59,8 @@
       (apply #'sb!sequence:stable-sort sequence predicate args))))
 
 ;;; FUNCALL-USING-KEY saves us a function call sometimes.
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
   (sb!xc:defmacro funcall2-using-key (pred key one two)
     `(if ,key
          (funcall ,pred (funcall ,key ,one)
@@ -207,7 +208,8 @@
 ;;; lists, using a temporary vector to merge back and forth between it
 ;;; and the given vector to sort.
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 
 ;;; STABLE-SORT-MERGE-VECTORS* takes a source vector with subsequences,
 ;;;    start-1 (inclusive) ... end-1 (exclusive) and
@@ -328,7 +330,8 @@
 
 ;;;; merging
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 
 ;;; MERGE-VECTORS returns a new vector which contains an interleaving
 ;;; of the elements of VECTOR-1 and VECTOR-2. Elements from VECTOR-2

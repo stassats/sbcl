@@ -20,7 +20,8 @@
 
 ;;; Make these INLINE, since the call to C is at least as compact as a
 ;;; Lisp call, and saves number consing to boot.
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 
 (sb!xc:defmacro def-math-rtn (name num-args)
   (let ((function (symbolicate "%" (string-upcase name)))

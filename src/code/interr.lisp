@@ -17,7 +17,8 @@
 (defvar *internal-errors*
   #.(map 'vector #'cdr sb!c:*backend-internal-errors*))
 
-(eval-when (:compile-toplevel :execute)
+(eval-when (:compile-toplevel :execute
+            #!+sb-devel :load-toplevel)
 
 (sb!xc:defmacro deferr (name args &rest body)
   (let* ((rest-pos (position '&rest args))
