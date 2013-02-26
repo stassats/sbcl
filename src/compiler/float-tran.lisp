@@ -505,12 +505,21 @@
 
 ;;;; irrational transforms
 
-(defknown (%tan %sinh %asinh %atanh %log %logb %log10 %tan-quick)
+(defknown (%tan %sinh %asinh %atanh %log %logb %log10 %log1p
+           %tan-quick)
           (double-float) double-float
+  (movable foldable flushable))
+
+(defknown (%tanf %sinhf %asinhf %atanhf %logf %log10f %log1pf)
+          (single-float) single-float
   (movable foldable flushable))
 
 (defknown (%sin %cos %tanh %sin-quick %cos-quick)
   (double-float) (double-float -1.0d0 1.0d0)
+  (movable foldable flushable))
+
+(defknown (%sinf %cosf %tanhf)
+  (single-float) (single-float -1.0s0 1.0s0)
   (movable foldable flushable))
 
 (defknown (%asin %atan)
@@ -519,17 +528,35 @@
                 #.(coerce (/ pi 2) 'double-float))
   (movable foldable flushable))
 
+(defknown (%asinf %atanf)
+  (single-float)
+  (single-float #.(coerce (- (/ pi 2)) 'single-float)
+                #.(coerce (/ pi 2) 'single-float))
+  (movable foldable flushable))
+
 (defknown (%acos)
   (double-float) (double-float 0.0d0 #.(coerce pi 'double-float))
   (movable foldable flushable))
+
+(defknown (%acosf)
+    (single-float) (single-float 0.0s0 #.(coerce pi 'single-float))
+    (movable foldable flushable))
 
 (defknown (%cosh)
   (double-float) (double-float 1.0d0)
   (movable foldable flushable))
 
+(defknown (%coshf)
+  (single-float) (single-float 1.0s0)
+  (movable foldable flushable))
+
 (defknown (%acosh %exp %sqrt)
   (double-float) (double-float 0.0d0)
   (movable foldable flushable))
+
+(defknown (%acoshf %expf)
+    (single-float) (single-float 0.0s0)
+    (movable foldable flushable))
 
 (defknown %expm1
   (double-float) (double-float -1d0)
@@ -539,9 +566,17 @@
   (double-float double-float) (double-float 0d0)
   (movable foldable flushable))
 
-(defknown (%pow)
+(defknown (%hypotf)
+    (single-float single-float) (single-float 0s0)
+    (movable foldable flushable))
+
+(defknown (%pow %scalb)
   (double-float double-float) double-float
   (movable foldable flushable))
+
+(defknown (%powf)
+    (single-float single-float) single-float
+    (movable foldable flushable))
 
 (defknown (%atan2)
   (double-float double-float)
@@ -549,24 +584,25 @@
                 #.(coerce pi 'double-float))
   (movable foldable flushable))
 
-(defknown (%scalb)
-  (double-float double-float) double-float
-  (movable foldable flushable))
+(defknown (%atan2f)
+    (single-float single-float)
+    (single-float #.(coerce (- pi) 'single-float)
+                  #.(coerce pi 'single-float))
+    (movable foldable flushable))
 
 (defknown (%scalbn)
   (double-float (signed-byte 32)) double-float
   (movable foldable flushable))
 
-(defknown (%log1p)
-  (double-float) double-float
-  (movable foldable flushable))
-
 (macrolet ((def (name prim rtype)
-             `(progn
-               (deftransform ,name ((x) (single-float) ,rtype)
-                 `(coerce (,',prim (coerce x 'double-float)) 'single-float))
-               (deftransform ,name ((x) (double-float) ,rtype)
-                 `(,',prim x)))))
+             (let ((f (find-symbol (format nil "~aF" prim))))
+               `(progn
+                  (deftransform ,name ((x) (single-float) ,rtype)
+                    ,(if f
+                         ``(,',f x)
+                         ``(coerce (,',prim (coerce x 'double-float)) 'single-float)))
+                  (deftransform ,name ((x) (double-float) ,rtype)
+                    `(,',prim x))))))
   (def exp %exp *)
   (def log %log float)
   (def sqrt %sqrt float)
@@ -599,7 +635,7 @@
                                   because the argument range (~S) was not within 2^63"
                                  (type-specifier (lvar-type x)))
                                 `(coerce (,',prim (coerce x 'double-float)) 'single-float)))
-                  #!-x86 `(coerce (,',prim (coerce x 'double-float)) 'single-float))
+                  #!-x86 `(,',(symbolicate prim "F") x))
                (deftransform ,name ((x) (double-float) *)
                  #!+x86 (cond ((csubtypep (lvar-type x)
                                           (specifier-type '(double-float
@@ -618,14 +654,14 @@
   (def tan %tan %tan-quick))
 
 (deftransform atan ((x y) (single-float single-float) *)
-  `(coerce (%atan2 (coerce x 'double-float) (coerce y 'double-float))
-    'single-float))
+  `(%atan2f x y))
+
 (deftransform atan ((x y) (double-float double-float) *)
   `(%atan2 x y))
 
 (deftransform expt ((x y) ((single-float 0f0) single-float) *)
-  `(coerce (%pow (coerce x 'double-float) (coerce y 'double-float))
-    'single-float))
+  `(%powf x y))
+
 (deftransform expt ((x y) ((double-float 0d0) double-float) *)
   `(%pow x y))
 (deftransform expt ((x y) ((single-float 0f0) (signed-byte 32)) *)
@@ -644,17 +680,13 @@
   '(%hypot (realpart x) (imagpart x)))
 
 (deftransform abs ((x) ((complex single-float)) single-float)
-  '(coerce (%hypot (coerce (realpart x) 'double-float)
-                   (coerce (imagpart x) 'double-float))
-          'single-float))
+  '(%hypotf (realpart x) (imagpart x)))
 
 (deftransform phase ((x) ((complex double-float)) double-float)
   '(%atan2 (imagpart x) (realpart x)))
 
 (deftransform phase ((x) ((complex single-float)) single-float)
-  '(coerce (%atan2 (coerce (imagpart x) 'double-float)
-                   (coerce (realpart x) 'double-float))
-          'single-float))
+  '(%atan2f (imagpart x) (realpart x)))
 
 (deftransform phase ((x) ((float)) float)
   '(if (minusp (float-sign x))

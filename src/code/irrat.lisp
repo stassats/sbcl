@@ -24,23 +24,37 @@
 
 (sb!xc:defmacro def-math-rtn (name num-args)
   (let ((function (symbolicate "%" (string-upcase name)))
+        (function-f (symbolicate "%" (string-upcase name) "F"))
         (args (loop for i below num-args
                     collect (intern (format nil "ARG~D" i)))))
     `(progn
-       (declaim (inline ,function))
+       (declaim (inline ,function ,function-f))
        (defun ,function ,args
          (alien-funcall
           (extern-alien ,name
                         (function double-float
                                   ,@(loop repeat num-args
                                           collect 'double-float)))
+          ,@args))
+       (defun ,function-f ,args
+         (alien-funcall
+          (extern-alien ,(format nil "~af" name)
+                        (function single-float
+                                  ,@(loop repeat num-args
+                                          collect 'single-float)))
           ,@args)))))
 
 (defun handle-reals (function var)
-  `((((foreach fixnum single-float bignum ratio))
-     (coerce (,function (coerce ,var 'double-float)) 'single-float))
-    ((double-float)
-     (,function ,var))))
+  (let ((f (find-symbol (format nil "~aF" function))))
+    `((((foreach fixnum ,@(and (not f)
+                               '(single-float))
+                 bignum ratio))
+       (coerce (,function (coerce ,var 'double-float)) 'single-float))
+      ,@(and f
+             `(((single-float)
+                (,f ,var))))
+      ((double-float)
+       (,function ,var)))))
 
 ) ; EVAL-WHEN
 
