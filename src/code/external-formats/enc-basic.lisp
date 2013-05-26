@@ -35,28 +35,99 @@
            (type array-range sstart send))
   (values (string->latin% string sstart send #'get-ascii-bytes null-padding)))
 
+(defconstant +ascii-mask+
+  (loop with result = 0
+        for i below sb-vm:n-word-bytes
+        do (setf (ldb (byte 8 (* i 8)) result)
+                 #x80)
+        finally (return result)))
+
+(defun ascii-array-p (vector start end)
+  (declare (type (simple-array (unsigned-byte 8) (*)) vector)
+           (type index start end)
+           (optimize speed (safety 0)))
+  (and
+   (or
+    ;; Check that START is divisible by n-word-bytes
+    (not (logtest start (1- sb-vm:n-word-bytes)))
+    (loop for i
+          from start
+          below (min end
+                     (+ (logand start (- sb-vm:n-word-bytes))
+                        sb-vm:n-word-bytes))
+          always (< (aref vector i) 128)))
+   (or
+    (not (logtest end (1- sb-vm:n-word-bytes)))
+    (loop for i
+          from (max (logand end (- sb-vm:n-word-bytes))
+                    start)
+          below end
+          always (< (aref vector i) 128)))
+   (loop for i
+         from (ceiling start sb-vm:n-word-bytes)
+         below (truncate end sb-vm:n-word-bytes) 
+         never (logtest (%vector-raw-bits vector i) +ascii-mask+))))
+
+(defun ascii-sap-p (sap start end)
+  (declare (type system-area-pointer sap)
+           (type index start end)
+           (optimize speed (safety 0)))
+  (and
+   (or
+    ;; Check that START is divisible by n-word-bytes
+    (not (logtest start (1- sb-vm:n-word-bytes)))
+    (loop for i
+          from start
+          below (min end
+                     (+ (logand start (- sb-vm:n-word-bytes))
+                        sb-vm:n-word-bytes))
+          always (< (sap-ref-8 sap i) 128)))
+   (or
+    (not (logtest end (1- sb-vm:n-word-bytes)))
+    (loop for i
+          from (max (logand end (- sb-vm:n-word-bytes))
+                    start)
+          below end
+          always (< (sap-ref-8 sap i) 128)))
+   (loop for i
+         from (* (ceiling start sb-vm:n-word-bytes) sb-vm:n-word-bytes)
+         below (logand end (- sb-vm:n-word-bytes))
+         by sb-vm:n-word-bytes
+         never (logtest (sap-ref-word sap i) +ascii-mask+))))
+
 (defmacro define-ascii->string (accessor type)
   (let ((name (make-od-name 'ascii->string accessor)))
     `(progn
-      (defun ,name (array astart aend)
-        (declare (optimize speed)
-                 (type ,type array)
-                 (type array-range astart aend))
-        ;; Since there is such a thing as a malformed ascii byte, a
-        ;; simple "make the string, fill it in" won't do.
-        (let ((string (make-array 0 :element-type 'character :fill-pointer 0 :adjustable t)))
-          (loop for apos from astart below aend
-                do (let* ((code (,accessor array apos))
-                          (string-content
-                           (if (< code 128)
-                               (code-char code)
-                               (decoding-error array apos (1+ apos) :ascii
-                                               'malformed-ascii apos))))
-                     (if (characterp string-content)
-                         (vector-push-extend string-content string)
-                         (loop for c across string-content
-                               do (vector-push-extend c string))))
-                finally (return (coerce string 'simple-string))))))))
+       (defun ,name (array astart aend)
+         (declare (optimize speed)
+                  (type ,type array)
+                  (type array-range astart aend))
+         ;; Since there is such a thing as a malformed ascii byte, a
+         ;; simple "make the string, fill it in" won't do.
+         (if ,(if (eq accessor 'sap-ref-8)
+                  `(ascii-sap-p array astart aend)
+                  `(ascii-array-p array astart aend))
+             (let ((string (make-array (- aend astart) :element-type 'character)))
+               (loop for src-i from astart below aend
+                     for dst-i from 0
+                     do (setf (aref string dst-i)
+                              (code-char (,accessor array src-i))))
+               string)
+             (let ((string (make-array (- aend astart)
+                                       :element-type 'character
+                                       :fill-pointer 0 :adjustable t)))
+               (loop for apos from astart below aend
+                     do (let* ((code (,accessor array apos))
+                               (string-content
+                                 (if (< code 128)
+                                     (code-char code)
+                                     (decoding-error array apos (1+ apos) :ascii
+                                                     'malformed-ascii apos))))
+                          (if (characterp string-content)
+                              (vector-push-extend string-content string)
+                              (loop for c across string-content
+                                    do (vector-push-extend c string))))
+                     finally (return (coerce string 'simple-string)))))))))
 (instantiate-octets-definition define-ascii->string)
 
 (define-unibyte-external-format :ascii
@@ -69,6 +140,7 @@
       (code-char byte))
   ascii->string-aref
   string->ascii)
+
 
 ;;; Latin-1
 
