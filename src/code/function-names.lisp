@@ -1,7 +1,7 @@
 (in-package "SB!IMPL")
 
 ;;;; generalized function names
-(defvar *valid-fun-names-alist* nil)
+(defglobal *valid-fun-names-alist* nil)
 
 (defun %define-fun-name-syntax (symbol checker)
   (let ((found (assoc symbol *valid-fun-names-alist* :test #'eq)))
@@ -24,7 +24,7 @@ situations."
        (defun ,syntax-checker (,var) ,@body)
        ;; FIXME: is it too expensive to go through a runtime call to
        ;; FDEFINITION each time we want to check a name's syntax?
-       (%define-fun-name-syntax ',symbol ',syntax-checker))))
+       (%define-fun-name-syntax ',symbol #',syntax-checker))))
 
 ;;; FIXME: this is a really lame name for something that has two
 ;;; return values.
@@ -39,7 +39,7 @@ use as a BLOCK name in the function in question."
        (let ((syntax-checker (cdr (assoc (car name) *valid-fun-names-alist*
                                          :test #'eq))))
          (when syntax-checker
-           (funcall syntax-checker name)))))
+           (funcall (the function syntax-checker) name)))))
     (symbol (values t name))
     (otherwise nil)))
 
