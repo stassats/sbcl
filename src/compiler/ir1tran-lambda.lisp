@@ -1180,7 +1180,7 @@
      (and for-real
           (not (and info
                     (ir1-attributep (fun-info-attributes info)
-                                    explicit-check))))
+                                    'explicit-check))))
      :where (if for-real
                 "previous declaration"
                 "previous definition"))))

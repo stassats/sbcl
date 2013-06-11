@@ -177,7 +177,7 @@
              `(defmacro ,block-slot (block)
                 `(block-attributep
                   (block-flags ,block)
-                  ,(symbolicate (subseq (string ',block-slot) 6))))))
+                  ',(symbolicate (subseq (string ',block-slot) 6))))))
   (defattr block-reoptimize)
   (defattr block-flush-p)
   (defattr block-type-check)
@@ -218,8 +218,8 @@
   (next nil :type (or null cblock))
   (prev nil :type (or null cblock))
   ;; This block's attributes: see above.
-  (flags (block-attributes reoptimize flush-p type-check type-asserted
-                           test-modified)
+  (flags (block-attributes 'reoptimize 'flush-p 'type-check 'type-asserted
+                           'test-modified)
          :type attributes)
   ;; in constraint propagation: list of LAMBDA-VARs killed in this block
   ;; in copy propagation: list of killed TNs
@@ -1166,13 +1166,13 @@
   (specvar :test specvar))
 
 (defmacro lambda-var-ignorep (var)
-  `(lambda-var-attributep (lambda-var-flags ,var) ignore))
+  `(lambda-var-attributep (lambda-var-flags ,var) 'ignore))
 (defmacro lambda-var-indirect (var)
-  `(lambda-var-attributep (lambda-var-flags ,var) indirect))
+  `(lambda-var-attributep (lambda-var-flags ,var) 'indirect))
 (defmacro lambda-var-deleted (var)
-  `(lambda-var-attributep (lambda-var-flags ,var) deleted))
+  `(lambda-var-attributep (lambda-var-flags ,var) 'deleted))
 (defmacro lambda-var-explicit-value-cell (var)
-  `(lambda-var-attributep (lambda-var-flags ,var) explicit-value-cell))
+  `(lambda-var-attributep (lambda-var-flags ,var) 'explicit-value-cell))
 
 ;;;; basic node types
 

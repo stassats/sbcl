@@ -510,7 +510,7 @@
   (setf (block-flags block1)
         (attributes-union (block-flags block1)
                           (block-flags block2)
-                          (block-attributes type-asserted test-modified)))
+                          (block-attributes 'type-asserted 'test-modified)))
 
   (let ((next (block-next block2))
         (prev (block-prev block2)))
@@ -834,7 +834,7 @@
 
 (defun check-important-result (node info)
   (when (and (null (node-lvar node))
-             (ir1-attributep (fun-info-attributes info) important-result))
+             (ir1-attributep (fun-info-attributes info) 'important-result))
     (let ((*compiler-error-context* node))
       (compiler-style-warn
        "The return value of ~A should not be discarded."
@@ -913,12 +913,12 @@
                  (return-from ir1-optimize-combination))))))
 
        (let ((attr (fun-info-attributes info)))
-         (when (and (ir1-attributep attr foldable)
+         (when (and (ir1-attributep attr 'foldable)
                     ;; KLUDGE: The next test could be made more sensitive,
                     ;; only suppressing constant-folding of functions with
                     ;; CALL attributes when they're actually passed
                     ;; function arguments. -- WHN 19990918
-                    (not (ir1-attributep attr call))
+                    (not (ir1-attributep attr 'call))
                     (every #'constant-lvar-p args)
                     (node-lvar node))
            (constant-fold-call node)
@@ -1189,7 +1189,7 @@
                      (or (info :function :source-transform (leaf-source-name leaf))
                          (and info
                               (ir1-attributep (fun-info-attributes info)
-                                              predicate)
+                                              'predicate)
                               (let ((lvar (node-lvar call)))
                                 (and lvar (not (if-p (lvar-dest lvar))))))))
                 (let ((name (leaf-source-name leaf))

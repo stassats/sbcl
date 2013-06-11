@@ -1397,7 +1397,7 @@
                ,@(when (vop-parse-conditional-p parse)
                    '((setf (fun-info-attributes info)
                            (attributes-union
-                            (ir1-attributes predicate)
+                            (ir1-attributes 'predicate)
                             (fun-info-attributes info)))))))
           (vop-parse-translate parse)))
 
@@ -1500,8 +1500,8 @@
       :ltn-policy ',(vop-parse-ltn-policy parse)
       :save-p ',(vop-parse-save-p parse)
       :move-args ',(vop-parse-move-args parse)
-      :effects (vop-attributes ,@(vop-parse-effects parse))
-      :affected (vop-attributes ,@(vop-parse-affected parse))
+      :effects (apply #'vop-attributes ',(vop-parse-effects parse))
+      :affected (apply #'vop-attributes ',(vop-parse-affected parse))
       ,@(make-costs-and-restrictions parse)
       ,@(make-emit-function-and-friends parse)
       ,@(inherit-vop-info :generator-function iparse

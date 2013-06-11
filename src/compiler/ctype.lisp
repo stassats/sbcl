@@ -804,7 +804,7 @@
          :where "proclamation"
          :really-assert (not (awhen (info :function :info name)
                                (ir1-attributep (fun-info-attributes it)
-                                               explicit-check))))))))
+                                               'explicit-check))))))))
 
 ;;; If the function has both &REST and &KEY, FIND-OPTIONAL-DISPATCH-TYPES
 ;;; doesn't complain about the type missing &REST -- which is good, because in

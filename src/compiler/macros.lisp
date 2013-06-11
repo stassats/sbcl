@@ -126,8 +126,6 @@
 
 (deftype attributes () 'fixnum)
 
-(eval-when (#-sb-xc :compile-toplevel :load-toplevel :execute)
-
 ;;; Given a list of attribute names and an alist that translates them
 ;;; to masks, return the OR of the masks.
 (defun compute-attribute-mask (names alist)
@@ -138,8 +136,6 @@
           (error "unknown attribute name: ~S" name))
         (res mask)))
     (res)))
-
-) ; EVAL-WHEN
 
 ;;; Define a new class of boolean attributes, with the attributes
 ;;; having the specified ATTRIBUTE-NAMES. NAME is the name of the
@@ -156,7 +152,6 @@
 #-sb-xc
 (progn
   (def!macro !def-boolean-attribute (name &rest attribute-names)
-
     (let ((translations-name (symbolicate "*" name "-ATTRIBUTE-TRANSLATIONS*"))
           (test-name (symbolicate name "-ATTRIBUTEP"))
           (decoder-name (symbolicate "DECODE-" name "-ATTRIBUTES")))
@@ -166,18 +161,17 @@
             ((null names))
           (alist (cons (car names) mask)))
         `(progn
-           (eval-when (:compile-toplevel :load-toplevel :execute)
-             (defparameter ,translations-name ',(alist)))
-           (defmacro ,(symbolicate name "-ATTRIBUTES") (&rest attribute-names)
+           (defparameter ,translations-name ',(alist))
+           (defun ,(symbolicate name "-ATTRIBUTES") (&rest attribute-names)
              "Automagically generated boolean attribute creation function.
   See !DEF-BOOLEAN-ATTRIBUTE."
              (compute-attribute-mask attribute-names ,translations-name))
-           (defmacro ,test-name (attributes &rest attribute-names)
+           (defun ,test-name (attributes &rest attribute-names)
              "Automagically generated boolean attribute test function.
   See !DEF-BOOLEAN-ATTRIBUTE."
-             `(logtest ,(compute-attribute-mask attribute-names
-                                                ,translations-name)
-                       (the attributes ,attributes)))
+             (logtest (compute-attribute-mask attribute-names
+                                              ,translations-name)
+                      (the attributes attributes)))
            ;; This definition transforms strangely under UNCROSS, in a
            ;; way that DEF!MACRO doesn't understand, so we delegate it
            ;; to a submacro then define the submacro differently when
@@ -213,14 +207,16 @@
            (error "multiple store variables for ~S" place))
          (let ((newval (sb!xc:gensym))
                (n-place (sb!xc:gensym))
-               (mask (compute-attribute-mask attributes ,translations-name)))
+               (mask `(compute-attribute-mask
+                       ',(mapcar #'cadr attributes) ;; get rid of quotes
+                       ,',translations-name)))
            (values `(,@temps ,n-place)
                    `(,@values ,get)
                    `(,newval)
                    `(let ((,(first stores)
                            (if ,newval
                                (logior ,n-place ,mask)
-                               (logand ,n-place ,(lognot mask)))))
+                               (logand ,n-place (lognot ,mask)))))
                       ,set
                       ,newval)
                    `(,',test-name ,n-place ,@attributes))))))
@@ -487,7 +483,7 @@
                     name
                     (list name))
               '(sfunction ,arg-types ,result-type)
-              (ir1-attributes ,@attributes)
+              ,(apply #'ir1-attributes attributes)
               ,@keys))
 
 ;;; Create a function which parses combination args according to WHAT

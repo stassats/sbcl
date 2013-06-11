@@ -783,7 +783,7 @@
                      (let ((info (basic-combination-fun-info call)))
                        (not (or (fun-info-ir2-convert info)
                                 (ir1-attributep (fun-info-attributes info)
-                                                recursive))))))
+                                                'recursive))))))
           (let ((*compiler-error-context* call))
             (compiler-warn "~@<recursion in known function definition~2I ~
                             ~_policy=~S ~_arg types=~S~:>"

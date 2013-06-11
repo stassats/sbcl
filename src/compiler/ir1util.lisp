@@ -417,7 +417,7 @@
       (when (return-p next)
         (node-ends-block cast))
       (setf (block-attributep (block-flags (node-block cast))
-                              type-check type-asserted)
+                              'type-check 'type-asserted)
             t)
       cast)))
 
@@ -460,14 +460,14 @@
         (info (combination-fun-info call)))
     (when (and (eq kind :known) (fun-info-p info))
       (let ((attr (fun-info-attributes info)))
-        (when (and (not (ir1-attributep attr call))
+        (when (and (not (ir1-attributep attr 'call))
                    ;; FIXME: For now, don't consider potentially flushable
                    ;; calls flushable when they have the CALL attribute.
                    ;; Someday we should look at the functional args to
                    ;; determine if they have any side effects.
                    (if (policy call (= safety 3))
-                       (ir1-attributep attr flushable)
-                       (ir1-attributep attr unsafely-flushable)))
+                       (ir1-attributep attr 'flushable)
+                       (ir1-attributep attr 'unsafely-flushable)))
           t)))))
 
 ;;;; DYNAMIC-EXTENT related
@@ -587,7 +587,7 @@
    (and (combination-p dest)
         (eq :known (combination-kind dest))
         (awhen (combination-fun-info dest)
-          (or (ir1-attributep (fun-info-attributes it) dx-safe)
+          (or (ir1-attributep (fun-info-attributes it) 'dx-safe)
               (and (not (combination-lvar dest))
                    (awhen (fun-info-result-arg it)
                      (eql lvar (nth it (combination-args dest))))))))))
@@ -1431,7 +1431,7 @@
          (block (ctran-block prev)))
     (reoptimize-component (block-component block) t)
     (setf (block-attributep (block-flags block)
-                            flush-p type-asserted type-check)
+                            'flush-p 'type-asserted 'type-check)
           t))
   (setf (node-lvar node) nil))
 

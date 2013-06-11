@@ -368,8 +368,8 @@
     (when countdown
       (decf countdown)
       (aver (not (instruction-attributep (inst-attributes inst)
-                                         variable-length))))
-    (cond ((instruction-attributep (inst-attributes inst) branch)
+                                         'variable-length))))
+    (cond ((instruction-attributep (inst-attributes inst) 'branch)
            (unless countdown
              (setf countdown (inst-delay inst)))
            (push (cons countdown inst)
@@ -415,7 +415,7 @@
                 (sset-adjoin other-inst write-dependencies)
                 (sset-delete other-inst emittable-insts))))
           ;; If the value is live at the end of the block, we can't flush it.
-          (setf (instruction-attributep (inst-attributes inst) flushable)
+          (setf (instruction-attributep (inst-attributes inst) 'flushable)
                 nil)))))
 
   ;; Grovel through the entire graph in the forward direction finding
@@ -434,7 +434,7 @@
                      (setf max dep-depth))))
                (cond ((and (sset-empty (inst-read-dependents inst))
                            (instruction-attributep (inst-attributes inst)
-                                                   flushable))
+                                                   'flushable))
                       #!+sb-show-assem (format *trace-output*
                                                "flushing ~S~%"
                                                inst)
@@ -581,7 +581,7 @@
     (let ((inst (car remaining)))
       (unless (and delay-slot-p
                    (instruction-attributep (inst-attributes inst)
-                                           variable-length))
+                                           'variable-length))
         ;; We've got us a live one here. Go for it.
         #!+sb-show-assem (format *trace-output* "emitting ~S~%" inst)
         ;; Delete it from the list of insts.
@@ -665,7 +665,7 @@
 ;;; branch, don't bother. It will be handled correctly by the branch
 ;;; emitting code in SCHEDULE-PENDING-INSTRUCTIONS.
 (defun insert-emittable-inst (segment inst)
-  (unless (instruction-attributep (inst-attributes inst) branch)
+  (unless (instruction-attributep (inst-attributes inst) 'branch)
     #!+sb-show-assem (format *trace-output* "now emittable: ~S~%" inst)
     (do ((my-depth (inst-depth inst))
          (remaining (segment-emittable-insts-queue segment) (cdr remaining))
@@ -1640,8 +1640,8 @@
                                             (incf (segment-inst-number
                                                    ,segment-name))
                                             #',flet-name
-                                            (instruction-attributes
-                                             ,@attributes)
+                                            ,(apply #'instruction-attributes
+                                                    attributes)
                                             (progn ,@delay))))
                                       ,@(when dependencies
                                           `((note-dependencies

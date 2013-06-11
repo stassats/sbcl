@@ -1083,7 +1083,7 @@
            (type global-var var))
   (let ((info (info :function :info (leaf-source-name var))))
     (if (and info
-             (ir1-attributep (fun-info-attributes info) predicate)
+             (ir1-attributep (fun-info-attributes info) 'predicate)
              (not (if-p (and result (lvar-dest result)))))
         (let ((*instrument-if-for-code-coverage* nil))
           (ir1-convert start next result `(if ,form t nil)))

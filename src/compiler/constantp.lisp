@@ -92,7 +92,7 @@
              (eq :function (info :function :kind name))
              (let ((info (info :function :info name)))
                (and info (ir1-attributep (fun-info-attributes info)
-                                         foldable)))
+                                         'foldable)))
              (and (every (lambda (arg)
                            (%constantp arg environment envp))
                          (cdr form))))
