@@ -437,13 +437,12 @@ body, references to a NAME will effectively be replaced with the EXPANSION."
 ;;; FIXME: Look at doing this ^, it doesn't look too hard actually.
 (def-ir1-translator %primitive ((name &rest args) start next result)
   (declare (type symbol name))
-  (let* ((template (or (gethash name *backend-template-names*)
-                       (bug "undefined primitive ~A" name)))
-         (required (length (template-arg-types template)))
-         (info (template-info-arg-count template))
+  (let* ((vop-info (template-or-lose name))
+         (required (length (vop-info-arg-types vop-info)))
+         (info (length (vop-info-info-args vop-info)))
          (min (+ required info))
          (nargs (length args)))
-    (if (template-more-args-type template)
+    (if (vop-info-more-args-type vop-info)
         (when (< nargs min)
           (bug "Primitive ~A was called with ~R argument~:P, ~
                 but wants at least ~R."
@@ -457,14 +456,14 @@ body, references to a NAME will effectively be replaced with the EXPANSION."
                nargs
                min)))
 
-    (when (template-conditional-p template)
-      (bug "%PRIMITIVE was used with a conditional template."))
+    (when (vop-info-conditional-p vop-info)
+      (bug "%PRIMITIVE was used with a conditional vop-info."))
 
-    (when (template-more-results-type template)
-      (bug "%PRIMITIVE was used with an unknown values template."))
+    (when (vop-info-more-results-type vop-info)
+      (bug "%PRIMITIVE was used with an unknown values vop-info."))
 
     (ir1-convert start next result
-                 `(%%primitive ',template
+                 `(%%primitive ',vop-info
                                ',(eval-info-args
                                   (subseq args required min))
                                ,@(subseq args 0 required)

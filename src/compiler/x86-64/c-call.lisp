@@ -408,7 +408,8 @@
   (:ignore object)
   (:policy :fast-safe)
   (:arg-types t)
-  (:generator 0))
+  (:generator 0
+              ()))
 
 ;;; Callbacks
 

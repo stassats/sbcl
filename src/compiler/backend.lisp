@@ -48,31 +48,9 @@
 (declaim (type hash-table *backend-template-names*))
 
 ;;; hashtables mapping from SC and SB names to the corresponding structures
-;;;
-;;; CMU CL comment:
-;;;   The META versions are only used at meta-compile and load times,
-;;;   so the defining macros can change these at meta-compile time
-;;;   without breaking the compiler.
-;;; FIXME: Couldn't the META versions go away in SBCL now that we don't
-;;; have to worry about metacompiling and breaking the compiler?
 (defvar *backend-sc-names* (make-hash-table :test 'eq))
 (defvar *backend-sb-names* (make-hash-table :test 'eq))
-(defvar *backend-meta-sc-names* (make-hash-table :test 'eq))
-(defvar *backend-meta-sb-names* (make-hash-table :test 'eq))
-(declaim (type hash-table
-               *backend-sc-names*
-               *backend-sb-names*
-               *backend-meta-sc-names*
-               *backend-meta-sb-names*))
-
-
-;;; like *SC-NUMBERS*, but updated at meta-compile time
-;;;
-;;; FIXME: As per *BACKEND-META-SC-NAMES* and *BACKEND-META-SB-NAMES*,
-;;; couldn't we get rid of this in SBCL?
-(defvar *backend-meta-sc-numbers*
-  (make-array sc-number-limit :initial-element nil))
-(declaim (type sc-vector *backend-meta-sc-numbers*))
+(declaim (type hash-table *backend-sc-names* *backend-sb-names*))
 
 ;;; translations from primitive type names to the corresponding
 ;;; primitive-type structure.
@@ -87,13 +65,6 @@
 (defvar *backend-primitive-type-aliases* (make-hash-table :test 'eq))
 (declaim (type hash-table *backend-primitive-type-aliases*))
 
-;;; meta-compile time translation from names to primitive types
-;;;
-;;; FIXME: As per *BACKEND-META-SC-NAMES* and *BACKEND-META-SB-NAMES*,
-;;; couldn't we get rid of this in SBCL?
-(defvar *backend-meta-primitive-type-names* (make-hash-table :test 'eq))
-(declaim (type hash-table *meta-primitive-type-names*))
-
 ;;; The primitive type T is somewhat magical, in that it is the only
 ;;; primitive type that overlaps with other primitive types. An object
 ;;; of primitive-type T is in the canonical descriptor (boxed or pointer)
@@ -106,11 +77,6 @@
 ;;; can be allocated in.
 (defvar *backend-t-primitive-type*)
 (declaim (type primitive-type *backend-t-primitive-type*))
-
-;;; a hashtable translating from VOP names to the corresponding VOP-PARSE
-;;; structures. This information is only used at meta-compile time.
-(defvar *backend-parsed-vops* (make-hash-table :test 'eq))
-(declaim (type hash-table *backend-parsed-vops*))
 
 ;;; support for the assembler
 (defvar *backend-instruction-formats* (make-hash-table :test 'eq))

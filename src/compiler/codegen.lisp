@@ -178,7 +178,7 @@
             (funcall gen vop)
             (format t
                     "missing generator for ~S~%"
-                    (template-name (vop-info vop)))))))
+                    (vop-info-name (vop-info vop)))))))
     (sb!assem:append-segment *code-segment* *elsewhere*)
     (setf *elsewhere* nil)
     #!+inline-constants

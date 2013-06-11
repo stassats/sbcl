@@ -193,24 +193,7 @@
 (define-storage-base noise :unbounded :size 2)
 
 ;;;; SC definitions
-
-;;; a handy macro so we don't have to keep changing all the numbers whenever
-;;; we insert a new storage class
-;;;
-(defmacro !define-storage-classes (&rest classes)
-  (collect ((forms))
-    (let ((index 0))
-      (dolist (class classes)
-        (let* ((sc-name (car class))
-               (constant-name (symbolicate sc-name "-SC-NUMBER")))
-          (forms `(define-storage-class ,sc-name ,index
-                    ,@(cdr class)))
-          (forms `(def!constant ,constant-name ,index))
-          (incf index))))
-    `(progn
-       ,@(forms))))
-
-;;; The DEFINE-STORAGE-CLASS call for CATCH-BLOCK refers to the size
+;;; The DEFINE-STORAGE-CLASSES call for CATCH-BLOCK refers to the size
 ;;; of CATCH-BLOCK. The size of CATCH-BLOCK isn't calculated until
 ;;; later in the build process, and the calculation is entangled with
 ;;; code which has lots of predependencies, including dependencies on
@@ -231,7 +214,7 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (def!constant kludge-nondeterministic-catch-block-size 5))
 
-(!define-storage-classes
+(define-storage-classes
 
   ;; non-immediate constants in the constant pool
   (constant constant)
@@ -304,7 +287,7 @@
   (descriptor-reg registers
                   :locations #.*qword-regs*
                   :element-size 2
-;                 :reserve-locations (#.eax-offset)
+                  ;; :reserve-locations (#.eax-offset)
                   :constant-scs (constant immediate)
                   :save-p t
                   :alternate-scs (control-stack))
@@ -325,7 +308,7 @@
   (sap-reg registers
            :locations #.*qword-regs*
            :element-size 2
-;          :reserve-locations (#.eax-offset)
+           ;; :reserve-locations (#.eax-offset)
            :constant-scs (immediate)
            :save-p t
            :alternate-scs (sap-stack))
@@ -348,15 +331,12 @@
   ;; temporaries.
   (word-reg registers
             :locations #.*word-regs*
-            :element-size 2
-            )
+            :element-size 2)
   (dword-reg registers
             :locations #.*dword-regs*
-            :element-size 2
-            )
+            :element-size 2)
   (byte-reg registers
-            :locations #.*byte-regs*
-            )
+            :locations #.*byte-regs*)
 
   ;; that can go in the floating point registers
 

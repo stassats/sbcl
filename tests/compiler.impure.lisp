@@ -1424,15 +1424,15 @@
 ;;; to prevent the code from later falling back into disrepair.
 (defun grovel-results (function)
   (dolist (template (fun-info-templates (info :function :info function)))
-    (when (template-more-results-type template)
+    (when (vop-info-more-results-type template)
       (format t "~&Template ~A has :MORE results, and translates ~A.~%"
-              (template-name template)
+              (vop-info-name template)
               function)
       (return nil))
-    (when (eq (template-result-types template) :conditional)
+    (when (eq (vop-info-result-types template) :conditional)
       ;; dunno.
       (return t))
-    (let ((types (template-result-types template))
+    (let ((types (vop-info-result-types template))
           (result-type (fun-type-returns (info :function :type function))))
       (cond
         ((values-type-p result-type)
@@ -1443,24 +1443,24 @@
              ((null ltypes)
               (unless (null types)
                 (format t "~&More types than ltypes in ~A, translating ~A.~%"
-                        (template-name template)
+                        (vop-info-name template)
                         function)
                 (return nil)))
            (when (null types)
              (unless (null ltypes)
                (format t "~&More ltypes than types in ~A, translating ~A.~%"
-                       (template-name template)
+                       (vop-info-name template)
                        function)
                (return nil)))))
         ((eq result-type (specifier-type nil))
          (unless (null types)
            (format t "~&Template ~A returns values for function ~A with RESULT-TYPE NIL.~%"
-                   (template-name template)
+                   (vop-info-name template)
                    function)
            (return nil)))
         ((/= (length types) 1)
          (format t "~&Template ~A isn't returning 1 value for ~A.~%"
-                 (template-name template)
+                 (vop-info-name template)
                  function)
          (return nil))
         (t t)))))

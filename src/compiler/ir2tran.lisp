@@ -633,12 +633,12 @@
 ;;; for emitting any necessary type-checking code.
 (defun reference-args (node block args template)
   (declare (type node node) (type ir2-block block) (list args)
-           (type template template))
+           (type vop-info template))
   (collect ((info-args))
     (let ((last nil)
           (first nil))
       (do ((args args (cdr args))
-           (types (template-arg-types template) (cdr types)))
+           (types (vop-info-arg-types template) (cdr types)))
           ((null args))
         (let ((type (first types))
               (arg (first args)))
@@ -656,15 +656,15 @@
 ;;; drop-through, but emit an unconditional branch afterward if we
 ;;; fail. NOT-P is true if the sense of the TEMPLATE's test should be
 ;;; negated.
-(defun ir2-convert-conditional (node block template args info-args if not-p)
+(defun ir2-convert-conditional (node block vop-info args info-args if not-p)
   (declare (type node node) (type ir2-block block)
-           (type template template) (type (or tn-ref null) args)
+           (type vop-info vop-info) (type (or tn-ref null) args)
            (list info-args) (type cif if) (type boolean not-p))
   (let ((consequent (if-consequent if))
         (alternative (if-alternative if))
-        (flags       (and (consp (template-result-types template))
-                          (rest (template-result-types template)))))
-    (aver (= (template-info-arg-count template)
+        (flags (and (consp (vop-info-result-types vop-info))
+                    (rest (vop-info-result-types vop-info)))))
+    (aver (= (length (vop-info-info-args vop-info))
              (+ (length info-args)
                 (if flags 0 2))))
     (when not-p
@@ -674,14 +674,14 @@
       (rotatef consequent alternative)
       (setf not-p t))
     (cond ((not flags)
-           (emit-template node block template args nil
+           (emit-template node block vop-info args nil
                           (list* (block-label consequent) not-p
                                  info-args))
            (if (drop-thru-p if alternative)
                (register-drop-thru alternative)
                (vop branch node block (block-label alternative))))
           (t
-           (emit-template node block template args nil info-args)
+           (emit-template node block vop-info args nil info-args)
            (vop branch-if node block (block-label consequent) flags not-p)
            (if (drop-thru-p if alternative)
                (register-drop-thru alternative)
@@ -747,17 +747,17 @@
   (declare (type combination call) (type ir2-block block))
   (let* ((template (combination-info call))
          (lvar (node-lvar call))
-         (rtypes (template-result-types template)))
+         (rtypes (vop-info-result-types template)))
     (multiple-value-bind (args info-args)
         (reference-args call block (combination-args call) template)
-      (aver (not (template-more-results-type template)))
-      (if (template-conditional-p template)
+      (aver (not (vop-info-more-results-type template)))
+      (if (vop-info-conditional-p template)
           (ir2-convert-conditional call block template args info-args
                                    (lvar-dest lvar) nil)
           (let* ((results (make-template-result-tns call lvar rtypes))
                  (r-refs (reference-tn-list results t)))
             (aver (= (length info-args)
-                     (template-info-arg-count template)))
+                     (length (vop-info-info-args template))))
             (when (and lvar (lvar-dynamic-extent lvar))
               (vop current-stack-pointer call block
                    (ir2-lvar-stack-pointer (lvar-info lvar))))
@@ -777,13 +777,13 @@
   (let* ((template (lvar-value template))
          (info (lvar-value info))
          (lvar (node-lvar call))
-         (rtypes (template-result-types template))
+         (rtypes (vop-info-result-types template))
          (results (make-template-result-tns call lvar rtypes))
          (r-refs (reference-tn-list results t)))
     (multiple-value-bind (args info-args)
         (reference-args call block (cddr (combination-args call)) template)
-      (aver (not (template-more-results-type template)))
-      (aver (not (template-conditional-p template)))
+      (aver (not (vop-info-more-results-type template)))
+      (aver (not (vop-info-conditional-p template)))
       (aver (null info-args))
 
       (if info
@@ -794,7 +794,7 @@
   (values))
 
 (defoptimizer (%%primitive derive-type) ((template info &rest args))
-  (let ((type (template-type (lvar-value template))))
+  (let ((type (vop-info-type (lvar-value template))))
     (if (fun-type-p type)
         (fun-type-returns type)
         *wild-type*)))
@@ -1831,7 +1831,7 @@
                   temp (first results))
              (move-lvar-result node block results lvar)
              (return))))))
-    (if (template-p (basic-combination-info node))
+    (if (vop-info-p (basic-combination-info node))
         (ir2-convert-template node block)
         (ir2-convert-full-call node block))))
 

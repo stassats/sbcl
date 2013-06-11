@@ -130,8 +130,8 @@ FBOUNDP."
             for source = (find-definition-source
                           (sb-c::vop-info-generator-function vop))
             do (setf (definition-source-description source)
-                     (list (sb-c::template-name vop)
-                           (sb-c::template-note vop)))
+                     (list (sb-c::vop-info-name vop)
+                           (sb-c::vop-info-note vop)))
             collect source))))
 
 (defun find-vop-source (name)

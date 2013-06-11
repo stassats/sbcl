@@ -50,23 +50,22 @@
                           nil
                           nil))
                (when (eq refs ref)
-                 (let ((parse (vop-parse-or-lose (vop-info-name info))))
-                   (multiple-value-bind (ccosts cscs)
-                       (compute-loading-costs
-                        (elt (if arg-p
-                                 (vop-parse-args parse)
-                                 (vop-parse-results parse))
-                             n)
-                        arg-p)
+                 (multiple-value-bind (ccosts cscs)
+                     (compute-loading-costs
+                      (elt (if arg-p
+                               (vop-info-args info)
+                               (vop-info-results info))
+                           n)
+                      arg-p)
 
-                     (return
-                      (values arg-p
-                              (1+ n)
-                              nil
-                              (car costs)
-                              (car load)
-                              (not (and (equalp ccosts (car costs))
-                                        (equalp cscs (car load))))))))))))
+                   (return
+                     (values arg-p
+                             (1+ n)
+                             nil
+                             (car costs)
+                             (car load)
+                             (not (and (equalp ccosts (car costs))
+                                       (equalp cscs (car load)))))))))))
       (if arg-p
           (frob (vop-args vop) (vop-info-arg-costs info)
                 (vop-info-arg-load-scs info)
@@ -109,7 +108,7 @@
                 Current cost info inconsistent with that in effect at compile ~
                 time. Recompile.~%Compilation order may be incorrect.~]"
                tn pos arg-p
-               (template-name (vop-info (tn-ref-vop ref)))
+               (vop-info-name (vop-info (tn-ref-vop ref)))
                (primitive-type-name ptype)
                (mapcar #'sc-name (losers))
                more-p
@@ -143,7 +142,7 @@
                                      (svref (sc-move-vops op-sc) i)
                                      (svref (sc-move-vops i-sc) op-scn))))
                        (if vops
-                           (dolist (vop vops) (move-lose (template-name vop)))
+                           (dolist (vop vops) (move-lose (vop-info-name vop)))
                            (no-move-scs i-sc))))
                     (t
                      (error "Representation selection flamed out for no ~
@@ -165,7 +164,7 @@
                 Current cost info inconsistent with that in effect at compile ~
                 time. Recompile.~%Compilation order may be incorrect.~]"
                op-tn pos arg-p
-               (template-name (vop-info (tn-ref-vop op)))
+               (vop-info-name (vop-info (tn-ref-vop op)))
                (primitive-type-name ptype)
                (mapcar #'sc-name (listify-restrictions load-scs))
                (mapcar #'sc-name (load-lose))
@@ -349,8 +348,8 @@
 ;;; DEST-TN is the distinct destination in a move.
 (defun maybe-emit-coerce-efficiency-note (vop op dest-tn)
   (declare (type vop-info vop) (type tn-ref op) (type (or tn null) dest-tn))
-  (let* ((note (or (template-note vop) (template-name vop)))
-         (cost (template-cost vop))
+  (let* ((note (or (vop-info-note vop) (vop-info-name vop)))
+         (cost (vop-info-cost vop))
          (op-vop (tn-ref-vop op))
          (op-node (vop-node op-vop))
          (op-tn (tn-ref-tn op))
@@ -358,11 +357,11 @@
     (cond ((eq (tn-kind op-tn) :constant))
           ((policy op-node (and (<= speed inhibit-warnings)
                                 (<= space inhibit-warnings))))
-          ((member (template-name (vop-info op-vop)) *suppress-note-vops*))
+          ((member (vop-info-name (vop-info op-vop)) *suppress-note-vops*))
           ((null dest-tn)
            (let* ((op-info (vop-info op-vop))
-                  (op-note (or (template-note op-info)
-                               (template-name op-info)))
+                  (op-note (or (vop-info-note op-info)
+                               (vop-info-name op-info)))
                   (arg-p (not (tn-ref-write-p op)))
                   (name (get-operand-name op-tn arg-p))
                   (pos (1+ (or (position-in #'tn-ref-across op
@@ -408,11 +407,11 @@
                         (svref (funcall slot other-sc) op-scn))
                     nil)
         (when (and (operand-restriction-ok
-                    (first (template-arg-types info))
+                    (first (vop-info-arg-types info))
                     (if write-p other-ptype op-ptype)
                     :tn op-tn :t-ok nil)
                    (operand-restriction-ok
-                    (first (template-result-types info))
+                    (first (vop-info-result-types info))
                     (if write-p op-ptype other-ptype)
                     :t-ok nil))
           (return info))))))
@@ -526,7 +525,7 @@
          (pass-locs (first (vop-codegen-info vop)))
          (prev (vop-prev vop)))
     (do ((val (do ((arg args (tn-ref-across arg))
-                   (req (template-arg-types info) (cdr req)))
+                   (req (vop-info-arg-types info) (cdr req)))
                   ((null req) arg))
               (tn-ref-across val))
          (pass pass-locs (cdr pass)))

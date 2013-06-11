@@ -52,7 +52,7 @@
   ;; template of one argument and one result, both of primitive-type T. If
   ;; the argument is of the correct type, then it is delivered into the
   ;; result. If the type is incorrect, then an error is signalled.
-  (check nil :type (or template null)))
+  (check nil :type (or vop-info null)))
 
 (defprinter (primitive-type)
   name)
@@ -535,18 +535,29 @@
   write-p
   (vop :test vop :prin1 (vop-info-name (vop-info vop))))
 
-;;; A TEMPLATE object represents a particular IR2 coding strategy for
-;;; a known function.
-(def!struct (template (:constructor nil)
-                      #-sb-xc-host (:pure t))
+;;; A VOP-INFO object holds the constant information for a given
+;;; virtual operation.
+(def!struct (vop-info
+             (:make-load-form-fun ignore-it))
   ;; the symbol name of this VOP. This is used when printing the VOP
   ;; and is also used to provide a handle for definition and
   ;; translation.
   (name nil :type symbol)
+  ;; a list of the names of functions this VOP is a translation of and
+  ;; the policy that allows this translation to be done. :FAST is a
+  ;; safe default, since it isn't a safe policy.
+  (translate () :type list)
   ;; the arg/result type restrictions. We compute this from the
   ;; PRIMITIVE-TYPE restrictions to make life easier for IR1 phases
   ;; that need to anticipate LTN's template selection.
-  (type (missing-arg) :type ctype)
+  (type *wild-type* :type ctype)
+  ;; lists of OPERAND-PARSE structures describing the arguments,
+  ;; results and temporaries of the VOP
+  (args nil :type list)
+  (results nil :type list)
+  (temps-parse nil :type list)
+  ;; a list of the names of the codegen-info arguments to this VOP
+  (info-args () :type list)
   ;; lists of restrictions on the argument and result types. A
   ;; restriction may take several forms:
   ;; -- The restriction * is no restriction at all.
@@ -570,6 +581,13 @@
   ;; be interpreted by the BRANCH-IF VOP (see $ARCH/pred.lisp).
   (arg-types nil :type list)
   (result-types nil :type (or list (member :conditional) (cons (eql :conditional))))
+  (arg-types-parse :unspecified :type (or (member :unspecified) list))
+  (result-types-parse :unspecified :type (or (member :unspecified) list))
+  ;; OPERAND-PARSE structures containing information about more args
+  ;; and results. If null, then there there are no more operands of
+  ;; that kind
+  (more-args nil :type (or operand-parse null))
+  (more-results nil :type (or operand-parse null))
   ;; the primitive type restriction applied to each extra argument or
   ;; result following the fixed operands. If NIL, no extra
   ;; args/results are allowed. Otherwise, either * or a (:OR ...) list
@@ -584,52 +602,18 @@
   ;; the policy under which this template is the best translation.
   ;; Note that LTN might use this template under other policies if it
   ;; can't figure out anything better to do.
-  (ltn-policy (missing-arg) :type ltn-policy)
+  (ltn-policy :fast :type ltn-policy)
   ;; the base cost for this template, given optimistic assumptions
   ;; such as no operand loading, etc.
-  (cost (missing-arg) :type index)
+  (cost 0 :type index)
   ;; If true, then this is a short noun-like phrase describing what
   ;; this VOP "does", i.e. the implementation strategy. This is for
   ;; use in efficiency notes.
   (note nil :type (or string null))
-  ;; the number of trailing arguments to VOP or %PRIMITIVE that we
-  ;; bundle into a list and pass into the emit function. This provides
-  ;; a way to pass uninterpreted stuff directly to the code generator.
-  (info-arg-count 0 :type index)
-  ;; a function that emits the VOPs for this template. Arguments:
-  ;;  1] Node for source context.
-  ;;  2] IR2-BLOCK that we place the VOP in.
-  ;;  3] This structure.
-  ;;  4] Head of argument TN-REF list.
-  ;;  5] Head of result TN-REF list.
-  ;;  6] If INFO-ARG-COUNT is non-zero, then a list of the magic
-  ;;     arguments.
-  ;;
-  ;; Two values are returned: the first and last VOP emitted. This vop
-  ;; sequence must be linked into the VOP Next/Prev chain for the
-  ;; block. At least one VOP is always emitted.
-  (emit-function (missing-arg) :type function))
-(defprinter (template)
-  name
-  arg-types
-  result-types
-  (more-args-type :test more-args-type :prin1 more-args-type)
-  (more-results-type :test more-results-type :prin1 more-results-type)
-  ltn-policy
-  cost
-  (note :test note)
-  (info-arg-count :test (not (zerop info-arg-count))))
-
-;;; A VOP-INFO object holds the constant information for a given
-;;; virtual operation. We include TEMPLATE so that functions with a
-;;; direct VOP equivalent can be translated easily.
-(def!struct (vop-info
-             (:include template)
-             (:make-load-form-fun ignore-it))
   ;; side effects of this VOP and side effects that affect the value
   ;; of this VOP
-  (effects (missing-arg) :type attributes)
-  (affected (missing-arg) :type attributes)
+  (effects (vop-attributes 'any) :type attributes)
+  (affected (vop-attributes 'any) :type attributes)
   ;; If true, causes special casing of TNs live after this VOP that
   ;; aren't results:
   ;; -- If T, all such TNs that are allocated in a SC with a defined
@@ -678,10 +662,7 @@
   ;; operand SC restriction.
   (arg-load-scs nil :type list)
   (result-load-scs nil :type list)
-  ;; if true, a function that is called with the VOP to do operand
-  ;; targeting. This is done by modifying the TN-REF-TARGET slots in
-  ;; the TN-REFS so that they point to other TN-REFS in the same VOP.
-  (target-fun nil :type (or null function))
+  (body nil :type list)
   ;; a function that emits assembly code for a use of this VOP when it
   ;; is called with the VOP structure. This is null if this VOP has no
   ;; specified generator (i.e. if it exists only to be inherited by
@@ -691,22 +672,42 @@
   ;; generator. This allows the same generator function to be used for
   ;; a group of VOPs with similar implementations.
   (variant nil :type list)
+  ;; a list of variables to be bound to the variant args.
+  (variant-vars () :type list)
   ;; the number of arguments and results. Each regular arg/result
   ;; counts as one, and all the more args/results together count as 1.
   (num-args 0 :type index)
   (num-results 0 :type index)
-  ;; a vector of the temporaries the vop needs. See EMIT-GENERIC-VOP
+  ;; a vector of the temporaries the vop needs. See EMIT-VOP
   ;; in vmdef for information on how the temps are encoded.
-  (temps nil :type (or null (specializable-vector (unsigned-byte 16))))
+  (temps nil :type (or null simple-vector ;; (specializable-vector (unsigned-byte 16))
+                       ))
   ;; the order all the refs for this vop should be put in. Each
   ;; operand is assigned a number in the following ordering: args,
   ;; more-args, results, more-results, temps. This vector represents
   ;; the order the operands should be put into in the next-ref link.
-  (ref-ordering nil :type (or null (specializable-vector (unsigned-byte 8))))
+  (ref-ordering nil :type (or null simple-vector ;; (specializable-vector (unsigned-byte 8))
+                              ))
   ;; a vector of the various targets that should be done. Each element
   ;; encodes the source ref (shifted 8, it is also encoded in
   ;; MAX-VOP-TN-REFS) and the dest ref index.
-  (targets nil :type (or null (specializable-vector (unsigned-byte 16)))))
+  (targets nil :type (or null simple-vector ;; (specializable-vector (unsigned-byte 16))
+                         ))
+  ;; names of variables that should be declared IGNORE
+  (ignores () :type list)
+   ;; variables bound to the VOP and Vop-Node when in the generator body
+  (vop-var '.vop. :type symbol)
+  (node-var nil :type (or symbol null)))
+
+(defprinter (vop-info)
+  name
+  arg-types
+  result-types
+  (more-args-type :test more-args-type :prin1 more-args-type)
+  (more-results-type :test more-results-type :prin1 more-results-type)
+  ltn-policy
+  cost
+  (note :test note))
 
 ;;;; SBs and SCs
 
@@ -924,7 +925,7 @@
   ;;    as :NORMAL, but then at the end merges the conflict info into
   ;;    the original TN and replaces all uses of the alias with the
   ;;    original TN. SAVE-TN holds the aliased TN.
-  (kind (missing-arg)
+  (kind nil
         :type (member :normal :environment :debug-environment
                       :save :save-once :specified-save :load :constant
                       :component :alias))

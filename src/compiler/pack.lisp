@@ -345,9 +345,7 @@
      ((setq temp (position-in #'tn-ref-across tn (vop-temps vop)
                               :key #'tn-ref-tn))
       `("~2D: ~A (temporary ~A)" ,loc ,name
-        ,(operand-parse-name (elt (vop-parse-temps
-                                   (vop-parse-or-lose
-                                    (vop-info-name  (vop-info vop))))
+        ,(operand-parse-name (elt (vop-info-temps-parse (vop-info vop))
                                   temp))))
      ((eq (tn-kind tn) :component)
       `("~2D: ~A (component live)" ,loc ,name))
@@ -419,7 +417,7 @@
               Current cost info inconsistent with that in effect at compile ~
               time. Recompile.~%Compilation order may be incorrect.~]"
              tn pos arg-p
-             (template-name (vop-info (tn-ref-vop ref)))
+             (vop-info-name (vop-info (tn-ref-vop ref)))
              (primitive-type-name ptype)
              (mapcar #'sc-name (listify-restrictions load-scs))
              incon))))
@@ -1516,14 +1514,6 @@
                          (> speed compilation-speed))
              (setf optimize t)
              (return)))
-
-         ;; Call the target functions.
-         (do-ir2-blocks (block component)
-           (do ((vop (ir2-block-start-vop block) (vop-next vop)))
-               ((null vop))
-             (let ((target-fun (vop-info-target-fun (vop-info vop))))
-               (when target-fun
-                 (funcall target-fun vop)))))
 
          ;; Pack wired TNs first.
          (do ((tn (ir2-component-wired-tns 2comp) (tn-next tn)))

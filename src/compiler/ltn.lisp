@@ -22,7 +22,7 @@
 ;;; like LTN-POLICY-SAFE-P become slot accessors. If we do this,
 ;;; grep for and carefully review use of literal keywords, so that
 ;;; things like
-;;;   (EQ (TEMPLATE-LTN-POLICY TEMPLATE) :SAFE)
+;;;   (EQ (VOP-INFO-LTN-POLICY TEMPLATE) :SAFE)
 ;;; don't get overlooked.
 ;;;
 ;;; FIXME: Classic CMU CL went to some trouble to cache LTN-POLICY
@@ -366,8 +366,8 @@
          (use (lvar-uses test)))
     (unless (and (combination-p use)
                  (let ((info (basic-combination-info use)))
-                   (and (template-p info)
-                        (template-conditional-p info))))
+                   (and (vop-info-p info)
+                        (vop-info-conditional-p info))))
       (annotate-ordinary-lvar test)))
   (values))
 
@@ -430,23 +430,23 @@
         (:constant
          (cond (lvar
                 (and (constant-lvar-p lvar)
-                     (funcall (second restr) (lvar-value lvar))))
+                     (typep (lvar-value lvar) (second restr))))
                (tn
                 (and (eq (tn-kind tn) :constant)
-                     (funcall (second restr) (tn-value tn))))
+                     (typep (tn-value tn) (second restr))))
                (t
                 (error "Neither LVAR nor TN supplied.")))))))
 
 ;;; Check that the argument type restriction for TEMPLATE are
 ;;; satisfied in call. If an argument's TYPE-CHECK is :NO-CHECK and
 ;;; our policy is safe, then only :SAFE templates are OK.
-(defun template-args-ok (template call safe-p)
-  (declare (type template template)
+(defun vop-info-args-ok (vop-info call safe-p)
+  (declare (type vop-info vop-info)
            (type combination call))
   (declare (ignore safe-p))
-  (let ((mtype (template-more-args-type template)))
+  (let ((mtype (vop-info-more-args-type vop-info)))
     (do ((args (basic-combination-args call) (cdr args))
-         (types (template-arg-types template) (cdr types)))
+         (types (vop-info-arg-types vop-info) (cdr types)))
         ((null types)
          (cond ((null args) t)
                ((not mtype) nil)
@@ -462,7 +462,7 @@
                                         :lvar arg)
           (return nil))))))
 
-;;; Check that TEMPLATE can be used with the specifed RESULT-TYPE.
+;;; Check that VOP-INFO can be used with the specifed RESULT-TYPE.
 ;;; Result type checking is pretty different from argument type
 ;;; checking due to the relaxed rules for values count. We succeed if
 ;;; for each required result, there is a positional restriction on the
@@ -470,12 +470,12 @@
 ;;; before we run out of restrictions, then we only succeed if the
 ;;; leftover restrictions are *. If we run out of restrictions before
 ;;; we run out of result types, then we always win.
-(defun template-results-ok (template result-type)
-  (declare (type template template)
+(defun vop-info-results-ok (vop-info result-type)
+  (declare (type vop-info vop-info)
            (type ctype result-type))
-  (when (template-more-results-type template)
-    (error "~S has :MORE results with :TRANSLATE." (template-name template)))
-  (let ((types (template-result-types template)))
+  (when (vop-info-more-results-type vop-info)
+    (error "~S has :MORE results with :TRANSLATE." (vop-info-name vop-info)))
+  (let ((types (vop-info-result-types vop-info)))
     (cond
      ((values-type-p result-type)
       (do ((ltypes (append (args-type-required result-type)
@@ -511,47 +511,47 @@
 ;;;
 ;;; If the template is *not* ok, then the second value is a keyword
 ;;; indicating which aspect failed.
-(defun is-ok-template-use (template call safe-p)
-  (declare (type template template) (type combination call))
-  (let* ((guard (template-guard template))
+(defun is-ok-template-use (vop-info call safe-p)
+  (declare (type vop-info vop-info) (type combination call))
+  (let* ((guard (vop-info-guard vop-info))
          (lvar (node-lvar call))
          (dtype (node-derived-type call)))
     (cond ((and guard (not (funcall guard)))
            (values nil :guard))
-          ((not (template-args-ok template call safe-p))
+          ((not (vop-info-args-ok vop-info call safe-p))
            (values nil
-                   (if (and safe-p (template-args-ok template call nil))
+                   (if (and safe-p (vop-info-args-ok vop-info call nil))
                        :arg-check
                        :arg-types)))
-          ((template-conditional-p template)
+          ((vop-info-conditional-p vop-info)
            (let ((dest (lvar-dest lvar)))
              (if (and (if-p dest)
                       (immediately-used-p (if-test dest) call))
                  (values t nil)
                  (values nil :conditional))))
-          ((template-results-ok template dtype)
+          ((vop-info-results-ok vop-info dtype)
            (values t nil))
           (t
            (values nil :result-types)))))
 
-;;; Use operand type information to choose a template from the list
-;;; TEMPLATES for a known CALL. We return three values:
-;;; 1. The template we found.
-;;; 2. Some template that we rejected due to unsatisfied type restrictions, or
+;;; Use operand type information to choose a vop-info from the list
+;;; VOP-INFOS for a known CALL. We return three values:
+;;; 1. The vop-info we found.
+;;; 2. Some vop-info that we rejected due to unsatisfied type restrictions, or
 ;;;    NIL if none.
-;;; 3. The tail of Templates for templates we haven't examined yet.
+;;; 3. The tail of Vop-Infos for vop-infos we haven't examined yet.
 ;;;
 ;;; We just call IS-OK-TEMPLATE-USE until it returns true.
-(defun find-template (templates call safe-p)
-  (declare (list templates) (type combination call))
-  (do ((templates templates (rest templates))
+(defun find-vop-info (vop-infos call safe-p)
+  (declare (list vop-infos) (type combination call))
+  (do ((vop-infos vop-infos (rest vop-infos))
        (rejected nil))
-      ((null templates)
+      ((null vop-infos)
        (values nil rejected nil))
-    (let ((template (first templates)))
-      (when (is-ok-template-use template call safe-p)
-        (return (values template rejected (rest templates))))
-      (setq rejected template))))
+    (let ((vop-info (first vop-infos)))
+      (when (is-ok-template-use vop-info call safe-p)
+        (return (values vop-info rejected (rest vop-infos))))
+      (setq rejected vop-info))))
 
 ;;; Given a partially annotated known call and a translation policy,
 ;;; return the appropriate template, or NIL if none can be found. We
@@ -583,13 +583,13 @@
         (rejected nil))
     (loop
      (multiple-value-bind (template this-reject more)
-         (find-template current call safe-p)
+         (find-vop-info current call safe-p)
        (unless rejected
          (setq rejected this-reject))
        (setq current more)
        (unless template
          (return (values fallback rejected)))
-       (let ((tcpolicy (template-ltn-policy template)))
+       (let ((tcpolicy (vop-info-ltn-policy template)))
          (cond ((eq tcpolicy ltn-policy)
                 (return (values template rejected)))
                ((eq tcpolicy :safe)
@@ -614,12 +614,12 @@
 ;;; figure out any reason why TEMPLATE was rejected. Users should
 ;;; never see these messages, but they can happen in situations where
 ;;; the VM definition is messed up somehow.
-(defun strange-template-failure (template call ltn-policy frob)
-  (declare (type template template) (type combination call)
+(defun strange-template-failure (vop-info call ltn-policy frob)
+  (declare (type vop-info vop-info) (type combination call)
            (type ltn-policy ltn-policy) (type function frob))
   (funcall frob "This shouldn't happen!  Bug?")
   (multiple-value-bind (win why)
-      (is-ok-template-use template call (ltn-policy-safe-p ltn-policy))
+      (is-ok-template-use vop-info call (ltn-policy-safe-p ltn-policy))
     (aver (not win))
     (ecase why
       (:guard
@@ -640,8 +640,8 @@
                               (ecase (car x)
                                 (:or `(:or .,(mapcar #'primitive-type-name
                                                      (cdr x))))
-                                (:constant `(:constant ,(third x))))))
-                        (template-arg-types template))))
+                                (:constant `(:constant ,(second x))))))
+                        (vop-info-arg-types vop-info))))
       (:conditional
        (funcall frob "conditional in a non-conditional context"))
       (:result-types
@@ -661,7 +661,7 @@
 ;;;    when an operand is known to be an integer,
 ;;; -- be disallowed by the stricter operand subtype test (which
 ;;;    resembles, but is not identical to the test done by
-;;;    FIND-TEMPLATE.)
+;;;    FIND-VOP-INFO.)
 ;;;
 ;;; Note that there may not be any possibly applicable templates,
 ;;; since we are called whenever any template is rejected. That
@@ -671,33 +671,33 @@
 ;;; We go to some trouble to make the whole multi-line output into a
 ;;; single call to COMPILER-NOTIFY so that repeat messages are
 ;;; suppressed, etc.
-(defun note-rejected-templates (call ltn-policy template)
+(defun note-rejected-templates (call ltn-policy vop-info)
   (declare (type combination call) (type ltn-policy ltn-policy)
-           (type (or template null) template))
+           (type (or vop-info null) vop-info))
 
   (collect ((losers))
     (let ((safe-p (ltn-policy-safe-p ltn-policy))
           (verbose-p (policy call (= inhibit-warnings 0)))
-          (max-cost (- (template-cost
-                        (or template
+          (max-cost (- (vop-info-cost
+                        (or vop-info
                             (template-or-lose 'call-named)))
                        *efficiency-note-cost-threshold*)))
       (dolist (try (fun-info-templates (basic-combination-fun-info call)))
-        (when (> (template-cost try) max-cost) (return)) ; FIXME: UNLESS'd be cleaner.
-        (let ((guard (template-guard try)))
+        (when (> (vop-info-cost try) max-cost) (return)) ; FIXME: UNLESS'd be cleaner.
+        (let ((guard (vop-info-guard try)))
           (when (and (or (not guard) (funcall guard))
                      (or (not safe-p)
-                         (ltn-policy-safe-p (template-ltn-policy try)))
+                         (ltn-policy-safe-p (vop-info-ltn-policy try)))
                      ;; :SAFE is also considered to be :SMALL-SAFE,
-                     ;; while the template cost describes time cost;
+                     ;; while the vop-info cost describes time cost;
                      ;; so the fact that (< (t-cost try) (t-cost
-                     ;; template)) does not mean that TRY is better
+                     ;; vop-info)) does not mean that TRY is better
                      (not (and (eq ltn-policy :safe)
-                               (eq (template-ltn-policy try) :fast-safe)))
+                               (eq (vop-info-ltn-policy try) :fast-safe)))
                      (or verbose-p
-                         (and (template-note try)
+                         (and (vop-info-note try)
                               (valid-fun-use
-                               call (template-type try)
+                               call (vop-info-type try)
                                :argument-test #'types-equal-or-intersect
                                :result-test
                                #'values-types-equal-or-intersect))))
@@ -714,12 +714,12 @@
                        (>= (notes) *efficiency-note-limit*))
               (lose1 "etc.")
               (return))
-            (let* ((type (template-type loser))
+            (let* ((type (vop-info-type loser))
                    (valid (valid-fun-use call type))
                    (strict-valid (valid-fun-use call type)))
               (lose1 "unable to do ~A (cost ~W) because:"
-                     (or (template-note loser) (template-name loser))
-                     (template-cost loser))
+                     (or (vop-info-note loser) (vop-info-name loser))
+                     (vop-info-cost loser))
               (cond
                ((and valid strict-valid)
                 (strange-template-failure loser call ltn-policy #'lose1))
@@ -734,11 +734,11 @@
 
         (let ((*compiler-error-context* call))
           (compiler-notify "~{~?~^~&~6T~}"
-                           (if template
+                           (if vop-info
                                `("forced to do ~A (cost ~W)"
-                                 (,(or (template-note template)
-                                       (template-name template))
-                                  ,(template-cost template))
+                                 (,(or (vop-info-note vop-info)
+                                       (vop-info-name vop-info))
+                                  ,(vop-info-cost vop-info))
                                  . ,(messages))
                                `("forced to do full call"
                                  nil

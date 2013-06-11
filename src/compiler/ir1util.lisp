@@ -2182,10 +2182,10 @@ is :ANY, the function name is not checked."
              (let ((info (basic-combination-fun-info call)))
                (and
                 (not (fun-info-ir2-convert info))
-                (dolist (template (fun-info-templates info) t)
-                  (when (eq (template-ltn-policy template) :fast-safe)
+                (dolist (vop-info (fun-info-templates info) t)
+                  (when (eq (vop-info-ltn-policy vop-info) :fast-safe)
                     (multiple-value-bind (val win)
-                       (valid-fun-use call (template-type template))
+                       (valid-fun-use call (vop-info-type vop-info))
                       (when (or val (not win)) (return nil)))))))))))
 
 ;;;; careful call

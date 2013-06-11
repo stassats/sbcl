@@ -633,20 +633,20 @@
     (check-vop-refs vop)
 
     (let* ((info (vop-info vop))
-           (atypes (template-arg-types info))
-           (rtypes (template-result-types info)))
+           (atypes (vop-info-arg-types info))
+           (rtypes (vop-info-result-types info)))
       (check-tn-refs (vop-args vop) vop nil
                      (count-if-not (lambda (x)
                                      (and (consp x)
                                           (eq (car x) :constant)))
                                    atypes)
-                     (template-more-args-type info) "args")
+                     (vop-info-more-args-type info) "args")
       (check-tn-refs (vop-results vop) vop t
-                     (if (template-conditional-p info) 0 (length rtypes))
-                     (template-more-results-type info) "results")
+                     (if (vop-info-conditional-p info) 0 (length rtypes))
+                     (vop-info-more-results-type info) "results")
       (check-tn-refs (vop-temps vop) vop t 0 t "temps")
       (unless (= (length (vop-codegen-info vop))
-                 (template-info-arg-count info))
+                 (length (vop-info-info-args info)))
         (barf "wrong number of codegen info args in ~S" vop))))
   (values))
 
@@ -724,8 +724,8 @@
                        (find-in #'tn-ref-across tn (,ops vop)
                                 :key #'tn-ref-tn))))
       (unless (and (eq vop (ir2-block-last-vop block))
-                   (or (frob template-more-args-type vop-args)
-                       (frob template-more-results-type vop-results)))
+                   (or (frob vop-info-more-args-type vop-args)
+                       (frob vop-info-more-results-type vop-results)))
         (barf "strange :MORE LTN entry for ~S in ~S" tn block))))
   (values))
 

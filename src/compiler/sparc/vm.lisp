@@ -99,31 +99,6 @@
 (define-storage-base constant :non-packed)
 (define-storage-base immediate-constant :non-packed)
 
-;;; handy macro so we don't have to keep changing all the numbers
-;;; whenever we insert a new storage class
-(defmacro !define-storage-classes (&rest classes)
-  (do ((forms (list 'progn)
-              (let* ((class (car classes))
-                     (sc-name (car class))
-                     (constant-name (intern (concatenate 'simple-string
-                                                         (string sc-name)
-                                                         "-SC-NUMBER"))))
-                (list* `(define-storage-class ,sc-name ,index
-                          ,@(cdr class))
-                       `(def!constant ,constant-name ,index)
-                       ;; (The CMU CL version of this macro did
-                       ;;   `(EXPORT ',CONSTANT-NAME)
-                       ;; here, but in SBCL we try to have package
-                       ;; structure described statically in one
-                       ;; master source file, instead of building it
-                       ;; dynamically by letting all the system code
-                       ;; modify it as the system boots.)
-                       forms)))
-       (index 0 (1+ index))
-       (classes classes (cdr classes)))
-      ((null classes)
-       (nreverse forms))))
-
 ;;; see comment in ../x86/vm.lisp.  The value of 7 was taken from
 ;;; vm:catch-block-size in a cmucl that I happened to have around
 ;;; and seems to be working so far    -dan
@@ -333,9 +308,9 @@
 ;;;; function call parameters
 
 ;;; the SC numbers for register and stack arguments/return values.
-(def!constant register-arg-scn (meta-sc-number-or-lose 'descriptor-reg))
-(def!constant immediate-arg-scn (meta-sc-number-or-lose 'any-reg))
-(def!constant control-stack-arg-scn (meta-sc-number-or-lose 'control-stack))
+(def!constant register-arg-scn (sc-number-or-lose 'descriptor-reg))
+(def!constant immediate-arg-scn (sc-number-or-lose 'any-reg))
+(def!constant control-stack-arg-scn (sc-number-or-lose 'control-stack))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
 

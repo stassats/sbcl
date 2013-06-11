@@ -27,13 +27,13 @@
 (defun fun-guessed-cost (name)
   (declare (symbol name))
   (let ((info (info :function :info name))
-        (call-cost (template-cost (template-or-lose 'call-named))))
+        (call-cost (vop-info-cost (template-or-lose 'call-named))))
     (if info
-        (let ((templates (fun-info-templates info)))
-          (if templates
-              (template-cost (first templates))
+        (let ((vop-infos (fun-info-templates info)))
+          (if vop-infos
+              (vop-info-cost (first vop-infos))
               (case name
-                (null (template-cost (template-or-lose 'if-eq)))
+                (null (vop-info-cost (template-or-lose 'if-eq)))
                 (t call-cost))))
         call-cost)))
 
@@ -49,7 +49,7 @@
         0)
       (let ((check (type-check-template type)))
         (if check
-            (template-cost check)
+            (vop-info-cost check)
             (let ((found (cdr (assoc type *backend-type-predicates*
                                      :test #'type=))))
               (if found
@@ -402,10 +402,10 @@
 ;;;      (if (fun-info-ir2-convert info)
 ;;;          t
 ;;;          (dolist (template (fun-info-templates info) nil)
-;;;            (when (eq (template-ltn-policy template)
+;;;            (when (eq (vop-info-ltn-policy template)
 ;;;                      :fast-safe)
 ;;;              (multiple-value-bind (val win)
-;;;                  (valid-fun-use dest (template-type template))
+;;;                  (valid-fun-use dest (vop-info-type template))
 ;;;                (when (or val (not win)) (return t)))))))))))))
 ;;;
 ;;; ADP says: It is still interesting. When we have a :SAFE template

@@ -14,7 +14,7 @@
 
 ;;; Return the template having the specified name, or die trying.
 (defun template-or-lose (x)
-  (the template
+  (the vop-info
        (or (gethash x *backend-template-names*)
            (error "~S is not a defined template." x))))
 
@@ -31,19 +31,6 @@
 (defun sc-number-or-lose (x)
   (the sc-number (sc-number (sc-or-lose x))))
 
-;;; This is like the non-meta versions, except we go for the
-;;; meta-compile-time info. These should not be used after load time,
-;;; since compiling the compiler changes the definitions.
-(defun meta-sc-or-lose (x)
-  (the sc
-       (or (gethash x *backend-meta-sc-names*)
-           (error "~S is not a defined storage class." x))))
-(defun meta-sb-or-lose (x)
-  (the sb
-       (or (gethash x *backend-meta-sb-names*)
-           (error "~S is not a defined storage base." x))))
-(defun meta-sc-number-or-lose (x)
-  (the sc-number (sc-number (meta-sc-or-lose x))))
 
 ;;;; side effect classes
 
@@ -97,7 +84,7 @@
 ;;;; generation of emit functions
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  ;; We need the EVAL-WHEN because %EMIT-GENERIC-VOP (below)
+  ;; We need the EVAL-WHEN because EMIT-VOP (below)
   ;; uses #.MAX-VOP-TN-REFS, not just MAX-VOP-TN-REFS.
   ;; -- AL 20010218
   ;;
@@ -114,17 +101,26 @@
 
 (def!constant sc-bits (integer-length (1- sc-number-limit)))
 
-(defun emit-generic-vop (node block template args results &optional info)
-  (%emit-generic-vop node block template args results info))
-
-(defun %emit-generic-vop (node block template args results info)
-  (let* ((vop (make-vop block node template args results))
-         (num-args (vop-info-num-args template))
+;; a function that emits the VOPs for this template. Arguments:
+;;  1] Node for source context.
+;;  2] IR2-BLOCK that we place the VOP in.
+;;  3] This structure.
+;;  4] Head of argument TN-REF list.
+;;  5] Head of result TN-REF list.
+;;  6] If INFO-ARGS is not NIL, then a list of the magic
+;;     arguments.
+;;
+;; Two values are returned: the first and last VOP emitted. This vop
+;; sequence must be linked into the VOP Next/Prev chain for the
+;; block. At least one VOP is always emitted.
+(defun emit-vop (node block vop-info args results &optional info)
+  (let* ((vop (make-vop block node vop-info args results))
+         (num-args (vop-info-num-args vop-info))
          (last-arg (1- num-args))
-         (num-results (vop-info-num-results template))
+         (num-results (vop-info-num-results vop-info))
          (num-operands (+ num-args num-results))
          (last-result (1- num-operands))
-         (ref-ordering (vop-info-ref-ordering template)))
+         (ref-ordering (vop-info-ref-ordering vop-info)))
     (declare (type vop vop)
              (type (integer 0 #.max-vop-tn-refs)
                    num-args num-results num-operands)
@@ -141,7 +137,7 @@
                 (ref results (and ref (tn-ref-across ref))))
                ((= index num-operands))
              (setf (svref refs index) ref))
-           (let ((temps (vop-info-temps template)))
+           (let ((temps (vop-info-temps vop-info)))
              (when temps
                (let ((index num-operands)
                      (prev nil))
@@ -179,7 +175,7 @@
                          (add-ref ref))
                        (add-ref ref)))))
              (setf (vop-refs vop) prev))
-           (let ((targets (vop-info-targets template)))
+           (let ((targets (vop-info-targets vop-info)))
              (when targets
                (dotimes (i (length targets))
                  (let ((target (aref targets i)))
@@ -194,17 +190,16 @@
 ;;; Add Template into List, removing any old template with the same name.
 ;;; We also maintain the increasing cost ordering.
 (defun adjoin-template (template list)
-  (declare (type template template) (list list))
   (sort (cons template
-              (remove (template-name template) list
-                      :key #'template-name))
+              (remove (vop-info-name template) list
+                      :key #'vop-info-name))
         #'<=
-        :key #'template-cost))
+        :key #'vop-info-cost))
 
-;;; Return a function type specifier describing TEMPLATE's type computed
+;;; Return a function type specifier describing VOP-INFO's type computed
 ;;; from the operand type restrictions.
-(defun template-type-specifier (template)
-  (declare (type template template))
+(defun vop-info-type-specifier (vop-info)
+  (declare (type vop-info vop-info))
   (flet ((convert (types more-types)
            (flet ((frob (x)
                     (if (eq x '*)
@@ -212,27 +207,28 @@
                         (ecase (first x)
                           (:or `(or ,@(mapcar #'primitive-type-specifier
                                               (rest x))))
-                          (:constant `(constant-arg ,(third x)))))))
+                          (:constant `(constant-arg ,(second x)))))))
              `(,@(mapcar #'frob types)
                ,@(when more-types
                    `(&rest ,(frob more-types)))))))
-    (let* ((args (convert (template-arg-types template)
-                          (template-more-args-type template)))
-           (result-restr (template-result-types template))
-           (results (if (template-conditional-p template)
+    (let* ((args (convert (vop-info-arg-types vop-info)
+                          (vop-info-more-args-type vop-info)))
+           (result-restr (vop-info-result-types vop-info))
+           (results (if (vop-info-conditional-p vop-info)
                         '(boolean)
                         (convert result-restr
-                                 (cond ((template-more-results-type template))
+                                 (cond ((vop-info-more-results-type vop-info))
                                        ((/= (length result-restr) 1) '*)
                                        (t nil))))))
-      `(function ,args
-                 ,(if (= (length results) 1)
-                      (first results)
-                      `(values ,@results))))))
+      (specifier-type
+       `(function ,args
+                  ,(if (= (length results) 1)
+                       (first results)
+                       `(values ,@results)))))))
 
-#!-sb-fluid (declaim (inline template-conditional-p))
-(defun template-conditional-p (template)
-  (declare (type template template))
-  (let ((rtypes (template-result-types template)))
+#!-sb-fluid (declaim (inline vop-info-conditional-p))
+(defun vop-info-conditional-p (vop-info)
+  (declare (type vop-info vop-info))
+  (let ((rtypes (vop-info-result-types vop-info)))
     (or (eq rtypes :conditional)
         (eq (car rtypes) :conditional))))

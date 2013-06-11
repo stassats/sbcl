@@ -166,7 +166,7 @@
                   (>= (or (position-in #'tn-ref-across arg (vop-args vop)
                                        :key #'tn-ref-tn)
                           (error "Couldn't find REF?"))
-                      (length (template-arg-types info))))))))
+                      (length (vop-info-arg-types info))))))))
 
 ;;; Make use of the result of flow analysis to eliminate copies. We
 ;;; scan the VOPs in block, propagating copies and keeping our IN set
