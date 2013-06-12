@@ -543,10 +543,6 @@
   ;; and is also used to provide a handle for definition and
   ;; translation.
   (name nil :type symbol)
-  ;; a list of the names of functions this VOP is a translation of and
-  ;; the policy that allows this translation to be done. :FAST is a
-  ;; safe default, since it isn't a safe policy.
-  (translate () :type list)
   ;; the arg/result type restrictions. We compute this from the
   ;; PRIMITIVE-TYPE restrictions to make life easier for IR1 phases
   ;; that need to anticipate LTN's template selection.

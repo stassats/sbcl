@@ -926,7 +926,8 @@
         (arg-types (and super-vop
                         (vop-info-arg-types super-vop)))
         (result-types (and super-vop
-                           (vop-info-result-types super-vop))))
+                           (vop-info-result-types super-vop)))
+        translated)
     (dolist (spec (sort-vop-arguments specs))
       (unless (consp spec)
         (error "malformed option specification: ~S" spec))
@@ -1016,7 +1017,8 @@
                  (vop-spec-arg args '(or string null))))
           (:translate
            (unless compile-time
-             (set-up-fun-translation vop-info args)))
+             (set-up-fun-translation vop-info args))
+           (setf translated t))
           (:guard
            (setf guard
                  `(lambda ()
@@ -1040,7 +1042,8 @@
     (compute-ref-ordering vop-info)
     (setf (vop-info-type vop-info)
           (vop-info-type-specifier vop-info))
-    (check-vop-operands vop-info arg-types result-types)
+    (check-vop-operands vop-info arg-types result-types
+                        translated)
     (values (and parameters-changed
                  (vop-info-body vop-info)
                  (make-generator-function vop-info))
@@ -1189,7 +1192,9 @@
         (declare (ignore costs))
         (dolist (ptype ptypes)
           (unless (dolist (rep (primitive-type-scs
-                                (primitive-type-or-lose ptype))
+                                (if (primitive-type-p ptype)
+                                    ptype
+                                    (primitive-type-or-lose ptype)))
                                nil)
                     (when (svref load-scs rep) (return t)))
             (error "In the ~A ~:[result~;argument~] to VOP ~S,~@
@@ -1206,7 +1211,9 @@
                     (dolist (ptype ptypes nil)
                       (when (sc-allowed-by-primitive-type
                              (sc-or-lose sc)
-                             (primitive-type-or-lose ptype))
+                             (if (primitive-type-p ptype)
+                                 ptype
+                                 (primitive-type-or-lose ptype)))
                         (return t))))
           (warn "~:[Result~;Argument~] ~A to VOP ~S~@
                  has SC restriction ~S which is ~
@@ -1222,7 +1229,8 @@
 
 ;;; If the operand types are specified, then check the number specified
 ;;; against the number of defined operands.
-(defun check-operand-types (vop-info ops more-op types load-p)
+(defun check-operand-types (vop-info ops more-op types load-p
+                            translated)
   (declare (type vop-info vop-info) (list ops)
            (type list types)
            (type (or operand-parse null) more-op))
@@ -1243,7 +1251,7 @@
         (when (and (consp mtype) (eq (first mtype) :constant))
           (error "can't use :CONSTANT on VOP more args")))))
 
-  (when (vop-info-translate vop-info)
+  (when translated
     (let ((types (specify-operand-types types ops more-op)))
       (mapc (lambda (x y)
               (check-operand-type-scs vop-info x y load-p))
@@ -1255,17 +1263,20 @@
 
   (values))
 
-(defun check-vop-operands (vop-info arg-types result-types)
+(defun check-vop-operands (vop-info arg-types result-types
+                           translated)
   (check-operand-types vop-info
                        (vop-info-args vop-info)
                        (vop-info-more-args vop-info)
                        arg-types
-                       t)
+                       t
+                       translated)
   (check-operand-types vop-info
                        (vop-info-results vop-info)
                        (vop-info-more-results vop-info)
                        result-types
-                       nil)
+                       nil
+                       translated)
   (values))
 
 ;;;; function translation stuff
