@@ -581,8 +581,6 @@
   ;; be interpreted by the BRANCH-IF VOP (see $ARCH/pred.lisp).
   (arg-types nil :type list)
   (result-types nil :type (or list (member :conditional) (cons (eql :conditional))))
-  (arg-types-parse :unspecified :type (or (member :unspecified) list))
-  (result-types-parse :unspecified :type (or (member :unspecified) list))
   ;; OPERAND-PARSE structures containing information about more args
   ;; and results. If null, then there there are no more operands of
   ;; that kind

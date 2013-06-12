@@ -922,7 +922,11 @@
 (defun parse-define-vop (vop-info super-vop specs &key compile-time)
   (let (guard
         parameters-changed
-        variant)
+        variant
+        (arg-types (and super-vop
+                        (vop-info-arg-types super-vop)))
+        (result-types (and super-vop
+                           (vop-info-result-types super-vop))))
     (dolist (spec (sort-vop-arguments specs))
       (unless (consp spec)
         (error "malformed option specification: ~S" spec))
@@ -957,11 +961,9 @@
            (setf (vop-info-info-args vop-info) args)
            (setf parameters-changed t))
           (:arg-types
-           (setf (vop-info-arg-types-parse vop-info)
-                 (parse-vop-operand-types args t)))
+           (setf arg-types (parse-vop-operand-types args t)))
           (:result-types
-           (setf (vop-info-result-types-parse vop-info)
-                 (parse-vop-operand-types args nil)))
+           (setf result-types (parse-vop-operand-types args nil)))
           (:conditional
            (setf (vop-info-result-types vop-info)
                  (if (eq (car args) t)
@@ -1033,12 +1035,12 @@
                                '(member t nil :compute-only :force-to-stack))))
           (t
            (error "unknown option specifier: ~S" key)))))
-    (set-vop-info-types vop-info)
+    (set-vop-info-types vop-info arg-types result-types)
     (compute-temporaries-description vop-info)
     (compute-ref-ordering vop-info)
     (setf (vop-info-type vop-info)
           (vop-info-type-specifier vop-info))
-    (check-vop-operands vop-info)
+    (check-vop-operands vop-info arg-types result-types)
     (values (and parameters-changed
                  (vop-info-body vop-info)
                  (make-generator-function vop-info))
@@ -1214,13 +1216,19 @@
 
   (values))
 
+;;; Consider types consiting only of * to be the same as unspecified at all
+(defun vop-unspecified-types-p (types)
+  (not (member '* types :test-not #'eq)))
+
 ;;; If the operand types are specified, then check the number specified
 ;;; against the number of defined operands.
 (defun check-operand-types (vop-info ops more-op types load-p)
   (declare (type vop-info vop-info) (list ops)
-           (type (or list (member :unspecified)) types)
+           (type list types)
            (type (or operand-parse null) more-op))
-  (unless (eq types :unspecified)
+  (unless (or (eq types :conditional)
+              (eq (car types) :conditional)
+              (vop-unspecified-types-p types))
     (let ((num (+ (length ops) (if more-op 1 0))))
       (unless (= (count-if-not (lambda (x)
                                  (and (consp x)
@@ -1247,16 +1255,16 @@
 
   (values))
 
-(defun check-vop-operands (vop-info)
+(defun check-vop-operands (vop-info arg-types result-types)
   (check-operand-types vop-info
                        (vop-info-args vop-info)
                        (vop-info-more-args vop-info)
-                       (vop-info-arg-types-parse vop-info)
+                       arg-types
                        t)
   (check-operand-types vop-info
                        (vop-info-results vop-info)
                        (vop-info-more-results vop-info)
-                       (vop-info-result-types-parse vop-info)
+                       result-types
                        nil)
   (values))
 
@@ -1287,28 +1295,33 @@
         (t
          (ecase (first type)
            (:or
-            `(:or ,@(mapcar (lambda (type)
-                              (primitive-type-or-lose type))
-                            (rest type))))
+            (if (primitive-type-p (cadr type))
+                type
+                `(:or ,@(mapcar (lambda (type)
+                                  (primitive-type-or-lose type))
+                                (rest type)))))
            (:constant
             `(:constant ,(second type)))))))
 
 (defun specify-operand-types (types ops more-ops)
-  (if (eq types :unspecified)
-      (make-list (+ (length ops) (if more-ops 1 0)) :initial-element '*)
-      types))
+  ;; NOTE: maybe share lists?
+  (let ((length (+ (length ops) (if more-ops 1 0))))
+    (if (and (vop-unspecified-types-p types)
+             (/= length (length types)))
+        (make-list length :initial-element '*)
+        types)))
 
 ;;; Here we make an initial dummy TEMPLATE-TYPE, since it is awkward
 ;;; to compute the type until the template has been made.
-(defun set-vop-info-types (vop-info)
+(defun set-vop-info-types (vop-info arg-types result-types)
   (let* ((more-args (vop-info-more-args vop-info))
-         (all-args (specify-operand-types (vop-info-arg-types-parse vop-info)
+         (all-args (specify-operand-types arg-types
                                           (vop-info-args vop-info)
                                           more-args))
          (args (if more-args (butlast all-args) all-args))
          (more-arg (when more-args (car (last all-args))))
          (more-results (vop-info-more-results vop-info))
-         (all-results (specify-operand-types (vop-info-result-types-parse vop-info)
+         (all-results (specify-operand-types result-types
                                              (vop-info-results vop-info)
                                              more-results))
          (results (if more-results (butlast all-results) all-results))
