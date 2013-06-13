@@ -145,8 +145,7 @@
                 (define-full-setter+offset
                   ,(symbolicate "DATA-VECTOR-SET-WITH-OFFSET/" type)
                   ,type vector-data-offset other-pointer-lowtag ,scs
-                  ,element-type data-vector-set-with-offset)))
-           )
+                  ,element-type data-vector-set-with-offset))))
   (def-full-data-vector-frobs simple-vector * descriptor-reg any-reg)
   (def-full-data-vector-frobs simple-array-unsigned-byte-64 unsigned-num
     unsigned-reg)
@@ -217,6 +216,32 @@
                (inst shr result (* extra ,bits)))
              (unless (= extra ,(1- elements-per-word))
                (inst and result ,(1- (ash 1 bits)))))))
+       (define-vop (,(symbolicate 'data-vector-ref-c-with-offset-fixnum/ type))
+         (:translate data-vector-ref-with-offset)
+         (:policy :fast-safe)
+         (:args (object :scs (descriptor-reg)))
+         (:arg-types ,type (:constant low-index) (:constant (integer 0 0)))
+         (:info index offset)
+         (:results (result :scs (any-reg)))
+         (:result-types tagged-num)
+         (:generator 14
+           (aver (zerop offset))
+           (multiple-value-bind (word extra) (floor index ,elements-per-word)
+             (loadw result object (+ word vector-data-offset)
+                    other-pointer-lowtag)
+             (case extra
+               (0
+                (inst and result ,(1- (ash 1 bits)))
+                (inst shl result n-fixnum-tag-bits))
+               ,@(when (= bits n-fixnum-tag-bits)
+                   `((,n-fixnum-tag-bits
+                      (inst and result ,(fixnumize (1- (ash 1 bits)))))))
+               (t
+                (if (< extra n-fixnum-tag-bits)
+                    (inst shl result (- (* extra ,bits) n-fixnum-tag-bits))
+                    (inst shr result (- (* extra ,bits) n-fixnum-tag-bits)))
+                (unless (= extra ,(1- elements-per-word))
+                  (inst and result ,(fixnumize (1- (ash 1 bits))))))))))
        (define-vop (,(symbolicate 'data-vector-set-with-offset/ type))
          (:note "inline array store")
          (:translate data-vector-set-with-offset)
