@@ -1328,13 +1328,16 @@ constant shift greater than word length")))
                         (:translate ,tran)
                         (:conditional ,(if signed cond unsigned))
                         (:generator ,cost
-                                    (inst cmp x
-                                          ,(case suffix
-                                             (-c/fixnum
-                                                `(constantize (fixnumize y)))
-                                             ((-c/signed -c/unsigned)
-                                                `(constantize y))
-                                             (t 'y))))))
+                          (cond ((eql y 0)
+                                 (inst test x x))
+                                (t
+                                 (inst cmp x
+                                       ,(case suffix
+                                          (-c/fixnum
+                                           `(constantize (fixnumize y)))
+                                          ((-c/signed -c/unsigned)
+                                           `(constantize y))
+                                          (t 'y))))))))
                    '(/fixnum -c/fixnum /signed -c/signed /unsigned -c/unsigned)
 ;                  '(/fixnum  /signed  /unsigned)
                    '(4 3 6 5 6 5)

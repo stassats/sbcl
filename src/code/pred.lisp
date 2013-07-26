@@ -154,6 +154,9 @@
 (defun fixnum-mod-p (x limit)
   (and (fixnump x)
        (<= 0 x limit)))
+#!+(or x86 x86-64)
+(defun char-mod-p (x limit)
+  (<= (char-code x) limit))
 
 
 ;;; Return the specifier for the type of object. This is not simply

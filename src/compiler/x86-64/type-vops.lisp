@@ -80,10 +80,9 @@
   (%test-headers value target not-p nil headers drop-through))
 
 (defun %test-lowtag (value target not-p lowtag)
-  (move-qword-to-eax value)
-  (inst and al-tn lowtag-mask)
-  (inst cmp al-tn lowtag)
-  (inst jmp (if not-p :ne :e) target))
+  (inst lea eax-tn (make-ea :dword :base value :disp (- lowtag)))
+  (inst test al-tn lowtag-mask)
+  (inst jmp (if not-p :nz :z) target))
 
 (defun %test-headers (value target not-p function-p headers
                             &optional (drop-through (gen-label)))
@@ -265,9 +264,9 @@
         (if not-p
             (values not-target target)
             (values target not-target))
-      (generate-fixnum-test value)
-      (inst jmp :e yep)
       (move-qword-to-eax value)
+      (inst test al-tn fixnum-tag-mask)
+      (inst jmp :e yep)
       (inst and al-tn lowtag-mask)
       (inst cmp al-tn other-pointer-lowtag)
       (inst jmp :ne nope)
@@ -307,27 +306,31 @@
               (values not-target target)
               (values target not-target))
         ;; Is it a fixnum?
-        (generate-fixnum-test value)
         (move rax-tn value)
+        (inst test al-tn fixnum-tag-mask)
+
+        ;; (move rax-tn value)
         (inst jmp :e fixnum)
 
         ;; If not, is it an other pointer?
-        (inst and al-tn lowtag-mask)
-        (inst cmp al-tn other-pointer-lowtag)
-        (inst jmp :ne nope)
+        (inst sub al-tn other-pointer-lowtag)
+        (inst test al-tn lowtag-mask)
+        (inst jmp :nz nope)
         ;; Get the header.
-        (loadw rax-tn value 0 other-pointer-lowtag)
+        ;(loadw rax-tn rax-tn)
         ;; Is it one?
-        (inst cmp rax-tn (+ (ash 1 n-widetag-bits) bignum-widetag))
+        (inst cmp (make-ea :qword :base rax-tn)
+              (+ (ash 1 n-widetag-bits) bignum-widetag))
         (inst jmp :e single-word)
         ;; If it's other than two, we can't be an (unsigned-byte 64)
-        (inst cmp rax-tn (+ (ash 2 n-widetag-bits) bignum-widetag))
+        (inst cmp (make-ea :qword :base rax-tn)
+              (+ (ash 2 n-widetag-bits) bignum-widetag))
         (inst jmp :ne nope)
-        ;; Get the second digit.
-        (loadw rax-tn value (1+ bignum-digits-offset) other-pointer-lowtag)
         ;; All zeros, its an (unsigned-byte 64).
-        (inst test rax-tn rax-tn)
-        (inst jmp :z yep)
+        (inst cmp (make-ea-for-object-slot value (1+ bignum-digits-offset)
+                      other-pointer-lowtag)
+              0)
+        (inst jmp :e yep)
         (inst jmp nope)
 
         (emit-label single-word)
@@ -441,6 +444,20 @@
        (inst cmp value (constantize fixnum-hi))
        (inst jmp (if not-p :a :be) target)
        (emit-label skip))))
+;;;
+
+(define-vop (test-char-mod)
+  (:args (value :scs (any-reg descriptor-reg)))
+  (:arg-types * (:constant fixnum))
+  (:translate char-mod-p)
+  (:conditional :be)
+  (:info hi)
+  (:save-p :compute-only)
+  (:policy :fast-safe)
+  (:generator 4
+              (inst cmp (reg-in-size value :dword)
+                    (logior (ash hi n-widetag-bits)
+                            character-widetag))))
 
 ;;;; list/symbol types
 ;;;

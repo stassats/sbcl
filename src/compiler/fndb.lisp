@@ -81,6 +81,9 @@
 (defknown fixnum-mod-p (t fixnum) boolean
     (movable foldable flushable always-translatable))
 
+#!+(or x86 x86-64)
+(defknown char-mod-p (t fixnum) boolean
+    (movable foldable flushable always-translatable))
 
 ;;;; classes
 

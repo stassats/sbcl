@@ -124,6 +124,24 @@
     (aver ctype)
     (ir1-transform-type-predicate object ctype node)))
 
+#!+(or x86 x86-64)
+(deftransform fixnum-mod-p ((object limit) * * :node node)
+  (unless (constant-lvar-p limit)
+    (give-up-ir1-transform))
+  (ir1-transform-type-predicate
+   object
+   (ir1-transform-specifier-type `(mod ,(1+ (lvar-value limit))))
+   node))
+
+#!+(or x86 x86-64)
+(deftransform char-mod-p ((object limit) * * :node node)
+  (unless (constant-lvar-p limit)
+    (give-up-ir1-transform))
+  (ir1-transform-type-predicate
+   object
+   (ir1-transform-specifier-type `(character-set ((0 . ,(lvar-value limit)))))
+   node))
+
 ;;; If FIND-CLASSOID is called on a constant class, locate the
 ;;; CLASSOID-CELL at load time.
 (deftransform find-classoid ((name) ((constant-arg symbol)) *)
@@ -333,18 +351,30 @@
 
 (defun source-transform-character-set-typep (object type)
   (let ((pairs (character-set-type-pairs type)))
-    (if (and (= (length pairs) 1)
-            (= (caar pairs) 0)
-            (= (cdar pairs) (1- sb!xc:char-code-limit)))
-       `(characterp ,object)
-       (once-only ((n-obj object))
-         (let ((n-code (gensym "CODE")))
-           `(and (characterp ,n-obj)
-                 (let ((,n-code (sb!xc:char-code ,n-obj)))
+    (cond ((and (= (length pairs) 1)
+                (= (caar pairs) 0)
+                (= (cdar pairs) (1- sb!xc:char-code-limit)))
+           `(characterp ,object))
+          #!+(or x86 x86-64) ;; Not implemented elsewhere yet
+          ((loop for (low) in pairs
+                 always (zerop low))
+           (once-only ((n-obj object))
+             `(and (characterp ,n-obj)
                    (or
-                    ,@(loop for pair in pairs
+                    ,@(loop for (nil . high) in pairs
                             collect
-                            `(<= ,(car pair) ,n-code ,(cdr pair)))))))))))
+                            `(char-mod-p ,n-obj ,high))))))
+          (t
+           (once-only ((n-obj object))
+             (let ((n-code (gensym "CODE")))
+               `(and (characterp ,n-obj)
+                     (let ((,n-code (sb!xc:char-code ,n-obj)))
+                       (or
+                        ,@(loop for (low . high) in pairs
+                                collect
+                                (if (zerop low)
+                                    `(typep ,n-code '(mod ,(1+ high)))
+                                    `(<= ,low ,n-code ,high))))))))))))
 
 #!+sb-simd-pack
 (defun source-transform-simd-pack-typep (object type)
