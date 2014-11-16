@@ -622,6 +622,7 @@ lra:
 
 	SET_SIZE(call_into_c)
 
+#if !defined(LISP_FEATURE_READ_ONLY_TRAMPS)
 	GFUNCDEF(xundefined_tramp)
 	.globl CSYMBOL(undefined_tramp)
 	.long	SIMPLE_FUN_HEADER_WIDETAG                         /* header */
@@ -667,7 +668,9 @@ CSYMBOL(undefined_tramp):
 	b 1b
 
 	SET_SIZE(xundefined_tramp)
+#endif
 
+#if !defined(LISP_FEATURE_READ_ONLY_TRAMPS)
 	GFUNCDEF(xclosure_tramp)
 	.globl CSYMBOL(closure_tramp)
 CSYMBOL(closure_tramp):
@@ -678,6 +681,7 @@ CSYMBOL(closure_tramp):
 	bctr
 
 	SET_SIZE(xclosure_tramp)
+#endif
 
 	GFUNCDEF(xfuncallable_instance_tramp)
 	.globl CSYMBOL(funcallable_instance_tramp)
