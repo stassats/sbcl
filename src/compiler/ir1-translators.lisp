@@ -981,11 +981,45 @@ care."
       (link-node-to-previous-ctran cast index-ctran)
       (setf (lvar-dest index-lvar) cast)
       (use-continuation cast next result))))
+
+(def-ir1-translator struct-slot-cast ((type value dd offset) start next result)
+  (let ((type (if (ctype-p type) type
+                  (compiler-values-specifier-type type))))
+    (cond ((or (eq type *wild-type*)
+               (eq type *universal-type*)
+               (and (leaf-p value)
+                    (values-subtypep (make-single-value-type (leaf-type value))
+                                     type))
+               (and (sb!xc:constantp value)
+                    (or (not (values-type-p type))
+                        (values-type-may-be-single-value-p type))
+                    (ctypep (constant-form-value value)
+                            (single-value-type type))))
+           (ir1-convert start next result value))
+          (t (let ((value-ctran (make-ctran))
+                   (value-lvar (make-lvar))
+                   (policy (lexenv-policy *lexenv*)))
+               (ir1-convert start value-ctran value-lvar value)
+               (let ((cast (make-struct-slot-cast :asserted-type type
+                                                  :value value-lvar
+                                                  :type-to-check (maybe-weaken-check type policy)
+                                                  :derived-type (coerce-to-values type)
+                                                  :layout (sb!kernel::dd-layout-or-lose dd)
+                                                  :offset offset)))
+                 (link-node-to-previous-ctran cast value-ctran)
+                 (setf (lvar-dest value-lvar) cast)
+                 (use-continuation cast next result)))))))
+
 #-sb-xc-host
 (setf (info :function :macro-function 'truly-the)
       (lambda (whole env)
         (declare (ignore env))
-        `(the ,@(cdr whole))))
+        `(the ,@(cdr whole)))
+      (info :function :macro-function 'struct-slot-cast)
+      (lambda (whole env)
+        (declare (ignore env))
+        `(the ,(second whole)
+              ,(third whole))))
 
 ;;;; SETQ
 

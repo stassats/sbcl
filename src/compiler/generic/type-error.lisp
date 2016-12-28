@@ -86,6 +86,24 @@
     ;; a jump, it's in the regular segment which pollutes the
     ;; instruction pipe with undecodable junk (the sc-numbers).
     (error-call vop errcode object)))
+
+(define-vop (slot-set-type-check-error)
+  (:policy :fast-safe)
+  (:translate sb!c::set-slot-type-error)
+  (:args (object :scs (descriptor-reg any-reg unsigned-reg signed-reg)
+                 :load-if (not (sc-is object
+                                      descriptor-reg any-reg
+                                      unsigned-reg signed-reg constant)))
+         (layout :scs (descriptor-reg)
+                 :load-if (not (sc-is layout
+                                      constant)))
+         (offset :scs (any-reg)))
+  (:arg-types * * positive-fixnum)
+  (:vop-var vop)
+  (:save-p :compute-only)
+  (:generator 900
+              (error-call vop 'sb!kernel::set-slot-type-error
+                          object layout offset)))
 
 (macrolet ((def (name error translate &rest args)
              `(define-vop (,name)

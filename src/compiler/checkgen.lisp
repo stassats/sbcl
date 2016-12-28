@@ -392,6 +392,18 @@
                  types)
        (values ,@temps))))
 
+(defun make-slot-type-check-form (cast type)
+  (let* ((temp (gensym))
+         (spec (let ()
+                 (type-specifier (second type))))
+         (test (if (first type) `(not ,spec) spec)))
+    `(let ((,temp 'dummy))
+       (unless (typep ,temp ',test)
+         (set-slot-type-error ,temp
+                              ,(struct-slot-cast-layout cast)
+                              ,(struct-slot-cast-offset cast)))
+       ,temp)))
+
 ;;; Splice in explicit type check code immediately before CAST. This
 ;;; code receives the value(s) that were being passed to CAST-VALUE,
 ;;; checks the type(s) of the value(s), then passes them further.
@@ -399,7 +411,9 @@
   (declare (type cast cast) (type list types))
   (let ((value (cast-value cast))
         (length (length types)))
-    (filter-lvar value (make-type-check-form types))
+    (if (struct-slot-cast-p cast)
+        (filter-lvar value (make-slot-type-check-form cast (car types)))
+        (filter-lvar value (make-type-check-form types)))
     (reoptimize-lvar (cast-value cast))
     (setf (cast-type-to-check cast) *wild-type*)
     (setf (cast-%type-check cast) nil)

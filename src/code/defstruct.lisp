@@ -1013,10 +1013,12 @@ unless :NAMED is also specified.")))
                (vector 'aref)))
         (index (dsd-index dsd))
         (rsd (dsd-raw-slot-data dsd)))
-    (if (not rsd) ; if not raw slot
-        (multiple-value-call 'list ref
-         (if (eq ref 'nth) (values index instance) (values instance index)))
-        `(,(raw-slot-data-accessor-name rsd) ,instance ,index))))
+    (cond (rsd
+           (list (raw-slot-data-accessor-name rsd) instance index))
+          ((eq ref 'nth)
+           (list ref index instance))
+          (t
+           (list ref instance index)))))
 
 ;;; Return the transform of conceptual FUNCTION one of {:READ,:WRITE,:SETF}
 ;;; as applied to ARGS, given SLOT-KEY which is a cons of a DD and a DSD.
@@ -1042,7 +1044,12 @@ unless :NAMED is also specified.")))
           (when (singleton-p (cdr args))
             (let ((inverse (info :setf :expander (car place))))
               (flet ((check (newval)
-                       (if (eq type-spec t) newval `(the ,type-spec ,newval))))
+                       (if (eq type-spec t)
+                           newval
+                           `(sb!c::struct-slot-cast ,type-spec
+                                                    ,newval
+                                                    ,dd
+                                                    ,(dsd-index dsd)))))
                 (ecase function
                   (:setf
                    ;; Instance setters take newval last, which matches
@@ -1621,7 +1628,12 @@ or they must be declared locally notinline at each call site.~@:>"
                     (mapcar (lambda (dsd arg)
                               (let ((type (dsd-type dsd))
                                     (var (cadar arg)))
-                                (if (eq type t) var `(the ,type ,var))))
+                                (if (eq type t)
+                                    var
+                                    `(sb!c::struct-slot-cast ,type
+                                                             ,var
+                                                             ,dd
+                                                             ,(dsd-index dsd)))))
                             (dd-slots dd) lambda-list))))))
   (destructuring-bind (llks &optional req opt rest keys aux) args
     (collect ((vars (copy-list req)) ; list of bound vars

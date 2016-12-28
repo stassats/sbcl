@@ -331,7 +331,7 @@
 ;;; have return type NIL. We create a new "filtered" lvar.
 ;;;
 ;;; TODO: remove preconditions.
-(defun filter-lvar (lvar form)
+(defun filter-lvar (lvar form &rest additional-substs)
   (declare (type lvar lvar) (type list form))
   (let* ((dest (lvar-dest lvar))
          (ctran (node-prev dest)))
@@ -364,22 +364,23 @@
         ;; code from the call in the form will be the use of the new
         ;; check lvar. We substitute exactly one argument.
         (let* ((node (lvar-use filtered-lvar))
-               victim)
-          (dolist (arg (basic-combination-args node) (aver victim))
+               main-subbed)
+          (dolist (arg (basic-combination-args node))
             (let* ((arg (principal-lvar arg))
                    (use (lvar-use arg))
                    leaf)
-              (when (and (ref-p use)
-                         (constant-p (setf leaf (ref-leaf use)))
-                         (eql (constant-value leaf) 'dummy))
-                (aver (not victim))
-                (setf victim arg))))
-          (aver (eq (constant-value (ref-leaf (lvar-use victim)))
-                    'dummy))
-
-          (substitute-lvar filtered-lvar lvar)
-          (substitute-lvar lvar victim)
-          (flush-dest victim))
+              (cond ((not (and (ref-p use)
+                               (constant-p (setf leaf (ref-leaf use))))))
+                    ((eql (constant-value leaf) 'dummy)
+                     (aver (not main-subbed))
+                     (substitute-lvar filtered-lvar lvar)
+                     (substitute-lvar lvar arg)
+                     (flush-dest arg)
+                     (setf main-subbed t))
+                    ((let ((subst (getf additional-substs (constant-value leaf))))
+                       (when subst
+                         (substitute-lvar subst arg)
+                         (flush-dest arg))))))))
 
         ;; Invoking local call analysis converts this call to a LET.
         (locall-analyze-component *current-component*))))

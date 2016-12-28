@@ -1485,6 +1485,10 @@
   (arg-count (missing-arg) :type index)
   (caller nil :type symbol))
 
+(def!struct (struct-slot-cast (:include cast))
+  (layout (missing-arg) :type layout)
+  (offset (missing-arg) :type (and fixnum unsigned-byte)))
+
 
 ;;;; non-local exit support
 ;;;;

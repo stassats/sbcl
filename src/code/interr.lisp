@@ -159,6 +159,18 @@
   ;; recursive error.
   (%primitive print "Thread local storage exhausted.")
   (sb!impl::%halt))
+
+(deferr set-slot-type-error (value layout offset)
+  (let* ((dd (layout-info layout))
+         (slot (find offset (dd-slots dd) :key #'dsd-index)))
+    (error "~@<The value ~
+            ~@:_~2@T~S ~
+            ~@:_cannot be used to set the slot ~a of ~a of type ~
+            ~@:_~2@T~/sb!impl:print-type-specifier/~:@>"
+           value
+           (dsd-name slot)
+           (dd-name dd)
+           (dsd-type slot))))
 
 
 ;;; Returns true if number of arguments matches required/optional
