@@ -389,7 +389,7 @@
         complex-double-reg fp-complex-double-immediate
         complex-double-float))
 
-(macrolet ((generate (opinst commutative constant-sc load-inst)
+(macrolet ((generate (op opinst commutative constant-sc load-inst)
              `(flet ((get-constant (tn &optional maybe-aligned)
                        (declare (ignorable maybe-aligned))
                        (let ((value (tn-value tn)))
@@ -398,16 +398,27 @@
                                    (register-inline-constant
                                     :aligned value)
                                    (register-inline-constant value))
-                              `(register-inline-constant value)))))
+                              `(register-inline-constant value))))
+                     (note-location (x y)
+                       (let ((*location-context*
+                               (and (tn-p x)
+                                    (tn-p y)
+                                    (list ',op (make-sc-offset (sc-number (tn-sc x))
+                                                               (or (tn-offset x) 0))
+                                          (make-sc-offset (sc-number (tn-sc y))
+                                                          (or (tn-offset y) 0))))))
+                         (note-this-location vop :internal-error))))
                 (declare (ignorable #'get-constant))
                 (cond
                   ((location= x r)
                    (when (sc-is y ,constant-sc)
                      (setf y (get-constant y t)))
+                   (note-location x y)
                    (inst ,opinst x y))
                   ((and ,commutative (location= y r))
                    (when (sc-is x ,constant-sc)
                      (setf x (get-constant x t)))
+                   (note-location y x)
                    (inst ,opinst y x))
                   ((not (location= r y))
                    (if (sc-is x ,constant-sc)
@@ -415,11 +426,13 @@
                        (move r x))
                    (when (sc-is y ,constant-sc)
                      (setf y (get-constant y t)))
+                   (note-location r y)
                    (inst ,opinst r y))
                   (t
                    (if (sc-is x ,constant-sc)
                        (inst ,load-inst tmp (get-constant x))
                        (move tmp x))
+                   (note-location tmp y)
                    (inst ,opinst tmp y)
                    (move r tmp)))))
            (frob (op sinst sname scost dinst dname dcost commutative
@@ -430,15 +443,17 @@
                                          'single-float-op))
                   (:translate ,op)
                   (:temporary (:sc single-reg) tmp)
+                  (:vop-var vop)
                   (:generator ,scost
-                    (generate ,sinst ,commutative fp-single-immediate movss)))
+                    (generate ,op ,sinst ,commutative fp-single-immediate movss)))
                 (define-vop (,dname ,(if commutative
                                          'double-float-comm-op
                                          'double-float-op))
                   (:translate ,op)
                   (:temporary (:sc double-reg) tmp)
+                  (:vop-var vop)
                   (:generator ,dcost
-                    (generate ,dinst ,commutative fp-double-immediate movsd)))
+                    (generate ,op ,dinst ,commutative fp-double-immediate movsd)))
                 ,(when csinst
                    `(define-vop (,csname
                                  ,(if commutative
@@ -446,8 +461,9 @@
                                       'complex-single-float-op))
                       (:translate ,op)
                       (:temporary (:sc complex-single-reg) tmp)
+                      (:vop-var vop)
                       (:generator ,cscost
-                        (generate ,csinst ,commutative
+                        (generate ,op ,csinst ,commutative
                                   fp-complex-single-immediate movq))))
                 ,(when cdinst
                    `(define-vop (,cdname
@@ -456,8 +472,9 @@
                                       'complex-double-float-op))
                       (:translate ,op)
                       (:temporary (:sc complex-double-reg) tmp)
+                      (:vop-var vop)
                       (:generator ,cdcost
-                        (generate ,cdinst ,commutative
+                        (generate ,op ,cdinst ,commutative
                                   fp-complex-double-immediate movapd)))))))
   (frob + addss +/single-float 2 addsd +/double-float 2 t
         addps +/complex-single-float 3 addpd +/complex-double-float 3)

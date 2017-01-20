@@ -1944,6 +1944,18 @@ register."
     (when frame
       (code-location-context (frame-code-location frame)))))
 
+(defun decode-arithmetic-error-operands (context)
+  (let* ((alien-context (sb!alien:sap-alien context (* os-context-t)))
+         (fp (int-sap (sb!vm:context-register alien-context
+                                              sb!vm::cfp-offset)))
+         (sb!debug:*stack-top-hint* (find-interrupted-frame))
+         (error-context (error-context)))
+    (and error-context
+         (values (car error-context)
+                 (loop for x in (cdr error-context)
+                       collect (sub-access-debug-var-slot
+                                fp x alien-context))))))
+
 ;;; true if OBJ1 and OBJ2 are the same place in the code
 (defun code-location= (obj1 obj2)
   (etypecase obj1
