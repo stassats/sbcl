@@ -49,6 +49,9 @@
 #include "forwarding-ptr.h"
 #include "var-io.h"
 
+#include <xmmintrin.h>
+#include <immintrin.h>
+
 #ifdef LISP_FEATURE_SPARC
 #define LONG_FLOAT_SIZE 4
 #elif defined(LISP_FEATURE_X86) || defined(LISP_FEATURE_X86_64)
@@ -194,6 +197,24 @@ sword_t scavenge(lispobj *start, sword_t n_words)
         if (is_lisp_pointer(object)) scav1(object_ptr, object);
     }
     return n_words;
+}
+
+void
+scavenge_vector(lispobj *start, sword_t n_words)
+{
+  sword_t i = 0;
+  __m256i reg, masked;
+  __m256i mask = _mm256_set1_epi64x(3);
+
+  for (; i < n_words; i += sizeof(__m256i) / sizeof(sword_t)) {
+    reg = _mm256_loadu_si256((__m256i*) &start[i]);
+    masked = _mm256_cmpeq_epi64(_mm256_and_si256(mask, reg), mask);
+    if (!_mm256_testz_si256(masked, masked)) {
+      break;
+    }
+  }
+
+  scavenge(&start[i], n_words - i);
 }
 
 static lispobj trans_fun_header(lispobj object); /* forward decls */
@@ -1106,7 +1127,7 @@ scav_vector (lispobj *where, lispobj object)
      * special GC support. */
     if ((HeaderValue(object) & 0xFF) == subtype_VectorNormal) {
       sword_t length = fixnum_value(((struct vector*)where)->length);
-      scavenge(where + 2, length);
+      scavenge_vector(where + 2, length);
       return CEILING(length + 2, 2);
     }
 
