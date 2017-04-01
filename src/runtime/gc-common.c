@@ -411,7 +411,16 @@ trans_instance(lispobj object)
 {
     gc_dcheck(lowtag_of(object) == INSTANCE_POINTER_LOWTAG);
     lispobj header = *(lispobj*)(object - INSTANCE_POINTER_LOWTAG);
-    return copy_object(object, 1 + (instance_length(header)|1));
+    int page_type_flag = BOXED_PAGE_FLAG;
+
+#ifdef LISP_FEATURE_COMPACT_INSTANCE_HEADER
+    lispobj* layout = native_pointer((lispobj)header >> 32);
+    if (layout && ((struct layout*)layout)->bitmap == 0) {
+        page_type_flag = UNBOXED_PAGE_FLAG;
+    }
+#endif
+
+    return gc_general_copy_object(object, 1 + (instance_length(header)|1), page_type_flag);
 }
 
 static sword_t

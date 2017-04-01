@@ -2307,8 +2307,9 @@ core and return a descriptor to it."
     ;; Raw slots can not possibly work because dump-struct uses
     ;; %RAW-INSTANCE-REF/WORD which does not exist in the cross-compiler.
     ;; Remove this assertion if that problem is somehow circumvented.
-    (unless (eql bitmap sb!kernel::+layout-all-tagged+)
-      (error "Raw slots not working in genesis."))
+    (unless (or (eql bitmap sb!kernel::+layout-all-tagged+)
+                (zerop size))
+      (error "Raw slots not working in genesis. ~a ~a" bitmap size))
     (loop for index downfrom (1- size) to sb!vm:instance-data-start
           for val = (pop-stack) then (pop-stack)
           do (write-wordindexed result
