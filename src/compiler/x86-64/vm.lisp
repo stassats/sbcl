@@ -266,6 +266,13 @@
            :save-p t
            :alternate-scs (control-stack))
 
+  (any-dword-reg registers
+           :locations #.*dword-regs*
+           :element-size 2 ; I think this is for the al/ah overlap thing
+           :constant-scs (immediate)
+           :save-p t
+           :alternate-scs (control-stack))
+
   ;; pointer descriptor objects -- must be seen by GC
   (descriptor-reg registers
                   :locations #.*qword-regs*
@@ -383,7 +390,7 @@
 (defparameter *byte-sc-names*
   '(#!-sb-unicode character-reg byte-reg #!-sb-unicode character-stack))
 (defparameter *word-sc-names* '(word-reg))
-(defparameter *dword-sc-names* '(dword-reg))
+(defparameter *dword-sc-names* '(dword-reg any-dword-reg))
 (defparameter *qword-sc-names*
   '(any-reg descriptor-reg sap-reg signed-reg unsigned-reg control-stack
     signed-stack unsigned-stack sap-stack single-stack

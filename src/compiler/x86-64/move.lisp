@@ -20,7 +20,7 @@
 
 (define-move-fun (load-immediate 1) (vop x y)
   ((immediate)
-   (any-reg descriptor-reg))
+   (any-reg descriptor-reg any-dword-reg))
   (move-immediate y (encode-value-if-immediate x)))
 
 (define-move-fun (load-number 1) (vop x y)
@@ -43,7 +43,7 @@
   (inst mov y x))
 
 (define-move-fun (load-stack 5) (vop x y)
-  ((control-stack) (any-reg descriptor-reg)
+  ((control-stack) (any-reg descriptor-reg any-dword-reg)
    (character-stack) (character-reg)
    (sap-stack) (sap-reg)
    (signed-stack) (signed-reg)
@@ -51,7 +51,7 @@
   (inst mov y x))
 
 (define-move-fun (store-stack 5) (vop x y)
-  ((any-reg descriptor-reg) (control-stack)
+  ((any-reg descriptor-reg any-dword-reg) (control-stack)
    (character-reg) (character-stack)
    (sap-reg) (sap-stack)
    (signed-reg) (signed-stack)
@@ -60,12 +60,12 @@
 
 ;;;; the MOVE VOP
 (define-vop (move)
-  (:args (x :scs (any-reg descriptor-reg immediate) :target y
+  (:args (x :scs (any-reg descriptor-reg any-dword-reg immediate) :target y
             :load-if (not (location= x y))))
-  (:results (y :scs (any-reg descriptor-reg)
+  (:results (y :scs (any-reg descriptor-reg any-dword-reg)
                :load-if
                (not (or (location= x y)
-                        (and (sc-is x any-reg descriptor-reg immediate)
+                        (and (sc-is x any-reg descriptor-reg any-dword-reg immediate)
                              (sc-is y control-stack))))))
   (:temporary (:sc unsigned-reg) temp)
   (:generator 0
@@ -75,8 +75,8 @@
         (move y x))))
 
 (define-move-vop move :move
-  (any-reg descriptor-reg immediate)
-  (any-reg descriptor-reg))
+  (any-reg descriptor-reg any-dword-reg immediate)
+  (any-reg descriptor-reg any-dword-reg))
 
 (defun move-immediate (target val &optional tmp-tn zeroed)
   ;; Try to emit the smallest immediate operand if the destination word
@@ -84,7 +84,7 @@
   (cond
     ;; If target is a register, we can just mov it there directly
     ((and (tn-p target)
-          (sc-is target signed-reg unsigned-reg descriptor-reg any-reg))
+          (sc-is target signed-reg unsigned-reg descriptor-reg any-reg any-dword-reg))
      ;; val can be a fixup for an immobile-space symbol, i.e. not a number,
      ;; hence not acceptable to ZEROP.
      (cond ((and (numberp val) (zerop val)) (zeroize target))
@@ -153,7 +153,7 @@
 ;;; because some possible arg SCs (control-stack) overlap with
 ;;; possible bignum arg SCs.
 (define-vop (move-to-word/fixnum)
-  (:args (x :scs (any-reg descriptor-reg) :target y
+  (:args (x :scs (any-reg any-dword-reg descriptor-reg) :target y
             :load-if (not (location= x y))))
   (:results (y :scs (signed-reg unsigned-reg)
                :load-if (not (location= x y))))
@@ -163,7 +163,7 @@
     (move y x)
     (inst sar y n-fixnum-tag-bits)))
 (define-move-vop move-to-word/fixnum :move
-  (any-reg descriptor-reg) (signed-reg unsigned-reg))
+  (any-reg any-dword-reg descriptor-reg) (signed-reg unsigned-reg))
 
 ;;; Arg is a non-immediate constant, load it.
 (define-vop (move-to-word-c)
@@ -230,7 +230,7 @@
 (define-vop (move-from-word/fixnum)
   (:args (x :scs (signed-reg unsigned-reg) :target y
             :load-if (not (location= x y))))
-  (:results (y :scs (any-reg descriptor-reg)
+  (:results (y :scs (any-reg any-dword-reg descriptor-reg)
                :load-if (not (location= x y))))
   (:result-types tagged-num)
   (:note "fixnum tagging")
@@ -246,7 +246,7 @@
            (move y x)
            (inst shl y n-fixnum-tag-bits)))))
 (define-move-vop move-from-word/fixnum :move
-  (signed-reg unsigned-reg) (any-reg descriptor-reg))
+  (signed-reg unsigned-reg) (any-reg any-dword-reg descriptor-reg))
 
 (eval-when (:compile-toplevel :execute)
   ;; Don't use a macro for this, because define-vop is weird.

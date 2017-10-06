@@ -22,7 +22,7 @@
 
 ;;; primitive integer types that fit in registers
 (/show0 "primtype.lisp 24")
-(!def-primitive-type positive-fixnum (any-reg signed-reg unsigned-reg)
+(!def-primitive-type positive-fixnum (any-reg signed-reg unsigned-reg #!+x86-64 any-dword-reg)
   :type (unsigned-byte #.sb!vm:n-positive-fixnum-bits))
 (/show0 "primtype.lisp 27")
 #!-64-bit-registers
@@ -39,7 +39,7 @@
 #!+64-bit-registers
 (!def-primitive-type unsigned-byte-64 (unsigned-reg descriptor-reg)
   :type (unsigned-byte 64))
-(!def-primitive-type fixnum (any-reg signed-reg)
+(!def-primitive-type fixnum (any-reg signed-reg #!+x86-64 any-dword-reg)
   :type (signed-byte #.(1+ n-positive-fixnum-bits)))
 #!-64-bit-registers
 (!def-primitive-type signed-byte-32 (signed-reg descriptor-reg)

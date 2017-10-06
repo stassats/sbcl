@@ -1424,16 +1424,20 @@
 (defun matching-operand-size (dst src)
   (let ((dst-size (operand-size dst))
         (src-size (operand-size src)))
-    (if dst-size
-        (if src-size
-            (if (eq dst-size src-size)
-                dst-size
-                (error "size mismatch: ~S is a ~S and ~S is a ~S."
-                       dst dst-size src src-size))
-            dst-size)
-        (if src-size
-            src-size
-            (error "can't tell the size of either ~S or ~S" dst src)))))
+    (cond ((or (and (eq dst-size :dword)
+                    (eq src-size :qword))
+               (and (eq src-size :dword)
+                    (eq dst-size :qword)))
+           :dword)
+          (dst-size
+           (if src-size
+               (if (eq dst-size src-size)
+                   dst-size
+                   (error "size mismatch: ~S is a ~S and ~S is a ~S."
+                          dst dst-size src src-size))
+               dst-size))
+          (src-size)
+          ((error "can't tell the size of either ~S or ~S" dst src)))))
 
 ;;; Except in a very few cases (MOV instructions A1, A3 and B8 - BF)
 ;;; we expect dword data bytes even when 64 bit work is being done.
