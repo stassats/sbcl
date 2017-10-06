@@ -16,14 +16,17 @@
 (in-package "SB!C")
 
 ;;; ANSI limits on compilation
-(defconstant sb!xc:call-arguments-limit sb!xc:most-positive-fixnum
+(defconstant sb!xc:call-arguments-limit
+  #!-64-bit sb!xc:most-positive-fixnum
+  ;; x86-64 can save on REX prefixes
+  #!+64-bit (ldb (byte (- 32 sb!vm:n-fixnum-tag-bits) 0) -1)
   "The exclusive upper bound on the number of arguments which may be passed
   to a function, including &REST args.")
-(defconstant sb!xc:lambda-parameters-limit sb!xc:most-positive-fixnum
+(defconstant sb!xc:lambda-parameters-limit sb!xc:call-arguments-limit
   "The exclusive upper bound on the number of parameters which may be specified
   in a given lambda list. This is actually the limit on required and &OPTIONAL
   parameters. With &KEY and &AUX you can get more.")
-(defconstant sb!xc:multiple-values-limit sb!xc:most-positive-fixnum
+(defconstant sb!xc:multiple-values-limit sb!xc:call-arguments-limit
   "The exclusive upper bound on the number of multiple VALUES that you can
   return.")
 
