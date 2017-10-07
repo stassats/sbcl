@@ -11,7 +11,7 @@
 
 (in-package "SB!VM")
 
-(defconstant arg-count-sc (make-sc-offset any-reg-sc-number rcx-offset))
+(defconstant arg-count-sc (make-sc-offset any-dword-reg-sc-number rcx-offset))
 (defconstant closure-sc (make-sc-offset any-reg-sc-number rax-offset))
 
 ;;; Make a passing location TN for a local call return PC.
@@ -62,7 +62,7 @@
 ;;; need to make the standard location, since a count is never passed when we
 ;;; are using non-standard conventions.
 (defun make-arg-count-location ()
-  (make-wired-tn *fixnum-primitive-type* any-reg-sc-number rcx-offset))
+  (make-wired-tn *fixnum-primitive-type* any-dword-reg-sc-number rcx-offset))
 
 ;;;; frame hackery
 
@@ -514,11 +514,11 @@
   (:temporary (:sc descriptor-reg :offset rbx-offset
                    :from :eval :to (:result 0))
               values-start)
-  (:temporary (:sc any-reg :offset rcx-offset
+  (:temporary (:sc any-dword-reg :offset rcx-offset
                :from :eval :to (:result 1))
               nvals)
   (:results (start :scs (any-reg control-stack))
-            (count :scs (any-reg control-stack))))
+            (count :scs (any-dword-reg control-stack))))
 
 ;;;; local call with unknown values convention return
 
@@ -1071,7 +1071,7 @@
   (:args (old-fp)
          (return-pc)
          (vals :scs (any-reg) :target rsi)
-         (nvals :scs (any-reg) :target rcx))
+         (nvals :scs (any-dword-reg) :target rcx))
   (:temporary (:sc unsigned-reg :offset rsi-offset :from (:argument 2)) rsi)
   (:temporary (:sc unsigned-reg :offset rcx-offset :from (:argument 3)) rcx)
   (:temporary (:sc unsigned-reg) return-asm)
@@ -1128,12 +1128,12 @@
            ;; verify-arg-count will do a CMP
            (inst jmp :e JUST-ALLOC-FRAME))
           (t
-           (inst cmp rcx-tn (fixnumize fixed))
+           (inst cmp ecx-tn (fixnumize fixed))
            (inst jmp :be JUST-ALLOC-FRAME)))
 
     ;; Create a negated copy of the number of arguments to allow us to
     ;; use EA calculations in order to do scaled subtraction.
-    (inst mov temp rcx-tn)
+    (inst mov temp ecx-tn)
     (inst neg temp)
 
     ;; Allocate the space on the stack.
@@ -1164,13 +1164,13 @@
            ;; run out of more args.
            ;; Number to copy = nargs-3
            ;; Save the original count of args.
-           (inst mov rbx-tn rcx-tn)
-           (inst sub rbx-tn (fixnumize register-arg-count))
+           (inst mov ebx-tn ecx-tn)
+           (inst sub ebx-tn (fixnumize register-arg-count))
            ;; Everything of interest in registers.
            (inst jmp :be DO-REGS))
           (t
            ;; Number to copy = nargs-fixed
-           (inst lea rbx-tn (make-ea :qword :base rcx-tn
+           (inst lea ebx-tn (make-ea :dword :base ecx-tn
                                      :disp (- (fixnumize fixed))))))
 
     ;; Initialize R8 to be the end of args.
@@ -1198,16 +1198,16 @@
              (inst mov temp (make-ea :qword :base source :index copy-index))
              (inst mov (make-ea :qword :base rsp-tn :index copy-index) temp)
              (inst add copy-index n-word-bytes)
-             (inst sub rbx-tn (fixnumize 1))
+             (inst sub ebx-tn (fixnumize 1))
              (inst jmp :nz loop))
             ((plusp delta)
              ;; dst is higher than src; copy backward
              (emit-label loop)
-             (inst sub rbx-tn (fixnumize 1))
+             (inst sub ebx-tn (fixnumize 1))
              (inst mov temp (make-ea :qword :base rsp-tn
-                                     :index rbx-tn :scale fixnum->word))
+                                     :index ebx-tn :scale fixnum->word))
              (inst mov (make-ea :qword :base source
-                                :index rbx-tn :scale fixnum->word)
+                                :index ebx-tn :scale fixnum->word)
                    temp)
              (inst jmp :nz loop)
              ;; done with the stack--stack copy. Reset RSP to its final
@@ -1236,8 +1236,8 @@
 
         ;; Don't deposit any more than there are.
         (if (zerop i)
-            (inst test rcx-tn rcx-tn)
-            (inst cmp rcx-tn (fixnumize i)))
+            (inst test ecx-tn ecx-tn)
+            (inst cmp ecx-tn (fixnumize i)))
         (inst jmp :eq DONE)))
 
     (inst jmp DONE)
@@ -1281,13 +1281,13 @@
 (define-vop (more-arg)
   (:translate sb!c::%more-arg)
   (:policy :fast-safe)
-  (:args (object :scs (descriptor-reg) :to (:result 1))
-         (index :scs (any-reg) :to (:result 1) :target value))
+  (:args (object :scs (descriptor-reg))
+         (index :scs (any-dword-reg) :target value))
   (:arg-types * tagged-num)
   (:results (value :scs (descriptor-reg any-reg)))
   (:result-types *)
   (:generator 4
-    (move value index)
+    (move value (reg-in-size index :dword))
     (inst neg value)
     (inst mov value (make-ea :qword :base object :index value
                              :scale (ash 1 (- word-shift n-fixnum-tag-bits))))))
@@ -1297,10 +1297,10 @@
   (:translate %listify-rest-args)
   (:policy :safe)
   (:args (context :scs (descriptor-reg) :target src)
-         (count :scs (any-reg) :target rcx))
+         (count :scs (any-dword-reg) :target rcx))
   (:arg-types * tagged-num)
   (:temporary (:sc unsigned-reg :offset rsi-offset :from (:argument 0)) src)
-  (:temporary (:sc unsigned-reg :offset rcx-offset :from (:argument 1)) rcx)
+  (:temporary (:sc dword-reg :offset rcx-offset :from (:argument 1)) rcx)
   (:temporary (:sc unsigned-reg :offset rax-offset) rax)
   (:temporary (:sc unsigned-reg) dst)
   (:results (result :scs (descriptor-reg)))
@@ -1353,11 +1353,11 @@
 (define-vop (more-arg-context)
   (:policy :fast-safe)
   (:translate sb!c::%more-arg-context)
-  (:args (supplied :scs (any-reg) :target count))
+  (:args (supplied :scs (any-dword-reg) :target count))
   (:arg-types positive-fixnum (:constant fixnum))
   (:info fixed)
   (:results (context :scs (descriptor-reg))
-            (count :scs (any-reg)))
+            (count :scs (any-dword-reg)))
   (:result-types t tagged-num)
   (:note "more-arg-context")
   (:generator 5
@@ -1373,7 +1373,7 @@
 
 (define-vop (verify-arg-count)
   (:policy :fast-safe)
-  (:args (nargs :scs (any-reg)))
+  (:args (nargs :scs (any-dword-reg)))
   (:arg-types positive-fixnum (:constant t) (:constant t))
   (:info min max)
   (:vop-var vop)

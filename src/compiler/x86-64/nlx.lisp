@@ -13,7 +13,7 @@
 
 ;;; Make a TN for the argument count passing location for a non-local entry.
 (defun make-nlx-entry-arg-start-location ()
-    (make-wired-tn *fixnum-primitive-type* any-reg-sc-number rbx-offset))
+    (make-wired-tn *fixnum-primitive-type* any-dword-reg-sc-number rbx-offset))
 
 (defun catch-block-ea (tn)
   (aver (sc-is tn catch-block))
@@ -184,11 +184,11 @@
   ;; Again, no SC restrictions for the args, 'cause the loading would
   ;; happen before the entry label.
   (:info label)
-  (:temporary (:sc unsigned-reg :offset rcx-offset :from (:argument 2)) rcx)
+  (:temporary (:sc dword-reg :offset rcx-offset :from (:argument 2)) rcx)
   (:temporary (:sc unsigned-reg :offset rsi-offset) rsi)
   (:temporary (:sc unsigned-reg :offset rdi-offset) rdi)
   (:results (result :scs (any-reg) :from (:argument 0))
-            (num :scs (any-reg control-stack)))
+            (num :scs (any-dword-reg control-stack)))
   (:save-p :force-to-stack)
   (:vop-var vop)
   (:generator 30

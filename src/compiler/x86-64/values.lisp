@@ -73,7 +73,7 @@
   (:arg-types list)
   (:policy :fast-safe)
   (:results (start :scs (any-reg))
-            (count :scs (any-reg)))
+            (count :scs (any-dword-reg)))
   (:temporary (:sc descriptor-reg :from (:argument 0) :to (:result 1)) list)
   (:temporary (:sc dword-reg :offset eax-offset :to (:result 1)) eax)
   (:ignore eax)
@@ -107,14 +107,14 @@
 ;;; defining a new stack frame.
 (define-vop (%more-arg-values)
   (:args (context :scs (descriptor-reg any-reg) :target src)
-         (skip :scs (any-reg immediate))
-         (num :scs (any-reg) :target count))
+         (skip :scs (any-dword-reg immediate))
+         (num :scs (any-dword-reg) :target count))
   (:arg-types * positive-fixnum positive-fixnum)
   (:temporary (:sc any-reg :offset rsi-offset :from (:argument 0)) src)
   (:temporary (:sc descriptor-reg :offset rax-offset) temp)
   (:temporary (:sc unsigned-reg :offset rcx-offset) loop-index)
   (:results (start :scs (any-reg))
-            (count :scs (any-reg)))
+            (count :scs (any-dword-reg)))
   (:generator 20
     (sc-case skip
       (immediate

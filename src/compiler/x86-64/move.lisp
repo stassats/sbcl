@@ -70,7 +70,7 @@
   (:temporary (:sc unsigned-reg) temp)
   (:generator 0
     (if (and (sc-is x immediate)
-             (sc-is y any-reg descriptor-reg control-stack))
+             (sc-is y any-reg any-dword-reg descriptor-reg control-stack))
         (move-immediate y (encode-value-if-immediate x) temp)
         (move y x))))
 
@@ -118,8 +118,8 @@
 ;;; to another frame, except if the destination is a register and in
 ;;; this case the loading works out.
 (define-vop (move-arg)
-  (:args (x :scs (any-reg descriptor-reg immediate) :target y
-            :load-if (not (and (sc-is y any-reg descriptor-reg)
+  (:args (x :scs (any-reg any-dword-reg descriptor-reg immediate) :target y
+            :load-if (not (and (sc-is y any-reg any-dword-reg descriptor-reg)
                                (sc-is x control-stack))))
          (fp :scs (any-reg)
              :load-if (not (sc-is y any-reg descriptor-reg))))
@@ -140,8 +140,8 @@
                (frame-word-offset (tn-offset y))))))))
 
 (define-move-vop move-arg :move-arg
-  (any-reg descriptor-reg)
-  (any-reg descriptor-reg))
+  (any-reg any-dword-reg descriptor-reg)
+  (any-reg any-dword-reg descriptor-reg))
 
 ;;;; moves and coercions
 
@@ -352,9 +352,9 @@
            (storew x fp (tn-offset y))  ; c-call
            (storew x fp (frame-word-offset (tn-offset y))))))))
 (define-move-vop move-word-arg :move-arg
-  (descriptor-reg any-reg signed-reg unsigned-reg) (signed-reg unsigned-reg))
+  (descriptor-reg any-reg any-dword-reg signed-reg unsigned-reg) (signed-reg unsigned-reg))
 
 ;;; Use standard MOVE-ARG and coercion to move an untagged number
 ;;; to a descriptor passing location.
 (define-move-vop move-arg :move-arg
-  (signed-reg unsigned-reg) (any-reg descriptor-reg))
+  (signed-reg unsigned-reg) (any-reg any-dword-reg descriptor-reg))

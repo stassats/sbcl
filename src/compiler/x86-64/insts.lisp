@@ -1428,7 +1428,10 @@
                     (eq src-size :qword))
                (and (eq src-size :dword)
                     (eq dst-size :qword)))
-           :dword)
+           (if (or (eq (tn-offset dst) sb!vm::rsp-offset)
+                   (eq (tn-offset dst) sb!vm::rbp-offset))
+               :qword
+               :dword))
           (dst-size
            (if src-size
                (if (eq dst-size src-size)
@@ -1552,7 +1555,7 @@
                    (emit-byte+reg segment #xB8 dst)
                    (emit-absolute-fixup segment src))
                   (t
-                   (maybe-emit-rex-for-ea segment src dst)
+                   (maybe-emit-rex-for-ea segment src dst :operand-size size)
                    (emit-byte segment (if (eq size :byte) #x8A #x8B))
                    (emit-ea segment src (reg-tn-encoding dst)
                             :allow-constants t))))
