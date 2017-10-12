@@ -98,9 +98,6 @@
 #endif
 
         
-	.text
-        .globl  GNAME(all_threads)
-        
 	.text	
 	.globl  GNAME(call_into_lisp_first_time)
 	TYPE(GNAME(call_into_lisp_first_time))
@@ -113,12 +110,7 @@
 GNAME(call_into_lisp_first_time):
 	push	%rbp		# Save old frame pointer.
 	mov	%rsp,%rbp	# Establish new frame.
-#if defined(LISP_FEATURE_DARWIN)
-	movq    GSYM(GNAME(all_threads)),%rax
-#else
-        movq    PIC_VAR(GNAME(all_threads)),%rax
-#endif
-	mov     THREAD_CONTROL_STACK_END_OFFSET(%rax) ,%rsp
+	mov     THREAD_CONTROL_STACK_END_OFFSET(%rcx) ,%rsp
 	jmp     Lstack
 
 	.text	
@@ -173,13 +165,7 @@ Lstack:
 	movq	%fs:0, %rax
 	movq	GNAME(current_thread)@TPOFF(%rax), %r12
 #else
-#ifdef LISP_FEATURE_DARWIN
-	mov	GSYM(GNAME(specials)),%rdi
-#else
-	mov	PIC_VAR(specials),%rdi
-#endif
-	call    PIC_CALL(GNAME(pthread_getspecific))
-	mov	%rax,%r12
+	mov	%rcx,%r12
 #endif
 #endif
 	pop	%rcx	# num args
@@ -382,13 +368,9 @@ GNAME(arch_scrub_control_stack):
 	 * guard page upper bound in R8, and our hard guard
 	 * page upper bound in R9. */
 	lea	-8(%rsp), %rax
-#ifdef LISP_FEATURE_DARWIN
-	mov	GSYM(GNAME(os_vm_page_size)),%r9
-#else
-	mov	PIC_VAR(os_vm_page_size),%r9
-#endif
-	lea	(%rsi,%r9), %r8
-	lea	(%rdx,%r9), %r9
+
+	lea	(%rsi,%rcx), %r8
+	lea	(%rdx,%rcx), %r9
 
 	/* Now we begin our main scrub loop. */
 ascs_outer_loop:

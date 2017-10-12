@@ -85,7 +85,7 @@ pthread_key_t lisp_thread = 0;
 #endif
 
 #if defined(LISP_FEATURE_X86) || defined(LISP_FEATURE_X86_64)
-extern lispobj call_into_lisp_first_time(lispobj fun, lispobj *args, int nargs)
+extern lispobj call_into_lisp_first_time(lispobj fun, lispobj *args, int nargs, struct thread* thread)
 # ifdef LISP_FEATURE_X86_64
     __attribute__((sysv_abi))
 # endif
@@ -224,7 +224,7 @@ initial_thread_trampoline(struct thread *th)
      * call_into_lisp_first_time will put the new stack in the middle
      * of the current stack */
 #if !defined(LISP_FEATURE_WIN32) && (defined(LISP_FEATURE_X86) || defined(LISP_FEATURE_X86_64))
-    return call_into_lisp_first_time(function,args,0);
+    return call_into_lisp_first_time(function,args,0, th);
 #else
     return funcall0(function);
 #endif

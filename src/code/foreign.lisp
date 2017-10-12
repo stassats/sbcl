@@ -106,7 +106,8 @@ if the symbol isn't found."
   ;; reasonably be expected to work with different versions of the
   ;; same library.
   (handler-bind ((style-warning #'muffle-warning))
-    (update-linkage-table)))
+    ;; (update-linkage-table)
+    ))
 
 ;;; Cleanups before saving a core
 #-sb-xc-host

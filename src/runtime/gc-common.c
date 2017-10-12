@@ -1619,8 +1619,8 @@ scrub_thread_control_stack(struct thread *th)
 #ifdef LISP_FEATURE_C_STACK_IS_CONTROL_STACK
     /* On these targets scrubbing from C is a bad idea, so we punt to
      * a routine in $ARCH-assem.S. */
-    extern void arch_scrub_control_stack(struct thread *, os_vm_address_t, os_vm_address_t);
-    arch_scrub_control_stack(th, guard_page_address, hard_guard_page_address);
+    extern void arch_scrub_control_stack(struct thread *, os_vm_address_t, os_vm_address_t, size_t page_size);
+    arch_scrub_control_stack(th, guard_page_address, hard_guard_page_address, os_vm_page_size);
 #else
     lispobj *sp = access_control_stack_pointer(th);
  scrub:

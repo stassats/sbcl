@@ -12,7 +12,7 @@
 .PHONY: all clean TAGS tags targets
 
 all: targets tags
-TARGET=sbcl
+TARGET=sbcl.so sbcl
 
 # Defaults which might be overridden or modified by values in the
 # Config file. Most of them are same on most systems right now.
@@ -30,7 +30,7 @@ __LDFLAGS__ =
 
 include ../../output/prefix.def
 
-CFLAGS += -g -Wall -Wundef -Wsign-compare -Wpointer-arith -O3
+CFLAGS += -g -Wall -Wundef -Wsign-compare -Wpointer-arith -O3 -fPIC
 ASFLAGS += $(CFLAGS)
 CPPFLAGS += -I. -DSBCL_PREFIX=\"$(SBCL_PREFIX)\"
 
@@ -44,20 +44,6 @@ include genesis/Makefile.features
 # Commonly used variables in Config are: ARCH_SRC, ASSEM_SRC, GC_SRC,
 # OS_SRC, OS_LIBS, OS_CLEAN_FILES
 include Config
-
-# Disable PIE when possible
-ifneq ($(shell $(CC) -dumpspecs 2>/dev/null | grep -e '[^f]no-pie'),)
-CFLAGS += -fno-pie
-LINKFLAGS += -no-pie
-LDFLAGS += -no-pie
-__LDFLAGS__ += -no-pie
-endif
-ifneq ($(shell $(CC) -dumpspecs 2>/dev/null | grep -e '[^f]nopie'),)
-CFLAGS += -fno-pie
-LINKFLAGS += -nopie
-LDFLAGS += -nopie
-__LDFLAGS__ += -nopie
-endif
 
 COMMON_SRC = alloc.c backtrace.c breakpoint.c coreparse.c dynbind.c     \
 	funcall.c gc-common.c globals.c hopscotch.c interr.c interrupt.c\
@@ -78,6 +64,7 @@ targets: $(TARGET) $(OBJTARGET) sbcl.nm sbcl.mk
 
 $(TARGET): $(LIBSBCL)
 	$(CC) ${LINKFLAGS} -o $@ $(USE_LIBSBCL) $(LIBS)
+	$(CC) ${LINKFLAGS} -fPIC -shared -o sbcl.so $(USE_LIBSBCL) $(LIBS)
 
 # ld -r -o sbcl.o works on Linux, but not on other platforms.
 # On macOS, it fails to keep debug sections.

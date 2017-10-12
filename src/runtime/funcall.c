@@ -22,7 +22,7 @@
 #include "interrupt.h"
 
 /* This is implemented in assembly language and called from C: */
-extern lispobj call_into_lisp(lispobj fun, lispobj *args, int nargs)
+extern lispobj call_into_lisp(lispobj fun, lispobj *args, int nargs, struct thread* thread)
 #ifdef LISP_FEATURE_X86_64
     __attribute__((sysv_abi))
 #endif
@@ -42,16 +42,16 @@ lispobj
 funcall0(lispobj function)
 {
     lispobj *args = NULL;
-
+    
     FSHOW((stderr, "/entering funcall0(0x%lx)\n", (long)function));
-    return call_into_lisp(function, args, 0);
+    return call_into_lisp(function, args, 0, arch_os_get_current_thread());
 }
 lispobj
 funcall1(lispobj function, lispobj arg0)
 {
     lispobj args[1];
     args[0] = arg0;
-    return call_into_lisp(function, args, 1);
+    return call_into_lisp(function, args, 1, arch_os_get_current_thread());
 }
 
 lispobj
@@ -60,7 +60,7 @@ funcall2(lispobj function, lispobj arg0, lispobj arg1)
     lispobj args[2];
     args[0] = arg0;
     args[1] = arg1;
-    return call_into_lisp(function, args, 2);
+    return call_into_lisp(function, args, 2, arch_os_get_current_thread());
 }
 
 lispobj
@@ -70,7 +70,7 @@ funcall3(lispobj function, lispobj arg0, lispobj arg1, lispobj arg2)
     args[0] = arg0;
     args[1] = arg1;
     args[2] = arg2;
-    return call_into_lisp(function, args, 3);
+    return call_into_lisp(function, args, 3, arch_os_get_current_thread());
 }
 
 #else

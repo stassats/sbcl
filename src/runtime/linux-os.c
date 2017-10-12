@@ -251,61 +251,6 @@ os_init(char *argv[], char *envp[])
      * don't do this trick on other platforms.
      */
 #if defined(LISP_FEATURE_X86) || defined(LISP_FEATURE_X86_64)
-    if ((major_version == 2
-         /* Some old kernels will apparently lose unsupported personality flags
-          * on exec() */
-         && ((minor_version == 6 && patch_version >= 11)
-             || (minor_version > 6)
-             /* This is what RHEL 3 reports */
-             || (minor_version == 4 && patch_version > 20)))
-        || major_version >= 3)
-    {
-        int pers = personality(0xffffffffUL);
-        if (!(pers & ADDR_NO_RANDOMIZE)) {
-            int retval = personality(pers | ADDR_NO_RANDOMIZE);
-            /* Allegedly some Linux kernels (the reported case was
-             * "hardened Linux 2.6.7") won't set the new personality,
-             * but nor will they return -1 for an error. So as a
-             * workaround query the new personality...
-             */
-            int newpers = personality(0xffffffffUL);
-            /* ... and don't re-execute if either the setting resulted
-             * in an error or if the value didn't change. Otherwise
-             * this might result in an infinite loop.
-             */
-
-            if (!getenv("SBCL_IS_RESTARTING") &&
-                retval != -1 && newpers != pers) {
-                /* Use /proc/self/exe instead of trying to figure out
-                 * the executable path from PATH and argv[0], since
-                 * that's unreliable. We follow the symlink instead of
-                 * executing the file directly in order to prevent top
-                 * from displaying the name of the process as "exe". */
-                char runtime[PATH_MAX+1];
-                int i = readlink("/proc/self/exe", runtime, PATH_MAX);
-                if (i != -1) {
-                    environ = envp;
-                    setenv("SBCL_IS_RESTARTING", "T", 1);
-                    runtime[i] = '\0';
-                    execv(runtime, argv);
-                }
-            }
-            /* Either changing the personality or execve() failed. Either
-             * way we might as well continue, and hope that the random
-             * memory maps are ok this time around.
-             */
-            fprintf(stderr, "WARNING:\
-\nCouldn't re-execute SBCL with proper personality flags (/proc isn't mounted? setuid?)\
-\nTrying to continue anyway.\n");
-        } else if (getenv("SBCL_IS_RESTARTING")) {
-            /* We restarted due to previously enabled ASLR.  Now,
-             * reenable it for fork()'ed children. */
-            int pers = personality(0xffffffffUL);
-            personality(pers & ~ADDR_NO_RANDOMIZE);
-
-            unsetenv("SBCL_IS_RESTARTING");
-        }
-    }
 #ifdef LISP_FEATURE_X86
     /* Use SSE detector.  Recent versions of Linux enable SSE support
      * on SSE capable CPUs.  */
