@@ -39,10 +39,90 @@
                 (negate-condition (first flags))
                 (first flags))
             dest))))
+
 
+(defvar *cmov-ptype-representation-vop*
+  (mapcan (lambda (entry)
+            (destructuring-bind (ptypes &optional sc vop)
+                entry
+              (mapcar (if (and vop sc)
+                          (lambda (ptype)
+                            (list ptype sc vop))
+                          #'list)
+                      (ensure-list ptypes))))
+          '((t descriptor-reg move-if/t)
+
+            ((fixnum positive-fixnum)
+             any-reg move-if/fx)
+            ((unsigned-byte-64 unsigned-byte-63)
+             unsigned-reg move-if/unsigned)
+            (signed-byte-64 signed-reg move-if/signed)
+            ;; FIXME: Can't use CMOV with byte registers, and characters live
+            ;; in such outside of unicode builds. A better solution then just
+            ;; disabling MOVE-IF/CHAR should be possible, though.
+            #!+sb-unicode
+            (character character-reg move-if/char)
+
+            ((single-float complex-single-float
+              double-float complex-double-float))
+
+            (system-area-pointer sap-reg move-if/sap))))
 (defun convert-conditional-move-p (node dst-tn x-tn y-tn)
-  (declare (ignore node dst-tn x-tn y-tn))
-  nil)
+  (declare (ignore node))
+  (let* ((ptype (sb!c::tn-primitive-type dst-tn))
+         (name  (sb!c::primitive-type-name ptype))
+         (param (cdr (or (assoc name *cmov-ptype-representation-vop*)
+                         '(t descriptor-reg move-if/t)))))
+    (when param
+      (destructuring-bind (representation vop) param
+        (let ((scn (sc-number-or-lose representation)))
+          (labels ((make-tn ()
+                     (make-representation-tn ptype scn))
+                   (frob-tn (tn)
+                     (if (immediate-tn-p tn)
+                         tn
+                         (make-tn))))
+            (values vop
+                    (frob-tn x-tn) (frob-tn y-tn)
+                    (make-tn)
+                    nil)))))))
+
+(define-vop (move-if)
+  (:args (then) (else))
+  (:results (res))
+  (:info flags)
+  (:generator 0
+     (let ((not-p (eq (first flags) 'not)))
+       (when not-p (pop flags))
+       (flet ((negate-condition (name)
+                (let ((code (logxor 1 (conditional-opcode name))))
+                  (aref +condition-name-vec+ code)))
+              (load-immediate (dst constant-tn
+                               &optional (sc (sc-name (tn-sc dst))))
+                ;; (inst mov dst (load-immediate-word (tn-value constant-tn)  )
+                ;;       (encode-value-if-immediate constant-tn
+                ;;                                  (memq sc '(any-reg descriptor-reg))))
+                ))
+         (aver (null (rest flags)))
+         (inst csel res then else (car flags))))))
+
+
+(macrolet ((def-move-if (name type reg)
+             `(define-vop (,name move-if)
+                (:args (then :scs (,reg) :to :eval)
+                       (else :scs (,reg) :target res))
+                (:arg-types ,type ,type)
+                (:results (res :scs (,reg)
+                               :from (:argument 1)))
+                (:result-types ,type))))
+  (def-move-if move-if/t t descriptor-reg)
+  (def-move-if move-if/fx tagged-num any-reg)
+  (def-move-if move-if/unsigned unsigned-num unsigned-reg)
+  (def-move-if move-if/signed signed-num signed-reg)
+  ;; FIXME: See *CMOV-PTYPE-REPRESENTATION-VOP* above.
+  #!+sb-unicode
+  (def-move-if move-if/char character character-reg)
+  (def-move-if move-if/sap system-area-pointer sap-reg))
 
 
 ;;;; Conditional VOPs:
@@ -55,27 +135,20 @@
                        (immediate
                         (not (fixnum-add-sub-immediate-p (tn-value y))))
                        (t t))))
-  (:conditional)
-  (:info target not-p)
+  (:conditional :eq)
+  ;(:info target not-p)
   (:policy :fast-safe)
   (:translate eq)
   (:generator 6
-    (cond ((not (and (sc-is y immediate)
-                     (eql 0 (tn-value y))))
-           (inst cmp
-                 (sc-case x
-                   (null null-tn) ;; FIXME: should it really be like that?
-                   (t x))
-                 (sc-case y
-                   (null null-tn)
-                   (immediate
-                    (fixnumize (tn-value y)))
-                   (t y)))
-           (inst b (if not-p :ne :eq) target))
-          (not-p
-           (inst cbnz x target))
-          (t
-           (inst cbz x target)))))
+              (inst cmp
+                    (sc-case x
+                      (null null-tn) ;; FIXME: should it really be like that?
+                      (t x))
+                    (sc-case y
+                      (null null-tn)
+                      (immediate
+                       (fixnumize (tn-value y)))
+                      (t y)))))
 
 (macrolet ((def (eq-name eql-name cost)
              `(define-vop (,eq-name ,eql-name)

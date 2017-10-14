@@ -134,10 +134,12 @@
              ;; Most of the time this means:
              ;; if X is already NIL, don't load it again.
              (when (and (eq (vop-name vop) 'if-eq)
-                        (immediate-tn-p value-if))
+                        (tn-leaf value-if)
+                        (eq (tn-kind value-if) :constant))
                (let* ((args (vop-args vop))
                       (test (tn-ref-tn (tn-ref-across args))))
-                 (when (and (immediate-tn-p test)
+                 (when (and (tn-leaf test)
+                            (eq (tn-kind test) :constant)
                             (equal (tn-value value-if)
                                    (tn-value test)))
                    (tn-ref-tn args)))))
