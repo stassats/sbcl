@@ -222,6 +222,39 @@
   (inst jmp (make-ea :byte :base eax
                      :disp (- (* closure-fun-slot n-word-bytes)
                               fun-pointer-lowtag))))
+
+;;; It's already established that the stack has to be copied, all the
+;;; registers are in the right place, RCX is correct.
+#+sb-assembling
+(define-assembly-routine
+    (tail-call-variable-simple
+     (:return-style :none))
+
+    ((:temp rax unsigned-reg rax-offset)
+     (:temp rbx unsigned-reg rbx-offset)
+     (:temp rcx unsigned-reg rcx-offset)
+     (:temp loop-index unsigned-reg r9-offset)
+     (:temp count unsigned-reg r8-offset)
+     (:temp temp unsigned-reg r10-offset))
+
+  (inst lea count (make-ea :qword :base rcx :disp (- (fixnumize register-arg-count))))
+  (inst mov loop-index (- n-word-bytes))
+  LOOP
+  (inst sub loop-index n-word-bytes)
+  (inst mov temp (make-ea :qword :base rbx-tn :index loop-index
+                                 :disp (* (frame-word-offset register-arg-count)
+                                          n-word-bytes)))
+  (inst mov (make-ea :qword :base rbp-tn :index loop-index) temp)
+  (inst sub count (fixnumize 1))
+  (inst jmp :nz LOOP)
+
+  (pushw rbp-tn (frame-word-offset return-pc-save-offset))
+
+  (inst jmp
+        (make-ea :byte :base rax
+                       :disp (- (* closure-fun-slot n-word-bytes)
+                                fun-pointer-lowtag))))
+
 
 (define-assembly-routine (throw
                           (:return-style :raw))

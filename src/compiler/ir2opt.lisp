@@ -68,13 +68,37 @@
         (pushnew 2block (car (gethash new *2block-info*)))))))
 
 ;;;; Conditional move insertion support code
-#!-sb-fluid (declaim (inline vop-name))
 (defun vop-name (vop &optional default)
   (declare (type vop vop))
   (let ((vop-info (vop-info vop)))
     (if vop-info
         (vop-info-name vop-info)
         default)))
+
+(defun next-vop (vop)
+  (or (vop-next vop)
+      (do ((block (ir2-block-next (vop-block vop))
+             (ir2-block-next block)))
+          ((null block) nil)
+        (cond ((or (ir2-block-%trampoline-label block)
+                   (ir2-block-%label block))
+               (return nil))
+              ((ir2-block-start-vop block)
+               (return (ir2-block-start-vop block)))))))
+
+(defun prev-vop (vop)
+  (or (vop-prev vop)
+      (let ((block (vop-block vop)))
+       (and (not (or (ir2-block-%trampoline-label block)
+                     (ir2-block-%label block)))
+            (do ((block (ir2-block-prev block)
+                   (ir2-block-prev block)))
+                ((null block) nil)
+              (cond ((or (ir2-block-%trampoline-label block)
+                         (ir2-block-%label block))
+                     (return nil))
+                    ((ir2-block-last-vop block)
+                     (return (ir2-block-last-vop block)))))))))
 
 (defun move-value-target (2block)
   (declare (type ir2-block 2block))

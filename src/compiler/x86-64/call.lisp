@@ -375,57 +375,61 @@
 ;;; explicitly allocate these TNs, since their lifetimes overlap with
 ;;; the results start and count. (Also, it's nice to be able to target
 ;;; them.)
-(defun receive-unknown-values (args nargs start count node)
+(defun receive-unknown-values (args nargs start count vop node)
   (declare (type tn args nargs start count))
-  (let ((type (sb!c::basic-combination-derived-type node))
-        (variable-values (gen-label))
-        (stack-values (gen-label))
-        (done (gen-label)))
-    (when (sb!kernel:values-type-may-be-single-value-p type)
-      (inst jmp :c variable-values)
-      (cond ((location= start (first *register-arg-tns*))
-             (inst push (first *register-arg-tns*))
-             (inst lea start (make-ea :qword :base rsp-tn :disp n-word-bytes)))
-            (t (inst mov start rsp-tn)
-               (inst push (first *register-arg-tns*))))
-      (inst mov count (fixnumize 1))
-      (inst jmp done)
-      (emit-label variable-values))
-    ;; The stack frame is burnt and RETurned from if there are no
-    ;; stack values. In this case quickly reallocate sufficient space.
-    (when (<= (sb!kernel:values-type-min-value-count type)
-              register-arg-count)
-      (inst cmp nargs (fixnumize register-arg-count))
-      (inst jmp :g stack-values)
-      #!+#.(cl:if (cl:= sb!vm:word-shift sb!vm:n-fixnum-tag-bits) '(and) '(or))
-      (inst sub rsp-tn nargs)
-      #!-#.(cl:if (cl:= sb!vm:word-shift sb!vm:n-fixnum-tag-bits) '(and) '(or))
-      (progn
-        ;; FIXME: This can't be efficient, but LEA (my first choice)
-        ;; doesn't do subtraction.
-        (inst shl nargs (- word-shift n-fixnum-tag-bits))
-        (inst sub rsp-tn nargs)
-        (inst shr nargs (- word-shift n-fixnum-tag-bits)))
-      (emit-label stack-values))
-    ;; dtc: this writes the registers onto the stack even if they are
-    ;; not needed, only the number specified in rcx are used and have
-    ;; stack allocated to them. No harm is done.
-    (loop
-      for arg in *register-arg-tns*
-      for i downfrom -1
-      for j below (sb!kernel:values-type-max-value-count type)
-      do (storew arg args i))
-    (move start args)
-    (move count nargs)
+  ;; tail-call-variable will deal with this, just preserve all the registers
+  (let ((next-vop (sb!c::next-vop vop)))
+    (unless (and next-vop
+                 (eq (sb!c::vop-name next-vop) 'tail-call-variable))
+      (let ((type (sb!c::basic-combination-derived-type node))
+            (variable-values (gen-label))
+            (stack-values (gen-label))
+            (done (gen-label)))
+        (when (sb!kernel:values-type-may-be-single-value-p type)
+          (inst jmp :c variable-values)
+          (cond ((location= start (first *register-arg-tns*))
+                 (inst push (first *register-arg-tns*))
+                 (inst lea start (make-ea :qword :base rsp-tn :disp n-word-bytes)))
+                (t (inst mov start rsp-tn)
+                   (inst push (first *register-arg-tns*))))
+          (inst mov count (fixnumize 1))
+          (inst jmp done)
+          (emit-label variable-values))
+        ;; The stack frame is burnt and RETurned from if there are no
+        ;; stack values. In this case quickly reallocate sufficient space.
+        (when (<= (sb!kernel:values-type-min-value-count type)
+                  register-arg-count)
+          (inst cmp nargs (fixnumize register-arg-count))
+          (inst jmp :g stack-values)
+          #!+#.(cl:if (cl:= sb!vm:word-shift sb!vm:n-fixnum-tag-bits) '(and) '(or))
+          (inst sub rsp-tn nargs)
+          #!-#.(cl:if (cl:= sb!vm:word-shift sb!vm:n-fixnum-tag-bits) '(and) '(or))
+          (progn
+            ;; FIXME: This can't be efficient, but LEA (my first choice)
+            ;; doesn't do subtraction.
+            (inst shl nargs (- word-shift n-fixnum-tag-bits))
+            (inst sub rsp-tn nargs)
+            (inst shr nargs (- word-shift n-fixnum-tag-bits)))
+          (emit-label stack-values))
+        ;; dtc: this writes the registers onto the stack even if they are
+        ;; not needed, only the number specified in rcx are used and have
+        ;; stack allocated to them. No harm is done.
+        (loop
+          for arg in *register-arg-tns*
+          for i downfrom -1
+          for j below (sb!kernel:values-type-max-value-count type)
+          do (storew arg args i))
+        (move start args)
+        (move count nargs)
 
-    (emit-label done))
+        (emit-label done))))
   (values))
 
 ;;; VOP that can be inherited by unknown values receivers. The main thing this
 ;;; handles is allocation of the result temporaries.
 (define-vop (unknown-values-receiver)
   (:temporary (:sc descriptor-reg :offset rbx-offset
-                   :from :eval :to (:result 0))
+               :from :eval :to (:result 0))
               values-start)
   (:temporary (:sc any-reg :offset rcx-offset
                :from :eval :to (:result 1))
@@ -519,7 +523,7 @@
     (note-this-location vop :call-site)
     (inst call target)
     (note-this-location vop :unknown-return)
-    (receive-unknown-values values-start nvals start count node)))
+    (receive-unknown-values values-start nvals start count vop node)))
 
 ;;;; local call with known values return
 
@@ -840,8 +844,7 @@
                     '((default-unknown-values vop values nvals node)))
                    (:unknown
                     '((note-this-location vop :unknown-return)
-                      (receive-unknown-values values-start nvals start count
-                                              node)))
+                      (receive-unknown-values values-start nvals start count vop node)))
                    (:tail))))))
 
   (define-full-call call nil :fixed nil)
@@ -877,10 +880,33 @@
   (:generator 75
     (check-ocfp-and-return-pc old-fp return-pc)
     ;; Move these into the passing locations if they are not already there.
-    (move rsi args)
-    (move rax function)
-    ;; And jump to the assembly routine.
-    (invoke-asm-routine 'jmp 'tail-call-variable vop call-target)))
+
+    (let ((prev-vop (sb!c::prev-vop vop)))
+      (cond ((and prev-vop
+                  (memq (sb!c::vop-name prev-vop)
+                        '(multiple-call-named multiple-call
+                          static-multiple-call-named
+                          multiple-call-variable
+                          multiple-call-local)))
+             (assemble ()
+               (move rax function)
+               (inst jmp :nc ONE-REGISTER)
+               (inst cmp rcx-tn (fixnumize register-arg-count))
+               (inst jmp :be ALL-REGISTERS)
+               (invoke-asm-routine 'jmp 'tail-call-variable-simple vop temp-reg-tn)
+               ONE-REGISTER
+               (inst mov rcx-tn (fixnumize 1))
+               ALL-REGISTERS
+               (pushw rbp-tn (frame-word-offset return-pc-save-offset))
+               (inst jmp
+                     (make-ea :byte :base rax
+                                    :disp (- (* closure-fun-slot n-word-bytes)
+                                             fun-pointer-lowtag)))))
+           (t
+            (move rsi args)
+            (move rax function)
+            ;; And jump to the assembly routine.
+            (invoke-asm-routine 'jmp 'tail-call-variable vop call-target))))))
 
 ;;;; unknown values return
 
