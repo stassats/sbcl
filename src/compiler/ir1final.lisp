@@ -241,6 +241,13 @@
          ref
          (find-free-fun two-arg "rewrite-full-call"))))))
 
+(defun ir1-final-reoptimize-if (component)
+  ;; IF branches can be merged only after constraint propagation
+  (do-blocks (block component)
+    (let ((last (block-last block)))
+      (when (if-p last)
+        (merge-if-branches last)))))
+
 ;;; Do miscellaneous things that we want to do once all optimization
 ;;; has been done:
 ;;;  -- Record the derived result type before the back-end trashes the
@@ -264,5 +271,6 @@
            *free-funs*)
 
   (ir1-merge-casts component)
+  (ir1-final-reoptimize-if component)
   (ir1-optimize-functional-arguments component)
   (values))

@@ -693,7 +693,7 @@
 ;;;
 ;;; For now this only handles blocks consisting of
 ;;; BASIC-COMBINATION, REF, CAST, CSET
-(defun cblocks-equivalent-p (block1 block2)
+(defun cblocks-equivalent-p (block1 block2 &key refs-only)
   (declare (type cblock block1 block2))
   (and (equal (block-succ block1) (block-succ block2))
        (let* ((last1 (block-last block1))
@@ -715,6 +715,9 @@
                                         block))
                           ;; Some other blocks receives this LVAR,
                           ;; yet it's not the last node in the block.
+                          (return-from cblocks-equivalent-p))
+                        (when (and refs-only
+                                   (not (ref-p node)))
                           (return-from cblocks-equivalent-p))
                         (typecase node
                           (ref
@@ -758,10 +761,21 @@
                   (eq-combination-p (call1 call2)
                     (and (eq-lvar-p (basic-combination-fun call1)
                                     (basic-combination-fun call2))
-                         (let ((args1 (basic-combination-args call1))
-                               (args2 (basic-combination-args call2)))
+                         (let* ((args1 (basic-combination-args call1))
+                                (args2 (basic-combination-args call2))
+                                (templates (and (basic-combination-fun-info call1)
+                                                (fun-info-templates (basic-combination-fun-info call1))))
+                                (types-to-fixup-before types-to-fixup))
+
                            (and (= (length args1) (length args2))
-                                (every #'eq-lvar-p args1 args2)))))
+                                (every #'eq-lvar-p args1 args2)
+                                ;; Equivalent IF branches could be used to
+                                ;; direct transformation after constraint
+                                ;; propagation.
+                                (or (not templates)
+                                    (and (eq types-to-fixup-before types-to-fixup)
+                                         (type= (node-derived-type call1)
+                                                (node-derived-type call2))))))))
                   (eq-node-p (node1 node2)
                     (and (node-p node1)
                          (node-p node2)
@@ -795,6 +809,30 @@
                        (every #'eq-node-p nodes1 nodes2)))
                 (values t types-to-fixup))))))
 
+(defun merge-if-branches (if &key refs-only)
+  (let ((consequent  (if-consequent  if))
+        (alternative (if-alternative if)))
+    (multiple-value-bind (eq types-to-fixup)
+        (cblocks-equivalent-p consequent alternative :refs-only refs-only)
+      (when eq
+        ;; Even if the references are the same they can
+        ;; have different derived types based on the TEST
+        ;; constraint propagation.
+        ;; Don't lose the second type when killing it.
+        (loop for (consequent-node . alternative-node)
+              in types-to-fixup
+              do
+              (derive-node-type consequent-node
+                                (values-type-union
+                                 (node-derived-type consequent-node)
+                                 (node-derived-type alternative-node))
+                                :from-scratch t))
+        (:dbg (node-source-form (block-start-node  consequent)))
+        (:dbg (node-source-form (block-start-node alternative)))
+        (kill-if-branch-1 if (if-test if) (node-block if) alternative)
+
+        t))))
+
 ;;; Check whether the predicate is known to be true or false,
 ;;; deleting the IF node in favor of the appropriate branch when this
 ;;; is the case.
@@ -804,37 +842,23 @@
 ;;; in fact, splice in direct jumps to the right branch if possible.
 (defun ir1-optimize-if (node)
   (declare (type cif node))
-  (let ((test (if-test node))
-        (block (node-block node)))
-    (let* ((type (lvar-type test))
-           (consequent  (if-consequent  node))
-           (alternative (if-alternative node))
-           (victim
-             (cond ((constant-lvar-p test)
-                    (if (lvar-value test) alternative consequent))
-                   ((not (types-equal-or-intersect type (specifier-type 'null)))
-                    alternative)
-                   ((type= type (specifier-type 'null))
-                    consequent)
-                   ((multiple-value-bind (eq types-to-fixup)
-                        (cblocks-equivalent-p consequent alternative)
-                      (when eq
-                        ;; Even if the references are the same they can
-                        ;; have different derived types based on the TEST
-                        ;; constraint propagation.
-                        ;; Don't lose the second type when killing it.
-                        (loop for (consequent-node . alternative-node)
-                              in types-to-fixup
-                              do
-                              (derive-node-type consequent-node
-                                                (values-type-union
-                                                 (node-derived-type consequent-node)
-                                                 (node-derived-type alternative-node))
-                                                :from-scratch t))
-                        alternative))))))
-      (when victim
-        (kill-if-branch-1 node test block victim)
-        (return-from ir1-optimize-if (values))))
+  (let* ((test (if-test node))
+         (block (node-block node))
+         (type (lvar-type test))
+         (consequent  (if-consequent  node))
+         (alternative (if-alternative node))
+         (victim
+           (cond ((constant-lvar-p test)
+                  (if (lvar-value test) alternative consequent))
+                 ((not (types-equal-or-intersect type (specifier-type 'null)))
+                  alternative)
+                 ((type= type (specifier-type 'null))
+                  consequent))))
+    (when victim
+      (kill-if-branch-1 node test block victim)
+      (return-from ir1-optimize-if (values)))
+    (when (merge-if-branches node :refs-only t) ;; too early to handle everything
+      (return-from ir1-optimize-if (values)))
     (tension-if-if-1 node test block)
     (duplicate-if-if-1 node test block)
     (values)))
@@ -846,6 +870,7 @@
   (flush-dest test)
   (when (rest (block-succ block))
     (unlink-blocks block victim))
+  (setf (reoptimize-block block) t)
   (setf (component-reanalyze (node-component node)) t)
   (unlink-node node))
 
