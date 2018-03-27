@@ -259,7 +259,7 @@
   ;;
   ;; If this is :UNUSED, then this LVAR should never actually be used
   ;; as the destination of a value: it is only used tail-recursively.
-  (kind :fixed :type (member :delayed :fixed :unknown :unused))
+  (kind :fixed :type (member :delayed :fixed :unknown :variable :unused))
   ;; The primitive-type of the first value of this LVAR. This is
   ;; primarily for internal use during LTN, but it also records the
   ;; type restriction on delayed references. In multiple-value
@@ -454,11 +454,11 @@
   ;; The return convention used:
   ;; -- If :UNKNOWN, we use the standard return convention.
   ;; -- If :FIXED, we use the known-values convention.
-  (kind (missing-arg) :type (member :fixed :unknown))
+  (kind (missing-arg) :type (member :fixed :unknown :variable))
   ;; the number of values returned, or :UNKNOWN if we don't know.
   ;; COUNT may be known when KIND is :UNKNOWN, since we may choose the
   ;; standard return convention for other reasons.
-  (count (missing-arg) :type (or index (member :unknown)))
+  (count (missing-arg) :type (or index (member :unknown :variable)))
   ;; If count isn't :UNKNOWN, then this is a list of the
   ;; primitive-types of each value.
   (types () :type list)

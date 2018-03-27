@@ -261,6 +261,23 @@
             (make-stack-pointer-tn))))
   (ltn-annotate-casts lvar)
   (values))
+
+(defun annotate-variable-values-lvar (lvar types)
+  (declare (type lvar lvar) (list types))
+  (let ((info (make-ir2-lvar nil)))
+    (setf (ir2-lvar-locs info)
+          (loop for type in types
+                collect (if type
+                            (make-normal-tn type)
+                            (make-unused-tn))))
+    (setf (lvar-info lvar) info)
+    (setf (ir2-lvar-kind info) :variable)
+    (when (lvar-dynamic-extent lvar)
+      (aver (proper-list-of-length-p types 1))
+      (setf (ir2-lvar-stack-pointer info)
+            (make-stack-pointer-tn))))
+  (ltn-annotate-casts lvar)
+  (values))
 
 ;;;; node-specific analysis functions
 
@@ -289,24 +306,28 @@
          (fun (return-lambda node))
          (returns (tail-set-info (lambda-tail-set fun)))
          (types (return-info-types returns)))
-    (if (eq (return-info-count returns) :unknown)
-        (collect ((res *empty-type* values-type-union))
-          (do-uses (use (return-result node))
-            (unless (and (node-tail-p use)
-                         (basic-combination-p use)
-                         (member (basic-combination-info use) '(:local :full)))
-              (res (node-derived-type use))))
+    (case (return-info-count returns)
+      (:unknown
+       (collect ((res *empty-type* values-type-union))
+         (do-uses (use (return-result node))
+           (unless (and (node-tail-p use)
+                        (basic-combination-p use)
+                        (member (basic-combination-info use) '(:local :full)))
+             (res (node-derived-type use))))
 
-          (let ((int (res)))
-            (multiple-value-bind (types kind)
-                (if (eq int *empty-type*)
-                    (values nil :unknown)
-                    (values-types int))
-              (if (eq kind :unknown)
-                  (annotate-unknown-values-lvar lvar)
-                  (annotate-fixed-values-lvar
-                   lvar (mapcar #'primitive-type types))))))
-        (annotate-fixed-values-lvar lvar types)))
+         (let ((int (res)))
+           (multiple-value-bind (types kind)
+               (if (eq int *empty-type*)
+                   (values nil :unknown)
+                   (values-types int))
+             (if (eq kind :unknown)
+                 (annotate-unknown-values-lvar lvar)
+                 (annotate-fixed-values-lvar
+                  lvar (mapcar #'primitive-type types)))))))
+      (:variable
+       (annotate-variable-values-lvar lvar types))
+      (t
+       (annotate-fixed-values-lvar lvar types))))
 
   (values))
 

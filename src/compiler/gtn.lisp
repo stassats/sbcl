@@ -176,14 +176,19 @@
       (when (and (eq count :unknown) (not use-standard)
                  (not (eq (tail-set-type tails) *empty-type*)))
         (return-value-efficiency-note tails))
-      (if (or (eq count :unknown) use-standard)
-          (make-return-info :kind :unknown
-                            :count count
-                            :types ptypes)
-          (make-return-info :kind :fixed
-                            :count count
-                            :types ptypes
-                            :locations (mapcar #'make-normal-tn ptypes))))))
+      (cond ((or (eq count :unknown) use-standard)
+             (make-return-info :kind :unknown
+                               :count count
+                               :types ptypes))
+            ((eq count :variable)
+             (make-return-info :kind :variable
+                               :count :variable
+                               :types ptypes))
+            (t
+             (make-return-info :kind :fixed
+                               :count count
+                               :types ptypes
+                               :locations (mapcar #'make-normal-tn ptypes)))))))
 
 ;;; If TAIL-SET doesn't have any INFO, then make a RETURN-INFO for it.
 (defun assign-return-locations (fun)

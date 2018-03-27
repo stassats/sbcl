@@ -972,6 +972,33 @@
     ;; And return.
     (inst ret)))
 
+(define-vop (push-variable-values)
+  (:args (vals :more t))
+  (:temporary (:sc unsigned-reg :to (:result 0) :target start) temp)
+  (:results (start) (count))
+  (:info nvals)
+  (:generator 20
+    (move temp rsp-tn)   
+    (do ((val vals (tn-ref-across val)))
+        ((null val))
+      (inst push (tn-ref-tn val)))
+    (move start temp)
+    (unless (eq (tn-kind count) :unused)
+      (inst mov count (fixnumize nvals)))))
+
+(define-vop (return-variable)
+  (:args (old-fp)
+         (return-pc))
+  (:ignore value)
+  (:generator 6
+              (check-ocfp-and-return-pc old-fp return-pc)
+              ;; Drop stack above old-fp
+              (inst mov rsp-tn rbp-tn)
+              ;; Restore the old frame pointer
+              (inst pop rbp-tn)
+              ;; And return.
+              (inst ret)))
+
 ;;; Do unknown-values return of a fixed (other than 1) number of
 ;;; values. The VALUES are required to be set up in the standard
 ;;; passing locations. NVALS is the number of values returned.
