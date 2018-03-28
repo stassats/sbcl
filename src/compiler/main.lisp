@@ -1163,10 +1163,13 @@ necessary, since type inference may take arbitrarily long to converge.")
            ;; the parameters of the real function (via CONVERT-CALL /
            ;; PROPAGATE-TO-ARGS). -- JES, 2007-02-27
            (*lexenv* (make-lexenv :policy (lexenv-policy (functional-lexenv fun))))
-           (xep (ir1-convert-lambda (make-xep-lambda-expression fun)
-                                    :source-name source-name
-                                    :debug-name (debug-name 'tl-xep debug-name-tail)
-                                    :system-lambda t)))
+           (xep (progn
+                  (print-all-blocks component)
+                  (ir1-convert-lambda (make-xep-lambda-expression fun)
+                                      :source-name source-name
+                                      :debug-name (debug-name 'tl-xep debug-name-tail)
+                                      :system-lambda t))))
+      (print-all-blocks component)
       (when name
         (assert-global-function-definition-type name fun))
       (setf (functional-kind xep) :external
@@ -1227,11 +1230,12 @@ necessary, since type inference may take arbitrarily long to converge.")
       ;; (The second alternative might be pretty easy if we used
       ;; the :LOCALL-ONLY option to IR1-FOR-LAMBDA. Then maybe the
       ;; whole FUNCTIONAL-KIND=:TOPLEVEL case could go away..)
-
+      ;(print-all-blocks (lambda-component fun))
       (locall-analyze-clambdas-until-done (list fun))
 
       (let ((components-from-dfo (find-initial-dfo (list fun))))
         (dolist (component-from-dfo components-from-dfo)
+          ;; (print-all-blocks component-from-dfo)
           (compile-component component-from-dfo)
           (replace-toplevel-xeps component-from-dfo))
 

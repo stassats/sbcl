@@ -520,16 +520,54 @@
 
   (values))
 
-;;; Attempt to convert a multiple-value call. The only interesting
-;;; case is a call to a function that LOOKS-LIKE-AN-MV-BIND, has
-;;; exactly one reference and no XEP, and is called with one values
-;;; lvar.
+;;; Lambda lists that look like (&optional var-name &rest unused) can
+;;; use the mv-bind treatment.
+;;; Anything else that doesn't use &rest or &key can use an external
+;;; etnry point to parse the arguments.
+;;; &rest and &key are not handled at the moment
+(defun mv-call-entry-point-kind (functional)
+  (if (optional-dispatch-p functional)
+      (do ((kind :mv-bind)
+           (rest-p)
+           (arg (optional-dispatch-arglist functional) (cdr arg)))
+          ((null arg) (if rest-p
+                          kind
+                          :xep))
+        (let ((info (lambda-var-arg-info (car arg))))
+          (unless info (return nil))
+          (case (arg-info-kind info)
+            (:required
+             (setf kind :xep))
+            (:optional
+             (when (or (arg-info-supplied-p info)
+                       (arg-info-default info))
+               (setf kind :xep)))
+            (:rest
+             (setf rest-p t)
+             (when (or (cdr arg)
+                       (leaf-refs (car arg))
+                       ;; Type checking will require reading the
+                       ;; variable, but it's done in one of the
+                       ;; dispatch functions making it invisible
+                       ;; to LEAF-REFS
+                       (and (eq (leaf-where-from (car arg)) :declared)
+                            (not (csubtypep (specifier-type 'list)
+                                            (leaf-type (car arg))))))
+               (return)))
+            (t
+             (return nil)))))
+      :xep))
+
+;;; Attempt to convert a multiple-value call. We currently handle
+;;; functions that do not use &rest or &key, have exactly one
+;;; reference and no XEP, and is called with one values lvar or with
+;;; multiple lvars with known values. 
 ;;;
-;;; We change the call to be to the last optional entry point and
-;;; change the call to be local. Due to our preconditions, the call
-;;; should eventually be converted to a let, but we can't do that now,
-;;; since there may be stray references to the e-p lambda due to
-;;; optional defaulting code.
+;;; We change the call to the approriate entry point and change the
+;;; call to be local. Due to our preconditions, the call should
+;;; eventually be converted to a let, but we can't do that now, since
+;;; there may be stray references to the e-p lambda due to optional
+;;; defaulting code.
 ;;;
 ;;; We also use variable types for the called function to construct an
 ;;; assertion for the values lvar.
@@ -537,39 +575,64 @@
 ;;; See CONVERT-CALL for additional notes on MERGE-TAIL-SETS, etc.
 (defun convert-mv-call (ref call fun)
   (declare (type ref ref) (type mv-combination call) (type functional fun))
-  (when (and (looks-like-an-mv-bind fun)
-             (singleton-p (leaf-refs fun))
-             (not (functional-entry-fun fun)))
-    (let* ((*current-component* (node-component ref))
-           (ep (optional-dispatch-entry-point-fun
-                fun (optional-dispatch-max-args fun)))
-           (args (basic-combination-args call)))
-      (when (and (null (leaf-refs ep))
-                 (or (singleton-p args)
-                     (call-all-args-fixed-p call)))
-        (aver (= (optional-dispatch-min-args fun) 0))
-        (setf (basic-combination-kind call) :local)
-        (sset-adjoin ep (lambda-calls-or-closes (node-home-lambda call)))
-        (merge-tail-sets call ep)
-        (change-ref-leaf ref ep)
-        (if (singleton-p args)
-            (assert-lvar-type
-             (first args)
-             (make-short-values-type (mapcar #'leaf-type (lambda-vars ep)))
-             (lexenv-policy (node-lexenv call)))
-            (let ((vars (lambda-vars ep)))
-              (loop for arg in args
-                    while vars
-                    do
-                    (assert-lvar-type
-                     arg
-                     (make-short-values-type
-                      (and vars
-                       (loop repeat (nth-value 1 (values-types
-                                                  (lvar-derived-type arg)))
-                             for var in vars
-                             collect (leaf-type var))))
-                     (lexenv-policy (node-lexenv call)))))))))
+  (let ((entry-kind (mv-call-entry-point-kind fun))
+        (args (basic-combination-args call)))
+   (when (and entry-kind
+              (singleton-p (leaf-refs fun))
+              (not (functional-entry-fun fun))
+              (or (singleton-p args)
+                  (and (eq entry-kind :mv-bind)
+                       (call-all-args-fixed-p call))))
+     (with-ir1-environment-from-node (lambda-bind (main-entry fun))
+       (let* ((ep (case entry-kind
+                    (:mv-bind
+                     (optional-dispatch-entry-point-fun
+                      fun (optional-dispatch-max-args fun)))
+                    (:xep
+                     (let ((xep
+                             (ir1-convert-lambda (make-xep-lambda-expression fun)
+                                                 :source-name (leaf-%source-name  fun)
+                                                 :debug-name (debug-name 'mv-xep (leaf-debug-name fun))
+                                                 :system-lambda t)))
+                       (setf (leaf-ever-used xep) t
+                             (component-reanalyze *current-component*) t)
+                       (reoptimize-component *current-component* :maybe)
+                       (locall-analyze-xep-entry-point xep)
+                       xep)))))
+         (unless (leaf-refs ep)
+           (setf (basic-combination-kind call) :local)
+           (sset-adjoin ep (lambda-calls-or-closes (node-home-lambda call)))
+           (merge-tail-sets call ep)
+           (change-ref-leaf ref ep)
+           (if (singleton-p args)
+               (assert-lvar-type
+                (first args)
+                (if (eq entry-kind :xep)
+                    (multiple-value-bind (required optional rest)
+                        (typecase fun
+                          (clambda
+                           (values (mapcar #'leaf-type (lambda-vars fun)) nil nil))
+                          (optional-dispatch
+                           ))
+                        (make-values-type :required required
+                                          :optional optional
+                                          :rest rest))
+                    (make-short-values-type
+                     (mapcar #'leaf-type (lambda-vars ep))))
+                (lexenv-policy (node-lexenv call)))
+               (let ((vars (lambda-vars ep)))
+                 (loop for arg in args
+                       while vars
+                       do
+                       (assert-lvar-type
+                        arg
+                        (make-short-values-type
+                         (and vars
+                              (loop repeat (nth-value 1 (values-types
+                                                         (lvar-derived-type arg)))
+                                    for var in vars
+                                    collect (leaf-type var))))
+                        (lexenv-policy (node-lexenv call)))))))))))
   (values))
 
 ;;; Convenience function to mark local calls as known bad.

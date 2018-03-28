@@ -528,7 +528,7 @@
 ;;; locations. If the lvar is unknown values, then do the moves into
 ;;; the standard value locations, and use PUSH-VALUES to put the
 ;;; values on the stack.
-(defun move-lvar-result (node block results lvar)
+(defun move-lvar-result (node block results lvar &optional skip-first)
   (declare (type node node) (type ir2-block block)
            (list results) (type (or lvar null) lvar))
   (when lvar
@@ -540,7 +540,10 @@
           (:fixed
            (let ((locs (ir2-lvar-locs 2lvar)))
              (unless (eq locs results)
-               (move-results-coerced node block results locs))))
+               (move-results-coerced node block results
+                                     (if skip-first
+                                         (cdr locs)
+                                         locs)))))
           (:unknown
            (let* ((nvals (length results))
                   (locs (make-standard-value-tns nvals)))
@@ -1072,6 +1075,16 @@
 
         (values fp first (locs) nargs)))))
 
+(defun mv-xep-call-p (call)
+  (let ((lvar (node-lvar call)))
+    (when lvar
+      (let ((dest (principal-lvar-dest lvar)))
+        (when (and 
+               (mv-combination-p dest)
+               (typep (lvar-fun-debug-name (basic-combination-fun dest))
+                      '(cons (eql mv-xep))))
+          dest)))))
+
 ;;; Do full call when a fixed number of values are desired. We make
 ;;; STANDARD-RESULT-TNS for our lvar, then deliver the result using
 ;;; MOVE-LVAR-RESULT. We do named or normal call, as appropriate.
@@ -1080,8 +1093,13 @@
   (multiple-value-bind (fp args arg-locs nargs)
       (ir2-convert-full-call-args node block)
     (let* ((lvar (node-lvar node))
+           (mv-xep-p (mv-xep-call-p node))
+           (ir2-lvar-locs (and lvar
+                               (ir2-lvar-locs (lvar-info lvar))))
            (locs (and lvar
-                      (loop for loc in (ir2-lvar-locs (lvar-info lvar))
+                      (loop for loc in (if mv-xep-p
+                                           (cdr ir2-lvar-locs)
+                                           ir2-lvar-locs)
                             for i from 0
                             collect (cond ((eql (tn-kind loc) :unused)
                                            loc)
@@ -1090,15 +1108,32 @@
                                            (make-normal-tn *backend-t-primitive-type*))
                                           (t
                                            (standard-arg-location i))))))
-           (loc-refs (reference-tn-list locs t))
+           (arg-count (and mv-xep-p
+                           (make-arg-count-location)))
+           (loc-refs (reference-tn-list
+                      (if arg-count
+                          (list* arg-count locs)
+                          locs)
+                      t))
            (nvals (length locs)))
       (multiple-value-bind (fun-tn named)
           (fun-lvar-tn node block (basic-combination-fun node))
         (cond ((not named)
-               (vop* call node block (fp fun-tn args) (loc-refs)
-                     arg-locs nargs nvals (emit-step-p node)
-                     #!+call-symbol
-                     (eq (tn-primitive-type fun-tn) *backend-t-primitive-type*)))
+               (cond (mv-xep-p
+                      (vop* sb-vm::call-mv-xep node block (fp fun-tn args) (loc-refs)
+                            arg-locs nargs (1- nvals) (emit-step-p node)
+                            #!+call-symbol
+                            (eq (tn-primitive-type fun-tn) *backend-t-primitive-type*))
+                      (xep-verify-arg-count mv-xep-p block
+                                            (nth-value 2
+                                                       (lvar-fun-type
+                                                        (basic-combination-fun mv-xep-p)))
+                                            arg-count))
+                     (t
+                      (vop* call node block (fp fun-tn args) (loc-refs)
+                            arg-locs nargs nvals (emit-step-p node)
+                            #!+call-symbol
+                            (eq (tn-primitive-type fun-tn) *backend-t-primitive-type*)))))
               #!-immobile-code
               ((eq fun-tn named)
                (vop* static-call-named node block
@@ -1107,12 +1142,18 @@
                      arg-locs nargs named nvals
                      (emit-step-p node)))
               (t
-               (vop* call-named node block
-                     (fp #!-immobile-code fun-tn args) ; args
-                     (loc-refs)                        ; results
-                     arg-locs nargs #!+immobile-code named nvals ; info
-                     (emit-step-p node))))
-        (move-lvar-result node block locs lvar))))
+               (if mv-xep-p
+                   (vop* sb-vm::call-named-mv-xep node block
+                         (fp #!-immobile-code fun-tn args)
+                         (loc-refs)
+                         arg-locs nargs #!+immobile-code named (1- nvals)
+                         (emit-step-p node))
+                   (vop* call-named node block
+                         (fp #!-immobile-code fun-tn args) ; args
+                         (loc-refs)                        ; results
+                         arg-locs nargs #!+immobile-code named nvals ; info
+                         (emit-step-p node)))))
+        (move-lvar-result node block locs lvar mv-xep-p))))
   (values))
 
 ;;; Do full call when unknown values are desired.
@@ -1590,13 +1631,21 @@
               #!+call-symbol
               (eq (tn-primitive-type fun) *backend-t-primitive-type*)))
        (t
-        (let ((locs (standard-result-tns lvar)))
-          (vop* call-variable node block (start fun nil)
-                ((reference-tn-list locs t)) (length locs)
-                (emit-step-p node)
-                #!+call-symbol
-                (eq (tn-primitive-type fun) *backend-t-primitive-type*))
-          (move-lvar-result node block locs lvar)))))))
+        (let ((mv-xep-p (mv-xep-call-p node))
+              (locs (standard-result-tns lvar)))
+          (if mv-xep-p
+              (vop* sb-vm::call-variable-mv-xep node block (start fun nil)
+                    ((reference-tn-list (list* (make-arg-count-location) locs) t))
+                    (1- (length locs))
+                    (emit-step-p node)
+                    #!+call-symbol
+                    (eq (tn-primitive-type fun) *backend-t-primitive-type*))
+              (vop* call-variable node block (start fun nil)
+                    ((reference-tn-list locs t)) (length locs)
+                    (emit-step-p node)
+                    #!+call-symbol
+                    (eq (tn-primitive-type fun) *backend-t-primitive-type*)))
+          (move-lvar-result node block locs lvar mv-xep-p)))))))
 
 ;;; Reset the stack pointer to the start of the specified
 ;;; unknown-values lvar (discarding it and all values globs on top of

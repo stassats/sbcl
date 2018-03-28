@@ -318,7 +318,9 @@
   (declare (type mv-combination call))
   (setf (basic-combination-kind call) :local)
   (setf (node-tail-p call) nil)
-  (let ((args (basic-combination-args call)))
+  (let ((args (basic-combination-args call))
+        (mv-xep-p (typep (lvar-fun-debug-name (basic-combination-fun call))
+                         '(cons (eql mv-xep)))))
     (if (singleton-p args)
         (annotate-fixed-values-lvar
          (first args)

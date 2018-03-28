@@ -2299,34 +2299,6 @@ is :ANY, the function name is not checked."
     (optional-dispatch
      (optional-dispatch-main-entry functional))))
 
-;;; RETURN true if FUNCTIONAL is a thing that can be treated like
-;;; MV-BIND when it appears in an MV-CALL. All fixed arguments must be
-;;; optional with null default and no SUPPLIED-P. There must be a
-;;; &REST arg with no references.
-(declaim (ftype (sfunction (functional) boolean) looks-like-an-mv-bind))
-(defun looks-like-an-mv-bind (functional)
-  (and (optional-dispatch-p functional)
-       (do ((arg (optional-dispatch-arglist functional) (cdr arg)))
-           ((null arg) nil)
-         (let ((info (lambda-var-arg-info (car arg))))
-           (unless info (return nil))
-           (case (arg-info-kind info)
-             (:optional
-              (when (or (arg-info-supplied-p info) (arg-info-default info))
-                (return nil)))
-             (:rest
-              (return (and (null (cdr arg))
-                           (null (leaf-refs (car arg)))
-                           ;; Type checking will require reading the
-                           ;; variable, but it's done in one of the
-                           ;; dispatch functions making it invisible
-                           ;; to LEAF-REFS
-                           (or (neq (leaf-where-from (car arg)) :declared)
-                               (values (csubtypep (specifier-type 'list)
-                                                  (leaf-type (car arg))))))))
-             (t
-              (return nil)))))))
-
 (defun call-all-args-fixed-p (call)
   (loop for arg in (basic-combination-args call)
         always (numberp (nth-value 1 (values-types
