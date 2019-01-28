@@ -344,12 +344,6 @@ GNAME(fun_end_breakpoint_end):
 	.globl 	GNAME(do_pending_interrupt)
 	TYPE(GNAME(do_pending_interrupt))
 	.align	align_16byte,0x90
-GNAME(do_pending_interrupt):
-	TRAP
-	.byte 	trap_PendingInterrupt
-	ret
-	SIZE(GNAME(do_pending_interrupt))
-
 #ifdef LISP_FEATURE_SB_SAFEPOINT
 	.globl 	GNAME(handle_global_safepoint_violation)
 	TYPE(GNAME(handle_global_safepoint_violation))
@@ -369,14 +363,6 @@ GNAME(handle_csp_safepoint_violation):
 	ret
 	SIZE(GNAME(handle_csp_safepoint_violation))
 #endif /* SB-SAFEPOINT */
-
-	.globl 	GNAME(memory_fault_emulation_trap)
-	TYPE(GNAME(memory_fault_emulation_trap))
-	.align	align_16byte,0x90
-GNAME(memory_fault_emulation_trap):
-	TRAP
-	.byte 	trap_MemoryFaultEmulation
-	SIZE(GNAME(memory_fault_emulation_trap))
 
 	.globl	GNAME(post_signal_tramp)
 	TYPE(GNAME(post_signal_tramp))

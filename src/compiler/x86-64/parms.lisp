@@ -172,6 +172,10 @@
 ;;;     Note these spaces grow from low to high addresses.
 (defvar *binding-stack-pointer*)
 
+(defconstant-eqx +runtime-asm-routines+
+    '(memory-fault-emulation do-pending-interrupt)
+  #'equal)
+
 (defconstant-eqx +static-symbols+
  `#(,@+common-static-symbols+
     #!+(and immobile-space (not sb-thread)) function-layout
@@ -179,7 +183,8 @@
      ;; interrupt handling
     #!-sb-thread *pseudo-atomic-bits*     ; ditto
     #!-sb-thread *binding-stack-pointer* ; ditto
-    *cpuid-fn1-ecx*)
+    *cpuid-fn1-ecx*
+    ,@+runtime-asm-routines+)
   #'equalp)
 
 ;;; FIXME: with #!+immobile-space, this should be the empty list,

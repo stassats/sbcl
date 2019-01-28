@@ -2195,7 +2195,6 @@ lisp_memory_fault_error(os_context_t *context, os_vm_address_t addr)
      * it up in the trap handler.  And the stack pointer manipulation
      * works as long as the on-stack side only pops items in its trap
      * handler. */
-    extern void memory_fault_emulation_trap(void);
     undo_fake_foreign_function_call(context);
     void **sp = (void **)*os_context_sp_addr(context);
     *--sp = (void *)*os_context_pc_addr(context);
@@ -2206,11 +2205,11 @@ lisp_memory_fault_error(os_context_t *context, os_vm_address_t addr)
 #  else
     *((void **)os_context_sp_addr(context)) = sp;
 #  endif
-    *os_context_pc_addr(context) =
-        (os_context_register_t)memory_fault_emulation_trap;
+    *os_context_pc_addr(context) = SYMBOL(MEMORY_FAULT_EMULATION)->value;
+
     /* We exit here, letting the signal handler return, picking up at
-     * memory_fault_emulation_trap (in target-assem.S), which will
-     * trap, and the handler calls the function below, where we
+     * MEMORY-FAULT-EMULATION in assembly/runtime-rtns.lisp, which
+     * will trap, and the handler calls the function below, where we
      * restore our state to parallel what a non-x86oid would have, and
      * then run the common code for handling the error in Lisp. */
 }
