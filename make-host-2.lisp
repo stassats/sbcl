@@ -17,6 +17,24 @@
 ;;; Run the cross-compiler to produce cold fasl files.
 (setq sb-c::*track-full-called-fnames* :minimal) ; Change this as desired
 (setq sb-c::*static-vop-usage-counts* (make-hash-table))
+(setq sb-c::*type-info* (make-hash-table :test #'equal))
+
+(defun read-type-information ()
+  (let ((*readtable* *xc-readtable*))
+    (with-open-file (stream "output/types.lisp-expr" :direction :input
+                                                     :if-does-not-exist nil)
+      (when stream
+        (let ((*package* (find-package :keyword)))
+          (loop for package = (read stream nil nil)
+                for name = (read stream nil nil)
+                for type = (read stream nil nil)
+                while type
+                do (ignore-errors
+                    (setf (gethash (cons package name) sb-c::*type-info*)
+                          (read-from-string type)))))))))
+
+(read-type-information)
+
 (let (fail
       variables
       functions

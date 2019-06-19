@@ -273,7 +273,7 @@
                                                      (list owrapper
                                                            (layout-of instance)
                                                            (class-wrapper class)))))))
-             (check-wrapper-validity instance))
+             (truly-the (values layout &optional) (check-wrapper-validity instance)))
             ((consp state)
              (ecase (car state)
                (:flush

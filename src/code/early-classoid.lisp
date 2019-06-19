@@ -476,22 +476,38 @@
   :type-spec (or layout null)
   :default (lambda (name)
              (awhen (find-classoid name nil) (classoid-layout it))))
+(defvar *type-info*
+  #-sb-xc-host
+  (macrolet ((f ()
+               `(sb-impl::%stuff-hash-table
+                 (make-hash-table :test #'equal)
+                 ',(%hash-table-alist *type-info*))))
+    (f)))
 
 (eval-when (#-sb-xc :compile-toplevel :load-toplevel :execute)
 (defun ftype-from-fdefn (name)
   (declare (ignorable name))
-  ;; Again [as in (DEFINE-INFO-TYPE (:FUNCTION :TYPE) ...)] it's
-  ;; not clear how to generalize the FBOUNDP expression to the
-  ;; cross-compiler. -- WHN 19990330
-  #+sb-xc-host
-  (specifier-type 'function)
-  #-sb-xc-host
-  (let* ((fdefn (sb-kernel::find-fdefn name))
-         (fun (and fdefn (fdefn-fun fdefn))))
-    (if fun
-        (handler-bind ((style-warning #'muffle-warning))
-          (specifier-type (sb-impl::%fun-type fun)))
-        (specifier-type 'function)))))
+  (let ((found (and (symbolp name)
+                    (boundp '*type-info*)
+                    (gethash (cons (package-name (cl:symbol-package name))
+                                   (symbol-name name))
+                             *type-info*))))
+    (if found
+        (handler-bind ((warning #'muffle-warning))
+          (sb-kernel:specifier-type found))
+          
+        ;; Again [as in (DEFINE-INFO-TYPE (:FUNCTION :TYPE) ...)] it's
+        ;; not clear how to generalize the FBOUNDP expression to the
+        ;; cross-compiler. -- WHN 19990330
+        #+sb-xc-host
+        (specifier-type 'function)
+        #-sb-xc-host
+        (let* ((fdefn (sb-kernel::find-fdefn name))
+               (fun (and fdefn (fdefn-fun fdefn))))
+          (if fun
+              (handler-bind ((style-warning #'muffle-warning))
+                (specifier-type (sb-impl::%fun-type fun)))
+              (specifier-type 'function)))))))
 
 ;;; The parsed or unparsed type for this function, or the symbol :GENERIC-FUNCTION.
 ;;; Ordinarily a parsed type is stored. Only if the parsed type contains

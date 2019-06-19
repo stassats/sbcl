@@ -337,7 +337,7 @@ Please check that all strings which were not recognizable to the compiler
 ;;; Use historical (stupid) behavior for storing pathname namestrings
 ;;; in fasls.
 (setq sb-c::*name-context-file-path-selector* 'truename)
-
+(makunbound 'sb-c::*type-info*)
 ;;; Lock internal packages
 (dolist (p (list-all-packages))
   (unless (member p (mapcar #'find-package '("KEYWORD" "CL-USER")))
@@ -359,6 +359,30 @@ Please check that all strings which were not recognizable to the compiler
 
 #+sb-devel
 (sb-impl::%enter-new-nicknames (find-package :cl) '("SB-XC" "CL"))
+
+(defun collect-type-information ()
+  (let ((old *print-pprint-dispatch*)
+        (*print-pprint-dispatch* (copy-pprint-dispatch)))
+    (set-pprint-dispatch 'float
+                         (lambda (stream x)
+                           (write-char #\$ stream)
+                           (funcall (pprint-dispatch x old) stream x)))
+    (with-open-file (stream "output/types.lisp-expr" :direction :output :if-exists :supersede)
+      (do-all-symbols (name)
+        (when (and (fboundp name)
+                   (not (macro-function name))
+                   (not (special-operator-p name)))
+          (let ((where (sb-int:info :function :where-from name)))
+            (when (eq where :defined)
+              (let ((type  (sb-int:global-ftype name)))
+                (when (sb-kernel:fun-type-p type)
+                  (let ((*package* (find-package :keyword)))
+                    (format stream "~s ~s ~s~%"
+                            (package-name (symbol-package name))
+                            (symbol-name name)
+                            (prin1-to-string (sb-kernel:type-specifier type)))))))))))))
+
+(collect-type-information)
 "done with warm.lisp, about to SAVE-LISP-AND-DIE"
 
 #|

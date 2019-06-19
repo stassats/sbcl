@@ -26,11 +26,13 @@
             (sb-c:insert-step-conditions 0)
             (sb-c:alien-funcall-saves-fp-and-pc #+x86 3 #-x86 0)))
 
+(setf sb-ext:*derive-function-types* t)
+
 (locally
-    (declare (notinline find-symbol)) ; don't ask
+    (declare (notinline find-symbol))   ; don't ask
   (let ((s (find-symbol "*/SHOW*" "SB-INT")))
-  ;; If you made it this far, chances are that you no longer wish to see
-  ;; whatever it is that show would have shown. Comment this out if you need.
+    ;; If you made it this far, chances are that you no longer wish to see
+    ;; whatever it is that show would have shown. Comment this out if you need.
     (when s (set s nil))))
 
 (assert (zerop (deref (extern-alien "lowtag_for_widetag" (array char 64))

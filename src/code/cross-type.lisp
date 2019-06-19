@@ -161,7 +161,10 @@
         (if (and (functionp obj) (eq caller 'sb-xc:typep))
             (error "TYPEP called with function type")
             (values (functionp obj) t)))
-       (alien-type-type (if (null obj) (values nil t) (unimplemented)))
+       (alien-type-type (if (or (null obj)
+                                (eq obj t))
+                            (values nil t)
+                            (unimplemented)))
        ;; Test UNKNOWN before falling into the HAIRY case
        (unknown-type
         (let ((spec (unknown-type-specifier type)))
@@ -262,7 +265,8 @@
                             (return-from contains-satisfies t)))
                         ctype)))
         (values answer certain)
-        (warn 'cross-type-giving-up :call `(ctypep ,obj ,ctype)))))
+        nil;; (warn 'cross-type-giving-up :call `(ctypep ,obj ,ctype))
+        )))
 
 (defun ctype-of (x)
   (typecase x
