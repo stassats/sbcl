@@ -563,6 +563,17 @@
     (inst mov rsp-tn rbp-tn)
     (inst pop rbp-tn)
     (inst ret)))
+
+(define-vop (unused-return)
+  (:args (old-fp)
+         (return-pc))
+  (:generator 6
+    (check-ocfp-and-return-pc old-fp return-pc)
+    ;; Zot all of the stack except for the old-fp and return-pc.
+    (inst clc)
+    (inst mov rsp-tn rbp-tn)
+    (inst pop rbp-tn)
+    (inst ret)))
 
 ;;;; full call
 ;;;

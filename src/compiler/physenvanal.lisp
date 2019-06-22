@@ -572,24 +572,25 @@
       ;; of whether we *want* to annotate it as such.
       (when ret
         (let ((result (return-result ret)))
-          (do-uses (use result)
-            (when (and (basic-combination-p use)
-                       (immediately-used-p result use)
-                       (or (eq (basic-combination-kind use) :local)
-                           ;; Nodes whose type is NIL (i.e. don't return) such
-                           ;; as calls to ERROR are never annotated as TAIL-P,
-                           ;; in order to preserve debugging information, so that
-                           ;;
-                           ;; We spread this net wide enough to catch
-                           ;; untrusted NIL return types as well, so that
-                           ;; frames calling functions such as FOO-ERROR are
-                           ;; kept in backtraces:
-                           ;;
-                           ;;  (defun foo-error (x) (error "oops: ~S" x))
-                           ;;
-                           (not (or (eq *empty-type* (node-derived-type use))
-                                    (eq *empty-type* (combination-defined-type use))))))
-              (setf (node-tail-p use) t)))))))
+          (when result
+           (do-uses (use result)
+             (when (and (basic-combination-p use)
+                        (immediately-used-p result use)
+                        (or (eq (basic-combination-kind use) :local)
+                            ;; Nodes whose type is NIL (i.e. don't return) such
+                            ;; as calls to ERROR are never annotated as TAIL-P,
+                            ;; in order to preserve debugging information, so that
+                            ;;
+                            ;; We spread this net wide enough to catch
+                            ;; untrusted NIL return types as well, so that
+                            ;; frames calling functions such as FOO-ERROR are
+                            ;; kept in backtraces:
+                            ;;
+                            ;;  (defun foo-error (x) (error "oops: ~S" x))
+                            ;;
+                            (not (or (eq *empty-type* (node-derived-type use))
+                                     (eq *empty-type* (combination-defined-type use))))))
+               (setf (node-tail-p use) t))))))))
   ;; The above loop does not find all calls to ERROR.
   (do-blocks (block component)
     (do-nodes (node nil block)

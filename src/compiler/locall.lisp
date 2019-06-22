@@ -1022,12 +1022,14 @@
                     (return-result (lambda-return (node-home-lambda call)))
                     (node-lvar call)))
           (call-type (node-derived-type call)))
-      (unless (eq call-type *wild-type*)
+      (unless (or (eq call-type *wild-type*)
+                  (not result))
         ;; FIXME: Replace the call with unsafe CAST. -- APD, 2003-01-26
         (do-uses (use result)
           (derive-node-type use call-type)))
-      (substitute-lvar-uses lvar result
-                            (and lvar (eq (lvar-uses lvar) call)))))
+      (when result
+       (substitute-lvar-uses lvar result
+                             (and lvar (eq (lvar-uses lvar) call))))))
 
   (values))
 

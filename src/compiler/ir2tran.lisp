@@ -1496,22 +1496,27 @@
 (defun ir2-convert-return (node block)
   (declare (type creturn node) (type ir2-block block))
   (let* ((lvar (return-result node))
-         (2lvar (lvar-info lvar))
-         (lvar-kind (ir2-lvar-kind 2lvar))
+         (2lvar (and lvar
+                     (lvar-info lvar)))
+         (lvar-kind (and 2lvar
+                         (ir2-lvar-kind 2lvar)))
          (fun (return-lambda node))
          (env (physenv-info (lambda-physenv fun)))
          (old-fp (ir2-physenv-old-fp env))
          (return-pc (ir2-physenv-return-pc env))
          (returns (tail-set-info (lambda-tail-set fun))))
     (cond
-     ((and (eq (return-info-kind returns) :fixed)
-           (not (xep-p fun)))
-      (let ((locs (lvar-tns node block lvar
-                                    (return-info-primitive-types returns))))
-        (vop* known-return node block
-              (old-fp return-pc (reference-tn-list locs nil))
-              (nil)
-              (return-info-locations returns))))
+      ((not lvar)
+       (vop sb-vm::unused-return node block
+             old-fp return-pc))
+      ((and (eq (return-info-kind returns) :fixed)
+            (not (xep-p fun)))
+       (let ((locs (lvar-tns node block lvar
+                             (return-info-primitive-types returns))))
+         (vop* known-return node block
+               (old-fp return-pc (reference-tn-list locs nil))
+               (nil)
+               (return-info-locations returns))))
      ((eq lvar-kind :fixed)
       (let* ((types (mapcar #'tn-primitive-type (ir2-lvar-locs 2lvar)))
              (lvar-locs (lvar-tns node block lvar types))

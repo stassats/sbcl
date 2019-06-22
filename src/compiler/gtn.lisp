@@ -139,10 +139,13 @@
                          (let* ((lambda (combination-lambda call))
                                 (return (lambda-return lambda)))
                            (when return
-                             (do-uses (node (return-result return) t)
-                               (unless (and (basic-combination-p node)
-                                            (eq (basic-combination-info node) :full))
-                                 (return)))))))
+                             (let ((result (return-result return)))
+                               (if result
+                                   (do-uses (node result t)
+                                     (unless (and (basic-combination-p node)
+                                                  (eq (basic-combination-info node) :full))
+                                       (return)))
+                                   t))))))
                  (when (and (basic-combination-p dest)
                             (not (node-tail-p dest))
                             (eq (basic-combination-fun dest) lvar)

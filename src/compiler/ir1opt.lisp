@@ -559,29 +559,30 @@
 (defun find-result-type (node)
   (declare (type creturn node))
   (let ((result (return-result node)))
-    (collect ((use-union *empty-type* values-type-union))
-      (do-uses (use result)
-        (let ((use-home (node-home-lambda use)))
-          (cond ((or (eq (functional-kind use-home) :deleted)
-                     (block-delete-p (node-block use))))
-                ((not (and (basic-combination-p use)
-                           (eq (basic-combination-kind use) :local)))
-                 (use-union (node-derived-type use)))
-                ((or (eq (functional-kind (combination-lambda use)) :deleted)
-                     (block-delete-p (lambda-block (combination-lambda use)))))
-                (t
-                 (aver (eq (lambda-tail-set use-home)
-                           (lambda-tail-set (combination-lambda use))))
-                 (when (combination-p use)
-                   (when (nth-value 1 (maybe-convert-tail-local-call use))
-                     (return-from find-result-type t)))))))
-      (let ((int
-             ;; (values-type-intersection
-             ;; (continuation-asserted-type result) ; FIXME -- APD, 2002-01-26
-             (use-union)
-              ;; )
-              ))
-        (setf (return-result-type node) int))))
+    (when result
+      (collect ((use-union *empty-type* values-type-union))
+        (do-uses (use result)
+          (let ((use-home (node-home-lambda use)))
+            (cond ((or (eq (functional-kind use-home) :deleted)
+                       (block-delete-p (node-block use))))
+                  ((not (and (basic-combination-p use)
+                             (eq (basic-combination-kind use) :local)))
+                   (use-union (node-derived-type use)))
+                  ((or (eq (functional-kind (combination-lambda use)) :deleted)
+                       (block-delete-p (lambda-block (combination-lambda use)))))
+                  (t
+                   (aver (eq (lambda-tail-set use-home)
+                             (lambda-tail-set (combination-lambda use))))
+                   (when (combination-p use)
+                     (when (nth-value 1 (maybe-convert-tail-local-call use))
+                       (return-from find-result-type t)))))))
+        (let ((int
+                ;; (values-type-intersection
+                ;; (continuation-asserted-type result) ; FIXME -- APD, 2002-01-26
+                (use-union)
+                ;; )
+                ))
+          (setf (return-result-type node) int)))))
   nil)
 
 ;;; Do stuff to realize that something has changed about the value
@@ -599,6 +600,19 @@
 (defun ir1-optimize-return (node)
   (declare (type creturn node))
   (let ((lambda (return-lambda node)))
+    (when (and (leaf-refs lambda)
+               (null (lambda-kind lambda))
+               (dolist (ref (leaf-refs lambda) t)
+                 (let* ((lvar (node-lvar ref))
+                        (combination (and lvar
+                                          (lvar-dest lvar))))
+                   (when (or (not (and (combination-p combination)
+                                       (eq (combination-fun combination) lvar)))
+                             (node-lvar combination)
+                             (node-tail-p combination))
+                     (return)))))
+       (flush-dest (shiftf (return-result node) nil))
+      (return-from ir1-optimize-return))
     (tagbody
      :restart
        (let* ((tails (lambda-tail-set lambda))

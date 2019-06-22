@@ -293,26 +293,27 @@
          (fun (return-lambda node))
          (returns (tail-set-info (lambda-tail-set fun)))
          (types (return-info-primitive-types returns)))
-    (if (eq (return-info-count returns) :unknown)
-        (collect ((res *empty-type* values-type-union))
-          (do-uses (use (return-result node))
-            (unless (and (node-tail-p use)
-                         (basic-combination-p use)
-                         (member (basic-combination-info use) '(:local :full)))
-              (res (node-derived-type use))))
+    (when lvar
+      (if (eq (return-info-count returns) :unknown)
+          (collect ((res *empty-type* values-type-union))
+            (do-uses (use (return-result node))
+              (unless (and (node-tail-p use)
+                           (basic-combination-p use)
+                           (member (basic-combination-info use) '(:local :full)))
+                (res (node-derived-type use))))
 
-          (let ((int (res)))
-            (multiple-value-bind (types kind)
-                (if (eq int *empty-type*)
-                    (values nil :unknown)
-                    (values-types int))
-              (if (eq kind :unknown)
-                  (annotate-unknown-values-lvar lvar)
-                  (annotate-fixed-values-lvar
-                   lvar (mapcar #'primitive-type types)
-                   types)))))
-        (annotate-fixed-values-lvar lvar types
-                                    (return-info-types returns))))
+            (let ((int (res)))
+              (multiple-value-bind (types kind)
+                  (if (eq int *empty-type*)
+                      (values nil :unknown)
+                      (values-types int))
+                (if (eq kind :unknown)
+                    (annotate-unknown-values-lvar lvar)
+                    (annotate-fixed-values-lvar
+                     lvar (mapcar #'primitive-type types)
+                     types)))))
+          (annotate-fixed-values-lvar lvar types
+                                      (return-info-types returns)))))
 
   (values))
 
@@ -919,6 +920,23 @@
               types)))))))
   (values))
 
+(defun relink-return-results (return)
+  (let ((result (return-result return)))
+    (unless result
+      (when (eq (ctran-kind (node-prev return)) :block-start)
+        (loop for pred in (block-pred (node-block return))
+              for node = (block-last pred)
+              when (basic-combination-p node)
+              do
+              (case (basic-combination-info node)
+                (:local
+                 (when (eq (lambda-tail-set (node-home-lambda node))
+                           (lambda-tail-set (lambda-home (combination-lambda node))))
+                   (set-tail-local-call-successor node)
+                   (setf (node-tail-p node) t)))
+                (:full
+                 (setf (node-tail-p node) t))))))))
+
 
 ;;;; interfaces
 
@@ -932,7 +950,7 @@
   (do* ((node (block-start-node block)
               (ctran-next ctran))
         (ctran (node-next node) (node-next node)))
-      (nil)
+       (nil)
     (etypecase node
       (ref)
       (combination
@@ -942,7 +960,8 @@
          (:known
           (ltn-analyze-known-call node))))
       (cif (ltn-analyze-if node))
-      (creturn) ;; delay to FLUSH-FULL-CALL-TAIL-TRANSFERS
+      (creturn
+       (relink-return-results node)) ;; delay to FLUSH-FULL-CALL-TAIL-TRANSFERS
       ((or bind entry))
       (exit (ltn-analyze-exit node))
       (cset (ltn-analyze-set node))

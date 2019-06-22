@@ -973,7 +973,8 @@
              (format t " ~S ~S" :kind (functional-kind (bind-lambda node)))))
           (creturn
            (write-string "return ")
-           (print-lvar (return-result node))
+           (when (return-result node)
+            (print-lvar (return-result node)))
            (print-leaf (return-lambda node)))
           (entry
            (let ((cleanup (entry-cleanup node)))

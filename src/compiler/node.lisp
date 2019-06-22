@@ -1498,7 +1498,7 @@
   ;; ir1tran.
   (lambda nil :type (or clambda null))
   ;; the lvar which yields the value of the lambda
-  (result (missing-arg) :type lvar)
+  (result (missing-arg) :type (or lvar null))
   ;; the union of the node-derived-type of all uses of the result
   ;; other than by a local call, intersected with the result's
   ;; asserted-type. If there are no non-call uses, this is
@@ -1514,7 +1514,7 @@
 (def!struct (cast (:include valued-node)
                   (:copier nil)
                   (:constructor %make-cast))
-  (asserted-type (missing-arg) :type ctype)
+    (asserted-type (missing-arg) :type ctype)
   (type-to-check (missing-arg) :type ctype)
   ;; an indication of what we have proven about how this type
   ;; assertion is satisfied:
