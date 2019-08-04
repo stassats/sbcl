@@ -600,6 +600,8 @@
 (defun ir1-optimize-return (node)
   (declare (type creturn node))
   (let ((lambda (return-lambda node)))
+    ;; Unlink the result lvar if all the calls of a local functions
+    ;; do not use their results
     (when (and (leaf-refs lambda)
                (null (lambda-kind lambda))
                (dolist (ref (leaf-refs lambda) t)
@@ -611,7 +613,7 @@
                              (node-lvar combination)
                              (node-tail-p combination))
                      (return)))))
-       (flush-dest (shiftf (return-result node) nil))
+      (flush-dest (shiftf (return-result node) nil))
       (return-from ir1-optimize-return))
     (tagbody
      :restart

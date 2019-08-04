@@ -185,38 +185,77 @@
                   (return)))))))))
   (values))
 
+(defun map-preceding-nodes (node function)
+  (let (seen)
+    (labels ((map-block (block)
+               (unless (memq block seen)
+                 (push block seen)
+                 (loop for pred in (block-pred block)
+                       for pred-node = (block-last pred)
+                       do (if pred-node
+                              (funcall function pred-node)
+                              (map-block pred))))))
+      (let ((prev (node-prev node)))
+        (if (eq (ctran-kind prev) :block-start)
+            (map-block (node-block node)))
+        (funcall function (ctran-use prev))))))
+
+(defun unused-return-count (return)
+  ;; We're only interested in the number of values not their types,
+  ;; so only examine combinations
+  (let ((max 1))
+    (map-preceding-nodes return
+                         (lambda (node)
+                           (when (combination-p node)
+                             (let ((count (nth-value 1 (values-types (node-derived-type node)))))
+                               (if (integerp count)
+                                   (setf max (max max count))
+                                   (return-from unused-return-count :unknown))))))
+
+    max))
+
 ;;; Return a RETURN-INFO structure describing how we should return
 ;;; from functions in the specified tail set. We use the unknown
 ;;; values convention if the number of values is unknown, or if it is
 ;;; a good idea for some other reason. Otherwise we allocate passing
 ;;; locations for a fixed number of values.
-(defun return-info-for-set (tails)
+(defun return-info-for-set (return tails)
   (declare (type tail-set tails))
-  (multiple-value-bind (types count) (values-types (tail-set-type tails))
-    (let ((ptypes (mapcar #'primitive-type types))
-          (use-standard (use-standard-returns tails)))
-      (when (and (eq count :unknown) (not use-standard)
-                 (not (eq (tail-set-type tails) *empty-type*)))
-        (return-value-efficiency-note tails))
-      (if (or (eq count :unknown) use-standard)
-          (make-return-info :kind :unknown
-                            :count count
-                            :primitive-types ptypes
-                            :types types)
-          (make-return-info :kind :fixed
-                            :count count
-                            :primitive-types ptypes
-                            :types types
-                            :locations (mapcar #'make-normal-tn ptypes))))))
+  (let ((unused-return (and return
+                            (not (return-result return)))))
+    (multiple-value-bind (types count)
+        (if unused-return
+            (values nil (unused-return-count return))
+            (values-types (tail-set-type tails)))
+      (let ((ptypes (mapcar #'primitive-type types))
+            (use-standard (use-standard-returns tails)))
+        (when (and (eq count :unknown) (not use-standard)
+                   (not (eq (tail-set-type tails) *empty-type*)))
+          (return-value-efficiency-note tails))
+        (cond (unused-return
+
+               (make-return-info :kind :unused
+                                 :count count))
+              ((or (eq count :unknown) use-standard)
+               (make-return-info :kind :unknown
+                                 :count count
+                                 :primitive-types ptypes
+                                 :types types))
+              (t
+               (make-return-info :kind :fixed
+                                 :count count
+                                 :primitive-types ptypes
+                                 :types types
+                                 :locations (mapcar #'make-normal-tn ptypes))))))))
 
 ;;; If TAIL-SET doesn't have any INFO, then make a RETURN-INFO for it.
 (defun assign-return-locations (fun)
   (declare (type clambda fun))
   (let* ((tails (lambda-tail-set fun))
+         (return (lambda-return fun))
          (returns (or (tail-set-info tails)
                       (setf (tail-set-info tails)
-                            (return-info-for-set tails))))
-         (return (lambda-return fun)))
+                            (return-info-for-set return tails)))))
     (when (and return
                (xep-p fun))
       (aver (eq (return-info-kind returns) :unknown))))

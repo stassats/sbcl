@@ -962,6 +962,19 @@
             (move-lvar-result node block locs lvar)))))
   (values))
 
+(defun ir2-convert-local-unused-call (node block fun start
+                                      n-values)
+  (declare (type node node) (type ir2-block block) (type clambda fun)
+           (type label start))
+  (multiple-value-bind (fp nfp temps arg-locs)
+      (ir2-convert-local-call-args node block fun)
+    (let ((temp-refs (reference-tn-list temps nil)))
+      (vop* sb-vm::unused-call-local node block
+            (fp nfp temp-refs)
+            (nil)
+            arg-locs start n-values)))
+  (values))
+
 ;;; Dispatch to the appropriate function, depending on whether we have
 ;;; a let, tail or normal call. If the function doesn't return, call
 ;;; it using the unknown-value convention. We could compile it as a
@@ -983,6 +996,10 @@
              (ecase (if returns
                         (return-info-kind returns)
                         :unknown)
+               (:unused
+                (aver (not lvar))
+                (ir2-convert-local-unused-call node block fun start
+                                               (return-info-count returns)))
                (:unknown
                 (ir2-convert-local-unknown-call node block fun lvar start))
                (:fixed
@@ -1508,7 +1525,7 @@
     (cond
       ((not lvar)
        (vop sb-vm::unused-return node block
-             old-fp return-pc))
+             old-fp return-pc (return-info-count returns)))
       ((and (eq (return-info-kind returns) :fixed)
             (not (xep-p fun)))
        (let ((locs (lvar-tns node block lvar

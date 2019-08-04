@@ -457,15 +457,17 @@
 ;;; in the TAIL-SET-INFO.
 (defstruct (return-info (:copier nil))
   ;; The return convention used:
-  ;; -- If :UNKNOWN, we use the standard return convention.
-  ;; -- If :FIXED, we use the known-values convention.
-  (kind (missing-arg) :type (member :fixed :unknown))
+  ;; -- :UNKNOWN use the standard return convention.
+  ;; -- :FIXED use the known-values convention.
+  ;; -- :UNUSED none of the calls use the return values
+  (kind (missing-arg) :type (member :fixed :unknown :unused))
   ;; the number of values returned, or :UNKNOWN if we don't know.
   ;; COUNT may be known when KIND is :UNKNOWN, since we may choose the
   ;; standard return convention for other reasons.
   (count (missing-arg) :type (or index (member :unknown)))
   ;; If count isn't :UNKNOWN, then this is a list of the
   ;; primitive-types of each value.
+  ;; Or NIL if KIND is :UNUSED
   (primitive-types () :type list)
   (types nil :type list)
   ;; If kind is :FIXED, then this is the list of the TNs that we

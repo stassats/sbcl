@@ -172,7 +172,7 @@
   (let ((tails (and (node-tail-p call)
                     (lambda-tail-set (node-home-lambda call)))))
     (cond ((not tails))
-          ((eq (return-info-kind (tail-set-info tails)) :unknown)
+          ((memq (return-info-kind (tail-set-info tails)) '(:unknown :unused))
            (ir2-change-node-successor call
                                       (component-tail (block-component (node-block call)))))
           (t

@@ -501,6 +501,23 @@
     (inst call target)
     (default-unknown-values vop values nvals node)))
 
+(define-vop (unused-call-local)
+  (:args (fp)
+         (nfp)
+         (args :more t))
+  (:save-p t)
+  (:move-args :local-call)
+  (:info arg-locs target nvals)
+  (:vop-var vop)
+  (:ignore nfp arg-locs args)
+  (:generator 5
+    (move rbp-tn fp)
+    (note-this-location vop :call-site)
+    (inst call target)
+    (when (or (eq nvals :unknown)
+              (> nvals register-arg-count))
+      (inst cmov :c rsp-tn rbx-tn))))
+
 ;;; Non-TR local call for a variable number of return values passed according
 ;;; to the unknown values convention. The results are the start of the values
 ;;; glob and the number of values received.
@@ -567,13 +584,15 @@
 (define-vop (unused-return)
   (:args (old-fp)
          (return-pc))
+  (:info nvals)
   (:generator 6
-    (check-ocfp-and-return-pc old-fp return-pc)
-    ;; Zot all of the stack except for the old-fp and return-pc.
-    (inst clc)
-    (inst mov rsp-tn rbp-tn)
-    (inst pop rbp-tn)
-    (inst ret)))
+   (check-ocfp-and-return-pc old-fp return-pc)
+   (when (or (eq nvals :unknown)
+             (> nvals register-arg-count))
+     (inst clc))
+   (inst mov rsp-tn rbp-tn)
+   (inst pop rbp-tn)
+   (inst ret)))
 
 ;;;; full call
 ;;;
