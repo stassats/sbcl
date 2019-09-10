@@ -190,6 +190,30 @@
                 (:or unsigned-num signed-num))
   (:variant nil)
   (:variant-cost 5))
+
+(define-vop (check-bound-vector)
+  (:translate sb-c::%check-bound-vector)
+  (:policy :fast-safe)
+  (:args (array :scs (descriptor-reg constant))
+         (vector :scs (descriptor-reg constant))
+         (index :scs (any-reg descriptor-reg)
+                :load-if (not (and (sc-is index immediate)
+                                   (typep (tn-value index)
+                                          'sc-offset)))))
+  (:variant-vars %test-fixnum)
+  (:variant t)
+  (:vop-var vop)
+  (:save-p :compute-only)
+  (:generator 6
+    (let ((error (generate-error-code vop 'invalid-array-index-error
+                                      array 10 index))
+          (index (if (sc-is index immediate)
+                     (fixnumize (tn-value index))
+                     index)))
+      (when (and %test-fixnum (not (integerp index)))
+        (%test-fixnum index nil error t))
+      (inst cmp :dword (ea -7 vector) index)
+      (inst jmp :be error))))
 
 ;;;; accessors/setters
 
