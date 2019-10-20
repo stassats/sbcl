@@ -3455,18 +3455,52 @@
 
 ;;;; equality predicate transforms
 
+(defun find-ref-constraint (kind lvar1 lvar2)
+  (let ((ref1 (lvar-uses lvar1))
+        (ref2 (lvar-uses lvar2)))
+    (when (and
+           (ref-p ref1)
+           (ref-p ref2))
+      (let ((leaf1 (ref-leaf ref1))
+            (leaf2 (ref-leaf ref2)))
+        (flet ((find-constraint (ref)
+                 (loop for constraint in (ref-constraints ref)
+                       when (and (eq (constraint-kind constraint) kind)
+                                 (or (and (eq (constraint-x constraint) leaf1)
+                                          (eq (constraint-y constraint) leaf2))
+                                     (and (eq (constraint-x constraint) leaf2)
+                                          (eq (constraint-y constraint) leaf1))))
+                       return constraint)))
+          (or (find-constraint ref1)
+              (find-constraint ref2)))))))
+(defvar *c* 0)
+
 ;;; If X and Y are the same leaf, then the result is true. Otherwise,
 ;;; if there is no intersection between the types of the arguments,
 ;;; then the result is definitely false.
 (deftransforms (eq char=) ((x y) * *)
   "Simple equality transform"
-  (let ((use (lvar-uses x)) arg)
+  (let ((use (lvar-uses x))
+        arg
+        (constraint (find-ref-constraint 'eql x y)))
     (declare (ignorable use arg))
     (cond
+      ((and constraint
+            (let ((eql-types (specifier-type '(and number
+                                               (not fixnum)
+                                               #+64-bit
+                                               (not single-float)))))
+              ;; Would need an EQ constraint for that
+              (not (and (types-equal-or-intersect (lvar-type x) eql-types)
+                        (types-equal-or-intersect (lvar-type y) eql-types)))))
+       (incf *c*)
+       (if (constraint-not-p constraint)
+           nil
+           t))
       ((same-leaf-ref-p x y) t)
       ((not (types-equal-or-intersect (lvar-type x) (lvar-type y)))
        nil)
-      #+(vop-translates sb-kernel:%instance-ref-eq)
+                                        ;#+(vop-translates sb-kernel:%instance-ref-eq)
       ;; Reduce (eq (%instance-ref x i) Y) to 1 instruction
       ;; if possible, but do not defer the memory load unless doing
       ;; so can have no effect, i.e. Y is a constant or provably not
@@ -3507,8 +3541,14 @@
   (let ((x-type (lvar-type x))
         (y-type (lvar-type y))
         #+integer-eql-vop (int-type (specifier-type 'integer))
-        (char-type (specifier-type 'character)))
+        (char-type (specifier-type 'character))
+        (constraint (find-ref-constraint 'eql x y)))
     (cond
+      (constraint
+       (incf *c*)
+       (if (constraint-not-p constraint)
+           nil
+           t))
       ((same-leaf-ref-p x y) t)
       ((not (types-equal-or-intersect x-type y-type))
        nil)
@@ -3562,7 +3602,8 @@
   (let ((x-type (lvar-type x))
         (y-type (lvar-type y))
         (combination-type (specifier-type '(or bit-vector string
-                                            cons pathname))))
+                                            cons pathname)))
+        (constraint (find-ref-constraint 'eql x y)))
     (flet ((both-csubtypep (type)
              (let ((ctype (specifier-type type)))
                (and (csubtypep x-type ctype)
@@ -3591,6 +3632,10 @@
                                    (csubtypep x equal-types))
                                  element-types))))))
       (cond
+        ((and constraint
+              (not (constraint-not-p constraint)))
+         (incf *c*)
+         t)
         ((same-leaf-ref-p x y) t)
         ((array-type-dimensions-mismatch x-type y-type)
          nil)
@@ -3648,7 +3693,8 @@
         (combination-type (specifier-type '(or number array
                                             character
                                             cons pathname
-                                            instance hash-table))))
+                                            instance hash-table)))
+        (constraint (find-ref-constraint 'eql x y)))
     (flet ((both-csubtypep (type)
              (let ((ctype (specifier-type type)))
                (and (csubtypep x-type ctype)
@@ -3666,6 +3712,10 @@
                   (characterp (lvar-value y))
                   (transform-constant-char-equal x y 'eq))))
       (cond
+        ((and constraint
+              (not (constraint-not-p constraint)))
+         (incf *c*)
+         t)
         ((same-leaf-ref-p x y) t)
         ((array-type-dimensions-mismatch x-type y-type)
          nil)

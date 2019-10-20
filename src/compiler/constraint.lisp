@@ -930,6 +930,9 @@
                          (pushnew con (ref-constraints ref)))
                (reoptimize-lvar (node-lvar ref))))
             (eql
+             (unless (eq (ref-constraints ref)
+                         (pushnew con (ref-constraints ref)))
+               (reoptimize-lvar (node-lvar ref)))
              (let ((other-type (leaf-type other)))
                (if not-p
                    (when (and (constant-p other)
