@@ -59,30 +59,31 @@ jobs:
     vmImage: 'windows-latest'
 
   steps:
-  # - script: |
-  #     choco install --no-progress msys2 --params "/NoUpdate"
-  #   displayName: 'install host msys2'
+  - script: |
+      choco install --no-progress msys2 --params "/NoUpdate"
+    displayName: 'install host msys2'
 
-  # - script: |
-  #     C:\tools\msys64\usr\bin\bash -c '/usr/bin/pacman -S --noconfirm --needed mingw-w64-x86_64-gcc make diffutils'
-  #   displayName: 'install gcc'
+  - script: |
+      C:\tools\msys64\usr\bin\bash -c '/usr/bin/pacman -S --noconfirm --needed mingw-w64-x86_64-gcc make diffutils'
+    displayName: 'install gcc'
 
-  # - script: |
-  #     cinst sbcl -source tools-for-build
-  #   displayName: 'install host sbcl'
+  - script: |
+      cinst sbcl -source tools-for-build
+    displayName: 'install host sbcl'
 
-  # - script: |
-  #     C:\tools\msys64\usr\bin\bash -c "PATH=\"/usr/bin:/c/Program Files/Steel Bank Common Lisp/1.4.14:$PATH\" $(make.sh)"
-  #   displayName: 'make'
-  #   env:
-  #     SBCL_HOME: "/c/Program Files/Steel Bank Common Lisp/1.4.14"
-  # - script: |
-  #     C:\tools\msys64\usr\bin\bash make-windows-installer.sh
-  #   displayName: 'make-installer'
+  - script: |
+      C:\tools\msys64\usr\bin\bash -c "PATH=\"/usr/bin:/c/Program Files/Steel Bank Common Lisp/1.4.14:$PATH\" $(make.sh)"
+    displayName: 'make'
+    env:
+      SBCL_HOME: "/c/Program Files/Steel Bank Common Lisp/1.4.14"
+  - script: |
+      C:\tools\msys64\usr\bin\bash make-windows-installer.sh
+    displayName: 'make-installer'
+
   - task: CopyFiles@2
     inputs:
-      sourceFolder: '$(Build.SourcesDirectory)/tools-for-build'
-      contents: 'w*.lisp'
+      sourceFolder: '$(Build.SourcesDirectory)/output'
+      contents: 'sbcl-*-windows-binary.msi'
       TargetFolder: '$(Build.ArtifactStagingDirectory)'
   - publish: $(Build.ArtifactStagingDirectory)
     artifact: win32.msi
