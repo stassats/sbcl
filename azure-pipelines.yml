@@ -83,7 +83,7 @@ jobs:
   - task: CopyFiles@2
     inputs:
       sourceFolder: '$(Build.SourcesDirectory)/output'
-      contents: 'sbcl-*-windows-binary.msi'
+      contents: '*.msi'
       TargetFolder: '$(Build.ArtifactStagingDirectory)'
   - publish: $(Build.ArtifactStagingDirectory)
     artifact: win32.msi
