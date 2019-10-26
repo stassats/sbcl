@@ -78,8 +78,9 @@ jobs:
       SBCL_HOME: "/c/Program Files/Steel Bank Common Lisp/1.4.14"
   - script: |
       C:\tools\msys64\usr\bin\bash make-windows-installer.sh
-      displayName: 'make-installer'
-
+    displayName: 'make-installer'
+  - publish: output/sbcl-*-windows-binary.msi
+    artifact: win32.msi
   # - script: |
   #       C:\tools\msys64\usr\bin\bash -c 'cd tests; PATH="/usr/bin:$PATH" ./run-tests.sh'
   #   displayName: 'tests'
