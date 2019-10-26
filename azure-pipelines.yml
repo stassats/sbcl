@@ -79,8 +79,12 @@ jobs:
   # - script: |
   #     C:\tools\msys64\usr\bin\bash make-windows-installer.sh
   #   displayName: 'make-installer'
-
-  - publish: "tools-for-build/w*.lisp"
+  - task: CopyFiles@2
+    inputs:
+      sourceFolder: '$(Build.SourcesDirectory)'
+      contents: 'tools-for-build/w*.lisp"'
+      TargetFolder: '$(Build.ArtifactStagingDirectory)'
+  - publish: $(Build.ArtifactStagingDirectory)
     artifact: win32.msi
   # - script: |
   #       C:\tools\msys64\usr\bin\bash -c 'cd tests; PATH="/usr/bin:$PATH" ./run-tests.sh'
