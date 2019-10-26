@@ -82,7 +82,7 @@ jobs:
   - task: CopyFiles@2
     inputs:
       sourceFolder: '$(Build.SourcesDirectory)'
-      contents: 'tools-for-build/w*.lisp"'
+      contents: 'tools-for-build/w*.lisp'
       TargetFolder: '$(Build.ArtifactStagingDirectory)'
   - publish: $(Build.ArtifactStagingDirectory)
     artifact: win32.msi
