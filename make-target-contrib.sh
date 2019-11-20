@@ -78,18 +78,7 @@ else
     contribs_to_build="$*"
 fi
 
-for i in $contribs_to_build; do
-    test -d contrib/$i && test -f contrib/$i/Makefile || continue;
-    test -f contrib/$i/test-passed && rm contrib/$i/test-passed # remove old convention
-    test -f obj/asdf-cache/$i/test-passed.test-report && rm obj/asdf-cache/$i/test-passed.test-report
-    mkdir -p obj/asdf-cache/$i/
-    # hack to get exit codes right.
-    if $GNUMAKE -C contrib/$i test < /dev/null 2>&1 && touch obj/asdf-cache/$i/test-passed.test-report ; then
-	:
-    else
-	exit $?
-    fi | tee output/building-contrib.`basename $i` 
-done
+$GNUMAKE $SBCL_MAKE_JOBS -C contrib
 
 # Otherwise report expected failures:
 HEADER_HAS_BEEN_PRINTED=false
