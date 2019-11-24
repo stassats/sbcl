@@ -75,6 +75,7 @@
 
 ;;; Give CLAMBDA an IR2-PHYSENV structure. (And in order to
 ;;; properly initialize the new structure, we make the TNs which hold
+(defvar *new* t)
 ;;; environment values and the old-FP/return-PC.)
 (defun assign-ir2-physenv (clambda)
   (declare (type clambda clambda))
@@ -110,7 +111,17 @@
       (setf (ir2-physenv-old-fp res)
             (make-old-fp-save-location lambda-physenv))
       (setf (ir2-physenv-return-pc res)
-            (make-return-pc-save-location lambda-physenv))))
+            (make-return-pc-save-location lambda-physenv))
+      (when (and *new*
+                 (xep-p clambda)
+                 (let ((ef (functional-entry-fun clambda)))
+                   (and (optional-dispatch-p ef)
+                        (optional-dispatch-more-entry ef)
+                        (neq (functional-kind (optional-dispatch-more-entry ef)) :deleted))))
+        (setf (ir2-physenv-old-sp res)
+              (physenv-live-tn
+               (make-representation-tn *backend-t-primitive-type*
+                                       sb-vm:control-stack-sc-number) lambda-physenv)))))
 
   (values))
 

@@ -960,6 +960,22 @@
     ;; And return.
     (inst ret)))
 
+(define-vop (new-return-single)
+  (:args (old-fp)
+         (old-sp)
+         (return-pc)
+         (value))
+  (:ignore value)
+  (:generator 6
+    (check-ocfp-and-return-pc old-fp return-pc)
+    (inst mov rsp-tn old-sp)
+    ;; Clear the multiple-value return flag
+    (inst clc)
+    ;; Restore the old frame pointer
+    (inst pop rbp-tn)
+    ;; And return.
+    (inst ret)))
+
 ;;; Do unknown-values return of a fixed (other than 1) number of
 ;;; values. The VALUES are required to be set up in the standard
 ;;; passing locations. NVALS is the number of values returned.
@@ -981,52 +997,52 @@
   ;; registers so that we can default the argument registers without
   ;; trashing return-pc.
   (:temporary (:sc unsigned-reg :offset (first *register-arg-offsets*)
-                   :from :eval) a0)
+               :from :eval) a0)
   (:temporary (:sc unsigned-reg :offset (second *register-arg-offsets*)
-                   :from :eval) a1)
+               :from :eval) a1)
   (:temporary (:sc unsigned-reg :offset (third *register-arg-offsets*)
-                   :from :eval) a2)
+               :from :eval) a2)
 
   (:generator 6
-    (check-ocfp-and-return-pc old-fp return-pc)
-    (when (= nvals 1)
-      ;; This is handled in RETURN-SINGLE.
-      (error "nvalues is 1"))
-    ;; Establish the values pointer and values count.
-    (inst lea rbx (ea (* sp->fp-offset n-word-bytes) rbp-tn))
-    (if (zerop nvals)
-        (zeroize rcx) ; smaller
-        (inst mov rcx (fixnumize nvals)))
-    ;; Pre-default any argument register that need it.
-    (when (< nvals register-arg-count)
-      (let* ((arg-tns (nthcdr nvals (list a0 a1 a2)))
-             (first (first arg-tns)))
-        (inst mov first nil-value)
-        (dolist (tn (cdr arg-tns))
-          (inst mov tn first))))
-    ;; Set the multiple value return flag.
-    (inst stc)
-    ;; And away we go. Except that return-pc is still on the
-    ;; stack and we've changed the stack pointer. So we have to
-    ;; tell it to index off of RBX instead of RBP.
-    (cond ((<= nvals register-arg-count)
-           (inst mov rsp-tn rbp-tn)
-           (inst pop rbp-tn)
-           (inst ret))
-          (t
-           ;; Some values are on the stack after RETURN-PC and OLD-FP,
-           ;; can't return normally and some slots of the frame will
-           ;; be used as temporaries by the receiver.
-           ;;
-           ;; Clear as much of the stack as possible, but not past the
-           ;; old frame address.
-           (inst lea rsp-tn
-                 (ea (frame-byte-offset (1- nvals)) rbp-tn))
-           (move rbp-tn old-fp)
-           (inst push (ea (frame-byte-offset
-                           (+ sp->fp-offset (tn-offset return-pc)))
-                          rbx))
-           (inst ret)))))
+              (check-ocfp-and-return-pc old-fp return-pc)
+              (when (= nvals 1)
+                ;; This is handled in RETURN-SINGLE.
+                (error "nvalues is 1"))
+              ;; Establish the values pointer and values count.
+              (inst lea rbx (ea (* sp->fp-offset n-word-bytes) rbp-tn))
+              (if (zerop nvals)
+                  (zeroize rcx)         ; smaller
+                  (inst mov rcx (fixnumize nvals)))
+              ;; Pre-default any argument register that need it.
+              (when (< nvals register-arg-count)
+                (let* ((arg-tns (nthcdr nvals (list a0 a1 a2)))
+                       (first (first arg-tns)))
+                  (inst mov first nil-value)
+                  (dolist (tn (cdr arg-tns))
+                    (inst mov tn first))))
+              ;; Set the multiple value return flag.
+              (inst stc)
+              ;; And away we go. Except that return-pc is still on the
+              ;; stack and we've changed the stack pointer. So we have to
+              ;; tell it to index off of RBX instead of RBP.
+              (cond ((<= nvals register-arg-count)
+                     (inst mov rsp-tn rbp-tn)
+                     (inst pop rbp-tn)
+                     (inst ret))
+                    (t
+                     ;; Some values are on the stack after RETURN-PC and OLD-FP,
+                     ;; can't return normally and some slots of the frame will
+                     ;; be used as temporaries by the receiver.
+                     ;;
+                     ;; Clear as much of the stack as possible, but not past the
+                     ;; old frame address.
+                     (inst lea rsp-tn
+                           (ea (frame-byte-offset (1- nvals)) rbp-tn))
+                     (move rbp-tn old-fp)
+                     (inst push (ea (frame-byte-offset
+                                     (+ sp->fp-offset (tn-offset return-pc)))
+                                    rbx))
+                     (inst ret)))))
 
 ;;; Do unknown-values return of an arbitrary number of values (passed
 ;;; on the stack.) We check for the common case of a single return
@@ -1081,6 +1097,47 @@
     ;; Get result.
     (move closure rax-tn)))
 
+(define-vop (new-copy-more-arg)
+  (:args (old-sp :scs (descriptor-reg)
+                 :load-if nil))
+  (:temporary (:sc any-reg :offset r8-offset) temp)
+  (:temporary (:sc any-reg :offset r9-offset) temp2)
+  (:info fixed)
+  (:generator 20
+              (inst mov temp rbp-tn)
+              (inst sub rsp-tn 16)
+              (inst mov rbp-tn rsp-tn)
+              (inst mov temp2 (ea n-word-bytes temp))
+              (inst mov (ea n-word-bytes rbp-tn) temp2)
+              (inst mov temp2 (ea temp))
+              (inst mov (ea rbp-tn) temp2)
+              (emit-lea rsp-tn rbp-tn
+                        (* n-word-bytes
+                           (- (sb-allocated-size 'stack))))
+              (inst mov old-sp temp)
+              (when (< fixed register-arg-count)
+                (do ((i fixed))
+                    (())
+                  
+                  (inst mov (ea (* (- -1 i) n-word-bytes)
+                                rbp-tn rcx-tn (ash 1 (- word-shift n-fixnum-tag-bits)))
+                        (nth i *register-arg-tns*))
+
+                  (incf i)
+                  (when (>= i register-arg-count)
+                    (return))))
+              DONE))
+
+(define-vop (arg-before-more)
+  (:policy :fast-safe)
+  (:info index)
+  (:results (value :scs (descriptor-reg any-reg)))
+  (:result-types *)
+  (:generator 4
+              
+              (inst mov value (ea (* (- -1 index) n-word-bytes)
+                                  rbp-tn rcx-tn (ash 1 (- word-shift n-fixnum-tag-bits))))))
+
 ;;; Copy a &MORE arg from the argument area to the end of the current
 ;;; frame. FIXED is the number of non-&MORE arguments.
 (define-vop (copy-more-arg)
@@ -1089,124 +1146,124 @@
   (:temporary (:sc descriptor-reg :offset r10-offset) temp)
   (:info fixed min-verified)
   (:generator 20
-    ;; Avoid the copy if there are no more args.
-    (cond ((zerop fixed)
-           (inst test rcx-tn rcx-tn)
-           (inst jmp :z JUST-ALLOC-FRAME))
-          ((and (eql min-verified fixed)
-                (> fixed 1))
-           ;; verify-arg-count will do a CMP
-           (inst jmp :e JUST-ALLOC-FRAME))
-          (t
-           (inst cmp rcx-tn (fixnumize fixed))
-           (inst jmp :be JUST-ALLOC-FRAME)))
+              ;; Avoid the copy if there are no more args.
+              (cond ((zerop fixed)
+                     (inst test rcx-tn rcx-tn)
+                     (inst jmp :z JUST-ALLOC-FRAME))
+                    ((and (eql min-verified fixed)
+                          (> fixed 1))
+                     ;; verify-arg-count will do a CMP
+                     (inst jmp :e JUST-ALLOC-FRAME))
+                    (t
+                     (inst cmp rcx-tn (fixnumize fixed))
+                     (inst jmp :be JUST-ALLOC-FRAME)))
 
-    ;; Create a negated copy of the number of arguments to allow us to
-    ;; use EA calculations in order to do scaled subtraction.
-    (inst mov temp rcx-tn)
-    (inst neg temp)
+              ;; Create a negated copy of the number of arguments to allow us to
+              ;; use EA calculations in order to do scaled subtraction.
+              (inst mov temp rcx-tn)
+              (inst neg temp)
 
-    ;; Allocate the space on the stack.
-    ;; stack = rbp + sp->fp-offset - frame-size - (nargs - fixed)
-    ;; if we'd move SP backward, swap the meaning of rsp and source;
-    ;; otherwise, we'd be accessing values below SP, and that's no good
-    ;; if a signal interrupts this code sequence.  In that case, store
-    ;; the final value in rsp after the stack-stack memmove loop.
-    (inst lea (if (<= fixed (sb-allocated-size 'stack))
-                  rsp-tn
-                  source)
-          (ea (* n-word-bytes (- (+ sp->fp-offset fixed) (sb-allocated-size 'stack)))
-              rbp-tn temp (ash 1 (- word-shift n-fixnum-tag-bits))))
+              ;; Allocate the space on the stack.
+              ;; stack = rbp + sp->fp-offset - frame-size - (nargs - fixed)
+              ;; if we'd move SP backward, swap the meaning of rsp and source;
+              ;; otherwise, we'd be accessing values below SP, and that's no good
+              ;; if a signal interrupts this code sequence.  In that case, store
+              ;; the final value in rsp after the stack-stack memmove loop.
+              (inst lea (if (<= fixed (sb-allocated-size 'stack))
+                            rsp-tn
+                            source)
+                    (ea (* n-word-bytes (- (+ sp->fp-offset fixed) (sb-allocated-size 'stack)))
+                        rbp-tn temp (ash 1 (- word-shift n-fixnum-tag-bits))))
 
-    ;; Now: nargs>=1 && nargs>fixed
+              ;; Now: nargs>=1 && nargs>fixed
 
-    (cond ((< fixed register-arg-count)
-           ;; the code above only moves the final value of rsp in
-           ;; rsp directly if that condition is satisfied.  Currently,
-           ;; r-a-c is 3, so the aver is OK. If the calling convention
-           ;; ever changes, the logic above with LEA will have to be
-           ;; adjusted.
-           (aver (<= fixed (sb-allocated-size 'stack)))
-           ;; We must stop when we run out of stack args, not when we
-           ;; run out of more args.
-           ;; Number to copy = nargs-3
-           ;; Save the original count of args.
-           (inst mov rbx-tn rcx-tn)
-           (inst sub rbx-tn (fixnumize register-arg-count))
-           ;; Everything of interest in registers.
-           (inst jmp :be DO-REGS))
-          (t
-           ;; Number to copy = nargs-fixed
-           (inst lea rbx-tn (ea (- (fixnumize fixed)) rcx-tn))))
+              (cond ((< fixed register-arg-count)
+                     ;; the code above only moves the final value of rsp in
+                     ;; rsp directly if that condition is satisfied.  Currently,
+                     ;; r-a-c is 3, so the aver is OK. If the calling convention
+                     ;; ever changes, the logic above with LEA will have to be
+                     ;; adjusted.
+                     (aver (<= fixed (sb-allocated-size 'stack)))
+                     ;; We must stop when we run out of stack args, not when we
+                     ;; run out of more args.
+                     ;; Number to copy = nargs-3
+                     ;; Save the original count of args.
+                     (inst mov rbx-tn rcx-tn)
+                     (inst sub rbx-tn (fixnumize register-arg-count))
+                     ;; Everything of interest in registers.
+                     (inst jmp :be DO-REGS))
+                    (t
+                     ;; Number to copy = nargs-fixed
+                     (inst lea rbx-tn (ea (- (fixnumize fixed)) rcx-tn))))
 
-    ;; Initialize R8 to be the end of args.
-    ;; Swap with SP if necessary to mirror the previous condition
-    (inst lea (if (<= fixed (sb-allocated-size 'stack))
-                  source
-                  rsp-tn)
-          (ea (* sp->fp-offset n-word-bytes)
-              rbp-tn temp (ash 1 (- word-shift n-fixnum-tag-bits))))
+              ;; Initialize R8 to be the end of args.
+              ;; Swap with SP if necessary to mirror the previous condition
+              (inst lea (if (<= fixed (sb-allocated-size 'stack))
+                            source
+                            rsp-tn)
+                    (ea (* sp->fp-offset n-word-bytes)
+                        rbp-tn temp (ash 1 (- word-shift n-fixnum-tag-bits))))
 
-    ;; src: rbp + temp + sp->fp
-    ;; dst: rbp + temp + sp->fp + (fixed - [stack-size])
-    (let ((delta (- fixed (sb-allocated-size 'stack)))
-          (loop (gen-label))
-          (fixnum->word (ash 1 (- word-shift n-fixnum-tag-bits))))
-      (cond ((zerop delta)) ; no-op move
-            ((minusp delta)
-             ;; dst is lower than src, copy forward
-             (zeroize copy-index)
-             ;; We used to use REP MOVS here, but on modern x86 it performs
-             ;; much worse than an explicit loop for small blocks.
+              ;; src: rbp + temp + sp->fp
+              ;; dst: rbp + temp + sp->fp + (fixed - [stack-size])
+              (let ((delta (- fixed (sb-allocated-size 'stack)))
+                    (loop (gen-label))
+                    (fixnum->word (ash 1 (- word-shift n-fixnum-tag-bits))))
+                (cond ((zerop delta))   ; no-op move
+                      ((minusp delta)
+                       ;; dst is lower than src, copy forward
+                       (zeroize copy-index)
+                       ;; We used to use REP MOVS here, but on modern x86 it performs
+                       ;; much worse than an explicit loop for small blocks.
 
-             (emit-label loop)
-             (inst mov temp (ea source copy-index))
-             (inst mov (ea rsp-tn copy-index) temp)
-             (inst add copy-index n-word-bytes)
-             (inst sub rbx-tn (fixnumize 1))
-             (inst jmp :nz loop))
-            ((plusp delta)
-             ;; dst is higher than src; copy backward
-             (emit-label loop)
-             (inst sub rbx-tn (fixnumize 1))
-             (inst mov temp (ea rsp-tn rbx-tn fixnum->word))
-             (inst mov (ea source rbx-tn fixnum->word) temp)
-             (inst jmp :nz loop)
-             ;; done with the stack--stack copy. Reset RSP to its final
-             ;; value
-             (inst mov rsp-tn source))))
-    DO-REGS
+                       (emit-label loop)
+                       (inst mov temp (ea source copy-index))
+                       (inst mov (ea rsp-tn copy-index) temp)
+                       (inst add copy-index n-word-bytes)
+                       (inst sub rbx-tn (fixnumize 1))
+                       (inst jmp :nz loop))
+                      ((plusp delta)
+                       ;; dst is higher than src; copy backward
+                       (emit-label loop)
+                       (inst sub rbx-tn (fixnumize 1))
+                       (inst mov temp (ea rsp-tn rbx-tn fixnum->word))
+                       (inst mov (ea source rbx-tn fixnum->word) temp)
+                       (inst jmp :nz loop)
+                       ;; done with the stack--stack copy. Reset RSP to its final
+                       ;; value
+                       (inst mov rsp-tn source))))
+              DO-REGS
 
-    ;; Here: nargs>=1 && nargs>fixed
-    (when (< fixed register-arg-count)
-      ;; Now we have to deposit any more args that showed up in
-      ;; registers.
-      (do ((i fixed))
-          ( nil )
-        ;; Store it relative to rbp
-        (inst mov (ea (* n-word-bytes
-                         (- sp->fp-offset
-                            (+ 1 (- i fixed) (sb-allocated-size 'stack))))
-                       rbp-tn)
-              (nth i *register-arg-tns*))
+              ;; Here: nargs>=1 && nargs>fixed
+              (when (< fixed register-arg-count)
+                ;; Now we have to deposit any more args that showed up in
+                ;; registers.
+                (do ((i fixed))
+                    ( nil )
+                  ;; Store it relative to rbp
+                  (inst mov (ea (* n-word-bytes
+                                   (- sp->fp-offset
+                                      (+ 1 (- i fixed) (sb-allocated-size 'stack))))
+                                rbp-tn)
+                        (nth i *register-arg-tns*))
 
-        (incf i)
-        (when (>= i register-arg-count)
-          (return))
+                  (incf i)
+                  (when (>= i register-arg-count)
+                    (return))
 
-        ;; Don't deposit any more than there are.
-        (inst cmp :dword rcx-tn (fixnumize i))
-        (inst jmp :eq DONE)))
+                  ;; Don't deposit any more than there are.
+                  (inst cmp :dword rcx-tn (fixnumize i))
+                  (inst jmp :eq DONE)))
 
-    (inst jmp DONE)
+              (inst jmp DONE)
 
-    JUST-ALLOC-FRAME
-    (emit-lea rsp-tn rbp-tn
-                         (* n-word-bytes
-                            (- sp->fp-offset
-                               (sb-allocated-size 'stack))))
+              JUST-ALLOC-FRAME
+              (emit-lea rsp-tn rbp-tn
+                        (* n-word-bytes
+                           (- sp->fp-offset
+                              (sb-allocated-size 'stack))))
 
-    DONE))
+              DONE))
 
 (define-vop (more-kw-arg)
   (:translate sb-c::%more-kw-arg)
@@ -1337,14 +1394,20 @@
   (:result-types t tagged-num)
   (:note "more-arg-context")
   (:generator 5
-    (move count supplied)
-    ;; SP at this point points at the last arg pushed.
-    ;; Point to the first more-arg, not above it.
-    (inst lea context (ea (- (* (1+ fixed) n-word-bytes))
-                          rsp-tn count
-                          (ash 1 (- word-shift n-fixnum-tag-bits))))
-    (unless (zerop fixed)
-      (inst sub count (fixnumize fixed)))))
+              (move count supplied)
+              (cond (sb-c::*new*
+                     (unless (zerop fixed)
+                       (inst sub count (fixnumize fixed)))
+                     (inst lea context (ea (- n-word-bytes)
+                                           rbp-tn count (ash 1 (- word-shift n-fixnum-tag-bits)))))
+                    (t
+                     ;; SP at this point points at the last arg pushed.
+                     ;; Point to the first more-arg, not above it.
+                     (inst lea context (ea (- (* (1+ fixed) n-word-bytes))
+                                           rsp-tn count
+                                           (ash 1 (- word-shift n-fixnum-tag-bits))))
+                     (unless (zerop fixed)
+                       (inst sub count (fixnumize fixed)))))))
 
 (define-vop (verify-arg-count)
   (:policy :fast-safe)

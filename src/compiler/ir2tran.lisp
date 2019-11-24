@@ -1031,7 +1031,7 @@
         (last nil)
         (first nil))
     (dotimes (num (length args))
-      (let ((loc (standard-arg-location num)))
+      (let ((loc (standard-arg-location num t)))
         (emit-move node block (lvar-tn node block (elt args num)) loc)
         (let ((ref (reference-tn loc nil)))
           (if last
@@ -1049,7 +1049,7 @@
          :designator)
         (t
          :symbol)))
-
+(defun fun-old-sp)
 ;;; Move the arguments into the passing locations and do a (possibly
 ;;; named) tail call.
 (defun ir2-convert-tail-full-call (node block)
@@ -1058,9 +1058,18 @@
          (args (basic-combination-args node))
          (nargs (length args))
          (pass-refs (move-tail-full-call-args node block))
-         (old-fp (ir2-physenv-old-fp env))
+         (old-fp (:Dbg (ir2-physenv-old-fp env)))
          (return-pc (ir2-physenv-return-pc env))
-         (fun-lvar (basic-combination-fun node)))
+         (fun-lvar (basic-combination-fun node))
+         (fun (node-home-lambda node))
+         old-sp)
+    (:dbg (ir2-physenv-old-sp env))
+    (when (lambda-optional-dispatch fun)
+      (let ((ef (lambda-optional-dispatch fun)))
+        (when (and (optional-dispatch-p ef)
+                   (functional-entry-fun ef))
+          (setf old-sp
+                (ir2-physenv-old-sp (physenv-info (lambda-physenv (functional-entry-fun ef))))))))
     (multiple-value-bind (fun-tn named)
         (fun-lvar-tn node block fun-lvar)
       (cond ((not named)
@@ -1361,8 +1370,12 @@
               ;; XEP-SETUP-SP here.
               #+(or alpha hppa mips sparc)
               (vop xep-setup-sp node block)
-              (vop copy-more-arg node block (optional-dispatch-max-args ef)
-                   #+x86-64 verified))
+              (if (ir2-physenv-old-sp env)
+                  (vop sb-vm::new-copy-more-arg node block
+                       (ir2-physenv-old-sp env)
+                       (optional-dispatch-max-args ef))
+                  (vop copy-more-arg node block (optional-dispatch-max-args ef)
+                       #+x86-64 verified)))
              (t
               (vop xep-setup-sp node block))))
       (when (ir2-physenv-closure env)
@@ -1387,12 +1400,17 @@
           (emit-move node block arg-count-tn (leaf-info (first vars))))
         (dolist (arg (rest vars))
           (when (leaf-refs arg)
-            (let ((pass (standard-arg-location n))
+            (let ((pass (standard-arg-location n t))
                   (home (leaf-info arg)))
-              (if (and (lambda-var-indirect arg)
-                       (lambda-var-explicit-value-cell arg))
-                  (emit-make-value-cell node block pass home)
-                  (emit-move node block pass home))))
+              (cond ((and (lambda-var-indirect arg)
+                          (lambda-var-explicit-value-cell arg))
+                     (emit-make-value-cell node block pass home))
+                    ((and (ir2-physenv-old-sp env)
+                          (sc-is pass sb-vm::control-stack))
+                     (vop sb-vm::arg-before-more node block
+                           n home))
+                    (t
+                     (emit-move node block pass home)))))
           (incf n))))
 
     (emit-move node block (make-old-fp-passing-location)
@@ -1423,7 +1441,8 @@
   ;; It could be saved from the XEP, but some functions have both
   ;; external and internal entry points, so it will be saved twice.
   (let ((temp (make-normal-tn *backend-t-primitive-type*))
-        (bsp-save-tn (make-representation-tn *backend-t-primitive-type*
+  
+      (bsp-save-tn (make-representation-tn *backend-t-primitive-type*
                                              sb-vm:control-stack-sc-number)))
     (vop current-binding-pointer node block temp)
     (emit-move node block temp bsp-save-tn)
@@ -1504,37 +1523,47 @@
          (env (physenv-info (lambda-physenv fun)))
          (old-fp (ir2-physenv-old-fp env))
          (return-pc (ir2-physenv-return-pc env))
-         (returns (tail-set-info (lambda-tail-set fun))))
+         (returns (tail-set-info (lambda-tail-set fun)))
+         (old-sp (ir2-physenv-old-sp env)))
+
+    (when (lambda-optional-dispatch fun)
+      (let ((ef (lambda-optional-dispatch fun)))
+        (when (and (optional-dispatch-p ef)
+                   (functional-entry-fun ef))
+          (setf old-sp
+                (ir2-physenv-old-sp (physenv-info (lambda-physenv (functional-entry-fun ef))))))))
     (cond
-     ((and (eq (return-info-kind returns) :fixed)
-           (not (xep-p fun)))
-      (let ((locs (lvar-tns node block lvar
-                                    (return-info-primitive-types returns))))
-        (vop* known-return node block
-              (old-fp return-pc (reference-tn-list locs nil))
-              (nil)
-              (return-info-locations returns))))
-     ((eq lvar-kind :fixed)
-      (let* ((types (mapcar #'tn-primitive-type (ir2-lvar-locs 2lvar)))
-             (lvar-locs (lvar-tns node block lvar types))
-             (nvals (length lvar-locs))
-             (locs (make-standard-value-tns nvals)))
-        (mapc (lambda (val loc)
-                (emit-move node block val loc))
-              lvar-locs
-              locs)
-        (if (= nvals 1)
-            (vop return-single node block old-fp return-pc (car locs))
-            (vop* return node block
-                  (old-fp return-pc (reference-tn-list locs nil))
-                  (nil)
-                  nvals))))
-     (t
-      (aver (eq lvar-kind :unknown))
-      (vop* return-multiple node block
-            (old-fp return-pc
-                    (reference-tn-list (ir2-lvar-locs 2lvar) nil))
-            (nil)))))
+      ((and (eq (return-info-kind returns) :fixed)
+            (not (xep-p fun)))
+       (let ((locs (lvar-tns node block lvar
+                             (return-info-primitive-types returns))))
+         (vop* known-return node block
+               (old-fp return-pc (reference-tn-list locs nil))
+               (nil)
+               (return-info-locations returns))))
+      ((eq lvar-kind :fixed)
+       (let* ((types (mapcar #'tn-primitive-type (ir2-lvar-locs 2lvar)))
+              (lvar-locs (lvar-tns node block lvar types))
+              (nvals (length lvar-locs))
+              (locs (make-standard-value-tns nvals)))
+         (mapc (lambda (val loc)
+                 (emit-move node block val loc))
+               lvar-locs
+               locs)
+         (if (= nvals 1)
+             (if old-sp
+                 (vop sb-vm::new-return-single node block old-fp old-sp return-pc (car locs))
+                 (vop return-single node block old-fp return-pc (car locs)))
+             (vop* return node block
+                   (old-fp return-pc (reference-tn-list locs nil))
+                   (nil)
+                   nvals))))
+      (t
+       (aver (eq lvar-kind :unknown))
+       (vop* return-multiple node block
+             (old-fp return-pc
+                     (reference-tn-list (ir2-lvar-locs 2lvar) nil))
+             (nil)))))
 
   (values))
 

@@ -109,7 +109,7 @@
 (define-storage-base float-registers :finite :size 16)
 
 ;;; Start from 2, for the old RBP (aka OCFP) and return address
-(define-storage-base stack :unbounded :size 2 :size-increment 1)
+(define-storage-base stack :unbounded :size #.(+ 2 3) :size-increment 1)
 (define-storage-base constant :non-packed)
 (define-storage-base immediate-constant :non-packed)
 (define-storage-base noise :unbounded :size 2)
@@ -481,8 +481,8 @@
 ;;; Let SP be the stack pointer before CALLing, and FP is the frame
 ;;; pointer after the standard prologue. SP +
 ;;; FRAME-WORD-OFFSET(SP->FP-OFFSET + I) = FP + FRAME-WORD-OFFSET(I).
-(defconstant sp->fp-offset 2)
-
+(defvar sp->fp-offset 2)
+(defvar register-save-space 0)
 (declaim (inline frame-word-offset))
 (defun frame-word-offset (index)
   (- (1- index)))

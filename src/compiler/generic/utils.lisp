@@ -81,12 +81,16 @@
 
 ;;; Return a wired TN describing the N'th full call argument passing
 ;;; location.
-(defun standard-arg-location (n)
+(defun standard-arg-location (n &optional call)
   (declare (type unsigned-byte n))
   (if (< n register-arg-count)
       (make-wired-tn *backend-t-primitive-type* descriptor-reg-sc-number
                      (nth n *register-arg-offsets*))
-      (make-wired-tn *backend-t-primitive-type* control-stack-sc-number n)))
+      (make-wired-tn *backend-t-primitive-type* control-stack-sc-number
+                     (+ n
+                        (if call
+                            register-save-space
+                            0)))))
 
 ;;; Same as above but marks stack locations as :arg-pass
 (defun standard-call-arg-location (n)
@@ -95,7 +99,8 @@
       (make-wired-tn *backend-t-primitive-type* descriptor-reg-sc-number
                      (nth n *register-arg-offsets*))
       (let ((tn
-              (make-wired-tn *backend-t-primitive-type* control-stack-sc-number n)))
+              (make-wired-tn *backend-t-primitive-type* control-stack-sc-number
+                             (+ n register-save-space))))
         (setf (tn-kind tn) :arg-pass)
         tn)))
 

@@ -444,7 +444,8 @@
   (environment-start nil :type (or label null))
   (closure-save-tn nil :type (or tn null))
   #+unwind-to-frame-and-call-vop
-  (bsp-save-tn nil :type (or tn null)))
+  (bsp-save-tn nil :type (or tn null))
+  (old-sp nil :type (or tn null)))
 
 (defprinter (ir2-physenv)
   closure
