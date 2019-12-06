@@ -41,144 +41,54 @@
   "Round NUMBER up to be an integral multiple of SIZE."
   (* size (ceiling number size)))
 
-;;;; implementing the concept of "vector" in (almost) portable
-;;;; Common Lisp
-;;;;
-;;;; "If you only need to do such simple things, it doesn't really
-;;;; matter which language you use." -- _ANSI Common Lisp_, p. 1, Paul
-;;;; Graham (evidently not considering the abstraction "vector" to be
-;;;; such a simple thing:-)
-
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (defconstant +smallvec-length+
-    (expt 2 16)))
-
-;;; an element of a BIGVEC -- a vector small enough that we have
-;;; a good chance of it being portable to other Common Lisps
-(deftype smallvec ()
-  `(simple-array (unsigned-byte 8) (,+smallvec-length+)))
-
-(defun make-smallvec ()
-  (make-array +smallvec-length+ :element-type '(unsigned-byte 8)
-              :initial-element 0))
-
-;;; a big vector, implemented as a vector of SMALLVECs
-;;;
-;;; KLUDGE: This implementation seems portable enough for our
-;;; purposes, since realistically every modern implementation is
-;;; likely to support vectors of at least 2^16 elements. But if you're
-;;; masochistic enough to read this far into the contortions imposed
-;;; on us by ANSI and the Lisp community, for daring to use the
-;;; abstraction of a large linearly addressable memory space, which is
-;;; after all only directly supported by the underlying hardware of at
-;;; least 99% of the general-purpose computers in use today, then you
-;;; may be titillated to hear that in fact this code isn't really
-;;; portable, because as of sbcl-0.7.4 we need somewhat more than
-;;; 16Mbytes to represent a core, and ANSI only guarantees that
-;;; ARRAY-DIMENSION-LIMIT is not less than 1024. -- WHN 2002-06-13
-(defstruct (bigvec (:constructor %make-bigvec ()))
-  (outer-vector (vector (make-smallvec)) :type (vector smallvec)))
-(defun make-bigvec (&optional (min-size 0))
-  (expand-bigvec (%make-bigvec) min-size))
-
-;;; analogous to SVREF, but into a BIGVEC
-(defun bvref (bigvec index)
-  (multiple-value-bind (outer-index inner-index)
-      (floor index +smallvec-length+)
-    (aref (the smallvec
-            (svref (bigvec-outer-vector bigvec) outer-index))
-          inner-index)))
-(defun (setf bvref) (new-value bigvec index)
-  (multiple-value-bind (outer-index inner-index)
-      (floor index +smallvec-length+)
-    (setf (aref (the (simple-array (unsigned-byte 8) (*))
-                  (svref (bigvec-outer-vector bigvec) outer-index))
-                inner-index)
-          new-value)))
-
-;;; analogous to LENGTH, but for a BIGVEC
-;;;
-;;; the length of BIGVEC, measured in the number of BVREFable bytes it
-;;; can hold
-(defun bvlength (bigvec)
-  (* (length (bigvec-outer-vector bigvec))
-     +smallvec-length+))
-
-;;; analogous to WRITE-SEQUENCE, but for a BIGVEC
-(defun write-bigvec-as-sequence (bigvec stream &key (start 0) end pad-with-zeros)
-  (let* ((bvlength (bvlength bigvec))
-         (data-length (min (or end bvlength) bvlength)))
-    (loop for i of-type index from start below data-length do
-      (write-byte (bvref bigvec i)
-                  stream))
-    (when (and pad-with-zeros (< bvlength data-length))
-      (loop repeat (- data-length bvlength) do (write-byte 0 stream)))))
-
-;;; analogous to READ-SEQUENCE-OR-DIE, but for a BIGVEC
-(defun read-bigvec-as-sequence-or-die (bigvec stream &key (start 0) end)
-  (loop for i of-type index from start below (or end (bvlength bigvec)) do
-        (setf (bvref bigvec i)
-              (read-byte stream))))
+(defun write-vector (vector stream &key (start 0) end pad-with-zeros)
+  (let* ((length (length vector))
+         (data-length (if end
+                          (min end length)
+                          length)))
+    (write-sequence vector stream :start start :end end)
+    (when (and pad-with-zeros (< length data-length))
+      (loop repeat (- data-length length)
+            do (write-byte 0 stream)))))
 
 (defun read-n-bytes (stream vector start end)
   (aver (zerop start))
   (let* ((start (+ (descriptor-byte-offset vector)
                    (ash sb-vm:vector-data-offset sb-vm:word-shift)))
          (end (+ start end)))
-    (read-bigvec-as-sequence-or-die (descriptor-mem vector)
-                                    stream :start start :end end)))
-
-;;; Grow BIGVEC (exponentially, so that large increases in size have
-;;; asymptotic logarithmic cost per byte).
-(defun expand-bigvec (bigvec required-length)
-  (loop
-    (when (>= (bvlength bigvec) required-length)
-      (return bigvec))
-    (let* ((old-outer-vector (bigvec-outer-vector bigvec))
-           (length-old-outer-vector (length old-outer-vector))
-           (new-outer-vector (make-array (* 2 length-old-outer-vector))))
-      (replace new-outer-vector old-outer-vector)
-      (loop for i from length-old-outer-vector below (length new-outer-vector)
-            do (setf (svref new-outer-vector i) (make-smallvec)))
-      (setf (bigvec-outer-vector bigvec)
-            new-outer-vector))))
+    (read-sequence (descriptor-mem vector) stream :start start :end end)))
 
-;;;; looking up bytes and multi-byte values in a BIGVEC (considering
-;;;; it as an image of machine memory on the cross-compilation target)
-
-;;; BVREF-32 and friends. These are like SAP-REF-n, except that
-;;; instead of a SAP we use a BIGVEC.
-(macrolet ((make-bvref-n (n)
-            (let ((name (intern (format nil "BVREF-~A" n)))
-                  (le-octet-indices
-                   (loop with n-octets = (/ n 8)
-                         for i from 0 below n-octets
-                         collect `(+ byte-index #+big-endian ,(- n-octets i 1)
-                                                #-big-endian ,i))))
-              `(progn
-                 (defun ,name (bigvec byte-index)
-                   (logior ,@(loop for index in le-octet-indices
-                                   for i from 0
-                                   collect `(ash (bvref bigvec ,index) ,(* i 8)))))
-                 (defun (setf ,name) (new-value bigvec byte-index)
-                   ;; We don't carefully distinguish between signed and unsigned,
-                   ;; since there's only one setter function per byte size.
-                   (declare (type (or (signed-byte ,n) (unsigned-byte ,n))
-                                  new-value))
-                   (setf ,@(loop for index in le-octet-indices
-                                 for i from 0
-                          append `((bvref bigvec ,index)
-                                   (ldb (byte 8 ,(* i 8)) new-value)))))))))
-  (make-bvref-n 8)
-  (make-bvref-n 16)
-  (make-bvref-n 32)
-  (make-bvref-n 64))
+;;; AREF-32 and friends. These are like SAP-REF-n
+(macrolet ((make-aref-n (n)
+             (let ((name (intern (format nil "AREF-~A" n)))
+                   (sap (find-symbol (format nil "SAP-REF-~a" n)
+                                     :host-sb-sys)))
+               `(progn
+                  (declaim (inline ,name (setf ,name)))
+                  (defun ,name (vector byte-index)
+                    (declare (type host-sb-int:index byte-index))
+                    (host-sb-sys:with-pinned-objects (vector)
+                      (,sap (host-sb-sys:vector-sap vector) byte-index)))
+                  (defun (setf ,name) (new-value vector byte-index)
+                    ;; We don't carefully distinguish between signed and unsigned,
+                    ;; since there's only one setter function per byte size.
+                    (declare (type (or (signed-byte ,n) (unsigned-byte ,n))
+                                   new-value)
+                             (type (simple-array (unsigned-byte 8) (*)) vector)
+                             (type host-sb-int:index byte-index))
+                    (host-sb-sys:with-pinned-objects (vector)
+                      (setf (,sap (host-sb-sys:vector-sap vector) byte-index)
+                            (cl:ldb (cl:byte ,n 0) new-value))))))))
+  (make-aref-n 16)
+  (make-aref-n 32)
+  (make-aref-n 64))
 
 ;; lispobj-sized word, whatever that may be
-;; hopefully nobody ever wants a 128-bit SBCL...
-(macrolet ((acc (bv index) `(#+64-bit bvref-64 #-64-bit bvref-32 ,bv ,index)))
-  (defun (setf bvref-word) (new-val bytes index) (setf (acc bytes index) new-val))
-  (defun bvref-word (bytes index) (acc bytes index)))
+(declaim (inline (setf aref-word) aref-word))
+(macrolet ((acc (v index) `(#+64-bit aref-64 #-64-bit aref-32 ,v ,index)))
+  (defun (setf aref-word) (new-val bytes index) (setf (acc bytes index) new-val))
+  (defun aref-word (bytes index) (acc bytes index)))
+
 
 ;;;; representation of spaces in the core
 
@@ -211,8 +121,8 @@
   (identifier (missing-arg) :type fixnum :read-only t)
   ;; the word address where the data will be loaded
   (word-address (missing-arg) :type unsigned-byte :read-only t)
-  ;; the gspace contents as a BIGVEC
-  (data (make-bigvec) :type bigvec :read-only t)
+  (data (make-array (expt 2 16) :element-type '(unsigned-byte 8))
+   :type (simple-array (unsigned-byte 8) (*)))
   (page-table nil) ; for dynamic space
   ;; lists of holes created by the allocator to segregate code from data.
   ;; Doesn't matter for cheneygc; does for gencgc.
@@ -256,6 +166,15 @@
                                         (/ sb-vm:immobile-card-bytes sb-vm:n-word-bytes))
                                        (t
                                         0))))
+
+(defun expand-gspace (gspace required-length)
+  (let* ((old-vector (gspace-data gspace))
+         (old-length (length old-vector)))
+    (when (> required-length old-length)
+      (let ((new-vector (make-array (* 2 old-length)
+                                    :element-type '(unsigned-byte 8))))
+        (setf (gspace-data gspace) new-vector)
+        (replace new-vector old-vector)))))
 
 ;;;; representation of descriptors
 
@@ -327,7 +246,7 @@
   (let* ((old-free-word-index (gspace-free-word-index gspace))
          (new-free-word-index (+ old-free-word-index n-words)))
     ;; Grow GSPACE as necessary
-    (expand-bigvec (gspace-data gspace) (* new-free-word-index sb-vm:n-word-bytes))
+    (expand-gspace gspace (* new-free-word-index sb-vm:n-word-bytes))
     ;; Now that GSPACE is big enough, we can meaningfully grab a chunk of it.
     (setf (gspace-free-word-index gspace) new-free-word-index)
     old-free-word-index))
@@ -571,13 +490,13 @@
 
 (declaim (ftype (function (descriptor sb-vm:word) descriptor) read-wordindexed))
 (macrolet ((read-bits ()
-             `(bvref-word (descriptor-mem address)
+             `(aref-word (descriptor-mem address)
                           (ash (+ index (descriptor-word-offset address))
                                sb-vm:word-shift))))
   (defun read-bits-wordindexed (address index)
     (read-bits))
   (defun read-wordindexed (address index)
-  "Return the value which is displaced by INDEX words from ADDRESS."
+    "Return the value which is displaced by INDEX words from ADDRESS."
     (make-random-descriptor (read-bits))))
 
 (defstruct (ltv-patch (:copier nil) (:constructor make-ltv-patch (index)))
@@ -585,9 +504,9 @@
 (declaim (ftype (function (descriptor sb-vm:word (or symbol descriptor ltv-patch)))
                 write-wordindexed))
 (macrolet ((write-bits (bits)
-             `(setf (bvref-word (descriptor-mem address)
-                                (ash (+ index (descriptor-word-offset address))
-                                     sb-vm:word-shift))
+             `(setf (aref-word (descriptor-mem address)
+                               (ash (+ index (descriptor-word-offset address))
+                                    sb-vm:word-shift))
                     ,bits)))
   (defun write-wordindexed (address index value)
     "Write VALUE displaced INDEX words from ADDRESS."
@@ -602,10 +521,10 @@
                       *!cold-toplevels*)
                 (bug "Can't patch load-time-value into ~S" address))
             sb-vm:unbound-marker-widetag)
-          (t
-           ;; If we're passed a symbol as a value then it needs to be interned.
-           (descriptor-bits (cond ((symbolp value) (cold-intern value))
-                                  (t value)))))))
+           (t
+            ;; If we're passed a symbol as a value then it needs to be interned.
+            (descriptor-bits (cond ((symbolp value) (cold-intern value))
+                                   (t value)))))))
 
   (defun write-wordindexed/raw (address index bits)
     (declare (type descriptor address) (type sb-vm:word index)
@@ -642,8 +561,8 @@
                                  widetag)))
 
 (defun set-header-data (object data)
-  (write-header-data+tag object data (ldb (byte sb-vm:n-widetag-bits 0)
-                                          (read-bits-wordindexed object 0)))
+  (write-header-data+tag object data (cl:ldb (cl:byte sb-vm:n-widetag-bits 0)
+                                             (read-bits-wordindexed object 0)))
   object) ; return the object itself, like SB-KERNEL:SET-HEADER-DATA
 
 (defun get-header-data (object)
@@ -747,9 +666,9 @@ core and return a descriptor to it."
          (offset (+ (* sb-vm:vector-data-offset sb-vm:n-word-bytes)
                     (descriptor-byte-offset des))))
     (dotimes (i length)
-      (setf (bvref bytes (+ offset i))
+      (setf (aref bytes (+ offset i))
             (sb-xc:char-code (aref string i))))
-    (setf (bvref bytes (+ offset length))
+    (setf (aref bytes (+ offset length))
           0) ; null string-termination character for C
     des))
 
@@ -760,7 +679,7 @@ core and return a descriptor to it."
          (bytes (descriptor-mem descriptor)))
     (dotimes (i len str)
       (setf (aref str i)
-            (code-char (bvref bytes
+            (code-char (aref bytes
                               (+ (descriptor-byte-offset descriptor)
                                  (* sb-vm:vector-data-offset sb-vm:n-word-bytes)
                                  i)))))))
@@ -779,7 +698,7 @@ core and return a descriptor to it."
            (warn "~W words of ~W were written, but ~W bits were left over."
                  words n remainder)))
       (write-wordindexed/raw handle index
-                             (ldb (byte sb-vm:n-word-bits 0) remainder)))
+                             (cl:ldb (cl:byte sb-vm:n-word-bits 0) remainder)))
     handle))
 
 (defun bignum-from-core (descriptor)
@@ -858,8 +777,8 @@ core and return a descriptor to it."
                               #-64-bit sb-vm:complex-single-float-real-slot
                               (descriptor-word-offset des))
                            sb-vm:word-shift)))
-          (setf (bvref-32 (descriptor-mem des) where) (single-float-bits r)
-                (bvref-32 (descriptor-mem des) (+ where 4)) (single-float-bits i))
+          (setf (aref-32 (descriptor-mem des) where) (single-float-bits r)
+                (aref-32 (descriptor-mem des) (+ where 4)) (single-float-bits i))
           des))
        (double-float
         (let ((des (allocate-header+object *dynamic*
@@ -962,7 +881,7 @@ core and return a descriptor to it."
     (let* ((cold-sym (cold-intern symbol))
            (tls-index
             #+64-bit
-            (ldb (byte 32 32) (read-bits-wordindexed cold-sym 0))
+            (cl:ldb (cl:byte 32 32) (read-bits-wordindexed cold-sym 0))
             #-64-bit
             (read-bits-wordindexed cold-sym sb-vm:symbol-tls-index-slot)))
       (unless (plusp tls-index)
@@ -2081,7 +2000,7 @@ core and return a descriptor to it."
 
 ;; Boxed header length is stored directly in bytes, not words
 (defun code-header-bytes (code-object)
-  (ldb (byte 32 0) (read-bits-wordindexed code-object sb-vm:code-boxed-size-slot)))
+  (cl:ldb (cl:byte 32 0) (read-bits-wordindexed code-object sb-vm:code-boxed-size-slot)))
 (defun code-header-words (code-object) ; same, but expressed in words
   (ash (code-header-bytes code-object) (- sb-vm:word-shift)))
 
@@ -2129,7 +2048,7 @@ core and return a descriptor to it."
             (= (gspace-identifier (descriptor-intuit-gspace code-object))
                dynamic-core-space-id))
            (addr (+ value
-                    (sb-vm::sign-extend (bvref-32 gspace-data gspace-byte-offset)
+                    (sb-vm::sign-extend (aref-32 gspace-data gspace-byte-offset)
                                         32))))
 
       (declare (ignorable code-end-addr in-dynamic-space))
@@ -2142,7 +2061,7 @@ core and return a descriptor to it."
       ;; Except for the use of saps, this is nearly identical.
       (when (ecase kind
              (:absolute
-              (setf (bvref-32 gspace-data gspace-byte-offset)
+              (setf (aref-32 gspace-data gspace-byte-offset)
                     (the (unsigned-byte 32) addr))
               #+x86
               (let ((n-jump-table-words
@@ -2162,15 +2081,15 @@ core and return a descriptor to it."
                                :symbol-value :assembly-routine :assembly-routine*)))
              #+x86-64
              (:absolute64
-              (setf (bvref-64 gspace-data gspace-byte-offset)
+              (setf (aref-64 gspace-data gspace-byte-offset)
                     (the (unsigned-byte 64) addr))
               ;; Never record it. (FIXME: this is a problem for relocatable heap)
               nil)
              (:relative ; (used for arguments to X86 relative CALL instruction)
               (let ((diff (- addr (+ gspace-base gspace-byte-offset 4)))) ; 4 = size of rel32off
-                (setf (bvref-32 gspace-data gspace-byte-offset)
+                (setf (aref-32 gspace-data gspace-byte-offset)
                       ;; 32-bit: use modular arithmetic since the address space is 32 bits
-                      #+x86 (ldb (byte 32 0) diff)
+                      #+x86 (cl:ldb (cl:byte 32 0) diff)
                       ;; 64-bit: ensure that the fixup actually fits in the size
                       ;; encodable in the instruction, or we're screwed
                       #+x86-64 (the (signed-byte 32) diff)))
@@ -2607,8 +2526,7 @@ core and return a descriptor to it."
     (let* ((start (+ (descriptor-byte-offset des)
                      (ash aligned-n-boxed-words sb-vm:word-shift)))
            (end (+ start code-size)))
-      (read-bigvec-as-sequence-or-die (descriptor-mem des) (fasl-input-stream)
-                                      :start start :end end)
+      (read-sequence (descriptor-mem des) (fasl-input-stream) :start start :end end)
       (when *show-pre-fixup-code-p*
         (format *trace-output*
                 "~&LOAD-CODE: ~d header words, ~d code bytes.~%"
@@ -2619,7 +2537,7 @@ core and return a descriptor to it."
                   " ~X: ~V,'.X~%"
                   (+ i (gspace-byte-address (descriptor-gspace des)))
                   (* 2 sb-vm:n-word-bytes)
-                  (bvref-word (descriptor-mem des) i)))))
+                  (aref-word (descriptor-mem des) i)))))
     (apply-fixups (%fasl-input-stack (fasl-input)) des n-fixups)))
 
 (defun resolve-deferred-known-funs ()
@@ -2635,7 +2553,7 @@ core and return a descriptor to it."
          ;; One uint32 prior to that is the offset of the 0th entry, so subtract
          ;; 8 bytes from the total object size to get the index of the 0th entry.
          ;; See related function %CODE-FUN-OFFSET.
-         (bvref-32 (descriptor-mem code-object)
+         (aref-32 (descriptor-mem code-object)
                    (+ (descriptor-byte-offset code-object)
                       (code-total-size code-object)
                       -8
@@ -2685,10 +2603,10 @@ core and return a descriptor to it."
     (write-code-header-words asm-code header-n-words rounded-length 0)
     (let ((start (+ (descriptor-byte-offset asm-code)
                     (ash header-n-words sb-vm:word-shift))))
-      (read-bigvec-as-sequence-or-die (descriptor-mem asm-code)
-                                      (fasl-input-stream)
-                                      :start start
-                                      :end (+ start length)))
+      (read-sequence (descriptor-mem asm-code)
+                     (fasl-input-stream)
+                     :start start
+                     :end (+ start length)))
     ;; Update the name -> address table.
     (let (table)
       (dotimes (i n-routines)
@@ -3361,7 +3279,7 @@ III. initially undefined function references (alphabetically):
     ;; be zero-filled. This will always be true under Mach on machines
     ;; where the page size is equal. (RT is 4K, PMAX is 4K, Sun 3 is
     ;; 8K).
-    (write-bigvec-as-sequence (gspace-data gspace)
+    (write-vector (gspace-data gspace)
                               core-file
                               :end total-bytes
                               :pad-with-zeros t)
@@ -3394,8 +3312,7 @@ III. initially undefined function references (alphabetically):
          (pte-bytes (round-up (* sizeof-corefile-pte n-ptes) sb-vm:n-word-bytes))
          (n-code 0)
          (n-mixed 0)
-         (ptes (make-bigvec)))
-    (expand-bigvec ptes pte-bytes)
+         (ptes (make-array pte-bytes :element-type '(unsigned-byte 8))))
     (dotimes (page-index n-ptes)
       (let* ((pte-offset (* page-index sizeof-corefile-pte))
              (pte (aref (gspace-page-table gspace) page-index))
@@ -3409,15 +3326,15 @@ III. initially undefined function references (alphabetically):
                               (:code  (incf n-code)  #b11)
                               (:mixed (incf n-mixed) #b01))
                             0)))
-        (setf (bvref-word ptes pte-offset) (logior sso type-bits))
-        (funcall (if (eql sizeof-usage 2) #'(setf bvref-16) #'(setf bvref-32))
+        (setf (aref-word ptes pte-offset) (logior sso type-bits))
+        (funcall (if (eql sizeof-usage 2) #'(setf aref-16) #'(setf aref-32))
                  usage ptes (+ pte-offset sb-vm:n-word-bytes))))
     (when verbose
       (format t "~d boxed pages, ~d code pages~%" n-mixed n-code))
     (force-output core-file)
     (let ((posn (file-position core-file)))
       (file-position core-file (* sb-c:+backend-page-bytes+ (1+ data-page)))
-      (write-bigvec-as-sequence ptes core-file :end pte-bytes)
+      (write-vector ptes core-file :end pte-bytes)
       (force-output core-file)
       (file-position core-file posn))
     (mapc write-word ; 5 = number of words in this core header entry
@@ -3436,56 +3353,56 @@ III. initially undefined function references (alphabetically):
                              :direction :output
                              :element-type '(unsigned-byte 8)
                              :if-exists :rename-and-delete)
-   (let ((bv (%make-bigvec))
-         (data-page 0))
-    (flet ((write-word (word)
-             (setf (bvref-word bv 0) (the sb-vm:word word))
-             (write-sequence (elt (bigvec-outer-vector bv) 0) core-file
-                             :start 0 :end sb-vm:n-word-bytes)))
-      ;; Write the magic number.
-      (write-word core-magic)
+    (let ((vector (make-array 128 :element-type '(unsigned-byte 8)))
+          (data-page 0))
+      (flet ((write-word (word)
+               (setf (aref-word vector 0) (the sb-vm:word word))
+               (write-sequence vector core-file
+                               :start 0 :end sb-vm:n-word-bytes)))
+        ;; Write the magic number.
+        (write-word core-magic)
 
-      ;; Write the build ID, which contains a generated string
-      ;; plus a suffix identifying a certain configuration of the C compiler.
-      (binding* ((build-id (concatenate
-                            'string
-                            (with-open-file (s "output/build-id.inc") (read s))
-                            (if (member :msan sb-xc:*features*) "-msan" "")))
-                 ((nwords padding) (ceiling (length build-id) sb-vm:n-word-bytes)))
-        (declare (type simple-string build-id))
-        ;; Write BUILD-ID-CORE-ENTRY-TYPE-CODE, the length of the header,
-        ;; length of the string, then base string chars + maybe padding.
-        (write-word build-id-core-entry-type-code)
-        (write-word (+ 3 nwords)) ; 3 = fixed overhead including this word
-        (write-word (length build-id))
-        (dovector (char build-id) (write-byte (sb-xc:char-code char) core-file))
-        (dotimes (j (- padding)) (write-byte #xff core-file)))
+        ;; Write the build ID, which contains a generated string
+        ;; plus a suffix identifying a certain configuration of the C compiler.
+        (binding* ((build-id (concatenate
+                              'string
+                              (with-open-file (s "output/build-id.inc") (read s))
+                              (if (member :msan sb-xc:*features*) "-msan" "")))
+                   ((nwords padding) (ceiling (length build-id) sb-vm:n-word-bytes)))
+          (declare (type simple-string build-id))
+          ;; Write BUILD-ID-CORE-ENTRY-TYPE-CODE, the length of the header,
+          ;; length of the string, then base string chars + maybe padding.
+          (write-word build-id-core-entry-type-code)
+          (write-word (+ 3 nwords)) ; 3 = fixed overhead including this word
+          (write-word (length build-id))
+          (dovector (char build-id) (write-byte (sb-xc:char-code char) core-file))
+          (dotimes (j (- padding)) (write-byte #xff core-file)))
 
-      ;; Write the Directory entry header.
-      (write-word directory-core-entry-type-code)
-      (let ((spaces (nconc (list *read-only* *static*)
-                           #+immobile-space
-                           (list *immobile-fixedobj* *immobile-varyobj*)
-                           (list *dynamic*))))
-        ;; length = (5 words/space) * N spaces + 2 for header.
-        (write-word (+ (* (length spaces) 5) 2))
-        (dolist (space spaces)
-          (setq data-page (output-gspace space data-page
-                                         core-file #'write-word verbose))))
-      #+gencgc (output-page-table *dynamic* data-page
-                                   core-file #'write-word verbose)
+        ;; Write the Directory entry header.
+        (write-word directory-core-entry-type-code)
+        (let ((spaces (nconc (list *read-only* *static*)
+                             #+immobile-space
+                             (list *immobile-fixedobj* *immobile-varyobj*)
+                             (list *dynamic*))))
+          ;; length = (5 words/space) * N spaces + 2 for header.
+          (write-word (+ (* (length spaces) 5) 2))
+          (dolist (space spaces)
+            (setq data-page (output-gspace space data-page
+                                           core-file #'write-word verbose))))
+        #+gencgc (output-page-table *dynamic* data-page
+                                    core-file #'write-word verbose)
 
-      ;; Write the initial function.
-      (write-word initial-fun-core-entry-type-code)
-      (write-word 3)
-      (let ((initial-fun (descriptor-bits (cold-symbol-function '!cold-init))))
-        (when verbose
-          (format t "~&/INITIAL-FUN=#X~X~%" initial-fun))
-        (write-word initial-fun))
+        ;; Write the initial function.
+        (write-word initial-fun-core-entry-type-code)
+        (write-word 3)
+        (let ((initial-fun (descriptor-bits (cold-symbol-function '!cold-init))))
+          (when verbose
+            (format t "~&/INITIAL-FUN=#X~X~%" initial-fun))
+          (write-word initial-fun))
 
-      ;; Write the End entry.
-      (write-word end-core-entry-type-code)
-      (write-word 2))))
+        ;; Write the End entry.
+        (write-word end-core-entry-type-code)
+        (write-word 2))))
 
   (when verbose
     (format t "done]~%")
