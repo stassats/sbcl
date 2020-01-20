@@ -2752,8 +2752,8 @@ register."
                                 '(progn
                                   (when (atom subform) (return))
                                   (let ((fm (car subform)))
-                                    (when (comma-p fm)
-                                      (setf fm (comma-expr fm)))
+                                    (when (comma2-p fm)
+                                      (setf fm (comma2-expr fm)))
                                     (cond ((consp fm)
                                            (translate1 fm (cons pos path)))
                                           ((eq 'quote fm)

@@ -11,16 +11,19 @@
 
 (in-package "SB-IMPL")
 
+(defstruct comma
+  (expr nil :read-only t)
+  (kind nil :read-only t))
+(declaim (freeze-type comma))
 ;; An unquoting COMMA struct.
-(defstruct (comma (:constructor unquote (expr &optional (kind 0)))
-                  #+sb-xc-host (:include structure!object)
-                  ;; READing unpretty commas requires a default constructor.
-                  ;; Not needed on the host.
-                  #-sb-xc-host (:constructor %default-comma-constructor)
-                  (:copier nil))
- (expr nil :read-only t)
- (kind nil :read-only t :type (member 0 1 2)))
-#+sb-xc (declaim (freeze-type comma))
+(defstruct (comma2 (:constructor unquote (expr &optional (kind 0)))
+                                        ;#+sb-xc-host (:include structure!object)
+                   (:copier nil)
+                   (:type list)
+                   :named)
+  (expr nil :read-only t)
+  (kind nil :read-only t :type (member 0 1 2)))
+;(!set-load-form-method comma (:host :xc :target))
 
 (defconstant !+comma-dot+ 1)
 (defconstant !+comma-at+  2)
@@ -30,9 +33,8 @@
 (defun unquote*-splice (list) (mapcar #'unquote-splice list))
 (declaim (inline comma-constructor comma-splicing-p))
 (defun comma-constructor (x)
-  (svref #(unquote unquote-nsplice unquote-splice) (comma-kind x)))
-(defun comma-splicing-p (comma) (not (zerop (comma-kind comma))))
-(!set-load-form-method comma (:host :xc :target))
+  (svref #(unquote unquote-nsplice unquote-splice) (comma2-kind x)))
+(defun comma-splicing-p (comma) (not (zerop (comma2-kind comma))))
 
 (declaim (type (and fixnum unsigned-byte) *backquote-depth*))
 (defvar *backquote-depth* 0 "how deep we are into backquotes")
@@ -44,7 +46,7 @@
   (let* ((expr (let ((*backquote-depth* (1+ *backquote-depth*)))
                  (read stream t nil t)))
          (result (list 'quasiquote expr)))
-    (if (and (comma-p expr) (comma-splicing-p expr))
+    (if (and (comma2-p expr) (comma-splicing-p expr))
         ;; use RESULT rather than EXPR in the error so it pprints nicely
         (simple-reader-error
          stream "~S is not a well-formed backquote expression" result)
@@ -110,20 +112,21 @@
 ;; the S-expression, and an indicator of how to incorporate it into its parent.
 (defun qq-template-to-sexpr (expr depth compiler-p)
   (cond ((not expr) (values nil 'quote))
-        ((listp expr)
-         (qq-template-1 expr (+ (if (eq (car expr) 'quasiquote) 1 0) depth)
-                        compiler-p))
         ((simple-vector-p expr) (qq-template-1 expr depth compiler-p))
-        ((not (comma-p expr)) (values expr 'quote))
+        ((not (comma2-p expr))
+         (if (listp expr)
+             (qq-template-1 expr (+ (if (eq (car expr) 'quasiquote) 1 0) depth)
+                            compiler-p)
+             (values expr 'quote)))
         ((zerop depth)
-         (values (comma-expr expr)
-                 (svref #(eval nconc |Append|) (comma-kind expr))))
+         (values (comma2-expr expr)
+                 (svref #(eval nconc |Append|) (comma2-kind expr))))
         (t
          ;; A comma is "pure data" if deeper than the current backquote depth.
          ;; If its expression interpolates 1 item, reconstruct it using its
          ;; ordinary constructor, otherwise its multi-constructor.
          (multiple-value-bind (subexpr operator)
-             (qq-template-to-sexpr (comma-expr expr) (1- depth) compiler-p)
+             (qq-template-to-sexpr (comma2-expr expr) (1- depth) compiler-p)
            (when (eq operator 'quote)
              (setq subexpr (list 'quote subexpr) operator 'eval))
            (values (list (cond ((eq operator 'eval) (comma-constructor expr))
@@ -177,26 +180,27 @@
                (qq-template-to-sexpr x depth compiler-p))))
       (typecase input
         (cons
-         (loop
+         (unless (eq (car input) 'comma2)
+           (loop
             (push (to-sexpr (pop input)) list)
             ;; Ensure that QQ-TEMPLATE-TO-SEXPR sees each occurrence of
             ;; (QUASIQUOTE <form>) as a proper list so that it can
             ;; bump the depth counter. The oddball case `(a . `(b))
             ;; would otherwise be seen as not nested `(a quasiquote (b)).
             (cond ((null input) (return))
-                  ((comma-p input) ; (... . ,<expr>)
+                  ((comma2-p input)                ; (... . ,<expr>)
                    (when (comma-splicing-p input) ; uncaught by reader
                      ;; Actually I don't even know how to get this error
                      (error "~S is not a well-formed backquote expression"
                             original))
                    ;; (A B . ,X) becomes (A B ,@X). It matters only if there
                    ;; are commas in X like (... . ,,@C). Otherwise no effect.
-                   (push (to-sexpr (unquote-splice (comma-expr input))) list)
+                   (push (to-sexpr (unquote-splice (comma2-expr input))) list)
                    (return))
                   ((or (not (listp input)) (eq (car input) 'quasiquote))
                    (push (to-sexpr input) list)
                    (setq dotted-p t)
-                   (return))))
+                   (return)))))
          (setq list (nreverse list)))
         (simple-vector
          (setq list (map 'list #'to-sexpr input)))))
@@ -206,7 +210,8 @@
     ;; But if splicing is required then we're going to construct the interim
     ;; list no matter what. It could theoretically be avoided by doing:
     ;;  (MULTIPLE-VALUE-CALL #'VECTOR ... (VALUES-LIST <splice>) ...)
-    (if (or (listp original)
+    (if (or (and (not (comma2-p original))
+                 (listp original))
             ;; The target compiler open-codes SOME but the cross-compiler
             ;; seems not to without (THE LIST) to help it out.
             (some #'qq-subform-splicing-p (the list list)))

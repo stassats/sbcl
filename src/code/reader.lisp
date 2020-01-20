@@ -855,7 +855,7 @@ standard Lisp readtable when NIL."
                  ;; never be exapanded, but nonetheless could be erroneous.
                  (unless (zerop (logand *backquote-depth* collectp))
                    (let ((lastcdr (cdr (last listtail))))
-                     (when (and (comma-p lastcdr) (comma-splicing-p lastcdr))
+                     (when (and (comma2-p lastcdr) (comma-splicing-p lastcdr))
                        (simple-reader-error
                         stream "~S contains a splicing comma after a dot"
                         (cdr thelist)))))

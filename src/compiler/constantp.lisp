@@ -41,11 +41,10 @@
   ;; This is an utter cinch because we haven't macroexpanded.
   ;; Parse just enough to recognize (DEFTYPE <T2> () (<T1> ,THING)) etc.
   (named-let recurse ((expr expr))
-    (cond ((atom expr)
-           (cond ((comma-p expr)
-                  (%constantp (comma-expr expr) environment envp))
-                 ((simple-vector-p expr) (every #'recurse expr))
-                 (t)))
+    (cond ((comma2-p expr)
+           (%constantp (comma2-expr expr) environment envp))
+          ((simple-vector-p expr) (every #'recurse expr))
+          ((atom expr) t)
           ((eq (car expr) 'quasiquote) nil) ; give up
           (t (and (recurse (car expr)) (recurse (cdr expr)))))))
 

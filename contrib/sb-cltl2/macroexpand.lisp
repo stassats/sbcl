@@ -24,23 +24,22 @@
            (and (listp x) (eq (car x) 'quasiquote) (singleton-p (cdr x))))
          (recurse (x)
            (%quasiquoted-macroexpand-all x env depth)))
-    (if (atom expr)
-        (cond ((simple-vector-p expr) (map 'vector #'recurse expr))
-              ((comma-p expr)
-               (unquote (if (> depth 1)
-                            (%quasiquoted-macroexpand-all
-                             (comma-expr expr) env (1- depth))
-                            (macroexpand-all (comma-expr expr) env))
-                        (comma-kind expr)))
-              (t expr))
-        (if (quasiquote-p expr)
-            (list 'quasiquote
-                  (%quasiquoted-macroexpand-all (second expr) env (1+ depth)))
-            (let (result)
-              (loop
-               (push (recurse (pop expr)) result)
-               (when (or (atom expr) (quasiquote-p expr))
-                 (return (nreconc result (recurse expr))))))))))
+    (cond ((simple-vector-p expr) (map 'vector #'recurse expr))
+          ((comma2-p expr)
+           (unquote (if (> depth 1)
+                        (%quasiquoted-macroexpand-all
+                         (comma2-expr expr) env (1- depth))
+                        (macroexpand-all (comma2-expr expr) env))
+                    (comma2-kind expr)))
+          ((atom expr) expr)
+          ((quasiquote-p expr)
+           (list 'quasiquote
+                 (%quasiquoted-macroexpand-all (second expr) env (1+ depth))))
+          ((let (result)
+             (loop
+              (push (recurse (pop expr)) result)
+              (when (or (atom expr) (quasiquote-p expr))
+                (return (nreconc result (recurse expr))))))))))
 
 (setf (get 'quasiquote :partial-macroexpander)
       (lambda (form env)

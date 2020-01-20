@@ -1085,15 +1085,15 @@ line break."
 
 (defun pprint-unquoting-comma (stream obj &rest noise)
   (declare (ignore noise))
-  (write-string (svref #("," ",." ",@") (comma-kind obj)) stream)
-  (when (eql (comma-kind obj) 0)
+  (write-string (svref #("," ",." ",@") (comma2-kind obj)) stream)
+  (when (eql (comma2-kind obj) 0)
     ;; Ensure a space is written before any output that would change the meaning
     ;; of the preceding the comma to ",." or ",@" such as a symbol named "@BAR".
     (setf (pretty-stream-char-out-oneshot-hook stream)
           (lambda (stream char)
             (when (member char '(#\. #\@))
               (write-char #\Space stream)))))
-  (output-object (comma-expr obj) stream))
+  (output-object (comma2-expr obj) stream))
 
 (defvar *pprint-quote-with-syntactic-sugar* t)
 
@@ -1398,12 +1398,13 @@ line break."
   ;; Also, START-LOGICAL-BLOCK could become an FLET inside here.
   (declare (function proc))
   (with-pretty-stream (stream (out-stream-from-designator stream))
-    (if (or (not (listp object)) ; implies obj-supplied-p
+    (if (or (not (listp object))        ; implies obj-supplied-p
             (and (eq (car object) 'quasiquote)
                  ;; We can only bail out from printing this logical block
                  ;; if the quasiquote printer would *NOT* punt.
                  ;; If it would punt, then we have to forge ahead.
-                 (singleton-p (cdr object))))
+                 (singleton-p (cdr object)))
+            (comma2-p object))
         ;; the spec says "If object is not a list, it is printed using WRITE"
         ;; but I guess this is close enough.
         (output-object object stream)
@@ -1485,10 +1486,10 @@ line break."
                          'pprint-macro-call -1)
     (set-pprint-dispatch '(cons (and symbol (satisfies fboundp)))
                          'pprint-fun-call -1)
+    (set-pprint-dispatch '(cons (eql sb-impl::comma2) (cons t (cons (mod 3)))) 'pprint-unquoting-comma -1)
     (set-pprint-dispatch '(cons symbol)
                          'pprint-data-list -2)
     (set-pprint-dispatch 'cons 'pprint-fill -2)
-    (set-pprint-dispatch 'sb-impl::comma 'pprint-unquoting-comma -3)
     ;; cons cells with interesting things for the car
     (/show0 "doing SET-PPRINT-DISPATCH for CONS with interesting CAR")
     (dolist (magic-form '((lambda pprint-lambda)

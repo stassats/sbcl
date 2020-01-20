@@ -193,8 +193,8 @@
       (let ((form root)
             (current (rest rpath)))
         (loop
-         (when (comma-p form)
-           (setf form (comma-expr form)))
+         (when (comma2-p form)
+           (setf form (comma2-expr form)))
          (when (atom form)
             (aver (null current))
             (return))
