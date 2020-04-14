@@ -823,6 +823,24 @@
                            (vop-codegen-info vop))
         (delete-vop vop)))))
 
+(defoptimizer (vop-optimize make-closure) (vop)
+  (let ((make-value-cell (vop-prev vop)))
+    (when (and make-value-cell
+               (eq (vop-name make-value-cell) 'make-value-cell))
+      (prog1
+          (emit-and-insert-vop (vop-node vop)
+                               (vop-block vop)
+                               (template-or-lose 'sb-vm::make-closure-with-value-cells)
+                               (reference-tn-list (list (tn-ref-tn (vop-args make-value-cell)))
+                                                  nil)
+                               (reference-tn-list (list (tn-ref-tn (vop-results vop))
+                                                        (tn-ref-tn (vop-results make-value-cell)))
+                                                  t)
+                               vop
+                               (vop-codegen-info vop))
+        (delete-vop make-value-cell)
+        (delete-vop vop)))))
+
 (defun very-temporary-p (tn)
   (let ((writes (tn-writes tn))
         (reads (tn-reads tn)))

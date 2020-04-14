@@ -590,6 +590,42 @@
   (:generator 10
     (alloc-other result value-cell-widetag value-cell-size node stack-allocate-p)
     (storew value result value-cell-value-slot other-pointer-lowtag)))
+
+(define-vop (make-closure-with-value-cells)
+  (:args (values :more t))
+  (:info label length stack-allocate-p)
+  (:temporary (:sc any-reg) temp)
+  (:results (closure :scs (descriptor-reg))
+            (cells :scs (descriptor-reg) :more t))
+  (:node-var node)
+  (:generator 10
+              (:dbg values)
+              (:dbg cells)
+              (let* ((words (+ length closure-info-offset)) ; including header
+                     (bytes (pad-data-block words))
+                     (header (logior (ash (1- words) n-widetag-bits) closure-widetag)))
+                (unless stack-allocate-p
+                  (instrument-alloc bytes node))
+                (pseudo-atomic (:elide-if stack-allocate-p)
+                  (allocation nil (+ bytes (* value-cell-size n-word-bytes))
+                              fun-pointer-lowtag node stack-allocate-p closure)
+                  (storew* #-immobile-space header ; write the widetag and size
+                           #+immobile-space ; ... plus the layout pointer
+                           (progn (inst mov temp header)
+                                  (inst or temp #-sb-thread (static-symbol-value-ea 'function-layout)
+                                                #+sb-thread
+                                                (thread-slot-ea thread-function-layout-slot))
+                                  temp)
+                           closure 0 fun-pointer-lowtag (not stack-allocate-p)))
+                (inst lea temp
+                      (ea (+ (- bytes fun-pointer-lowtag) other-pointer-lowtag)
+                          closure))
+                (storew (tn-ref-tn values) temp value-cell-value-slot other-pointer-lowtag)
+                (inst mov (tn-ref-tn cells) temp)
+                ;; Done with pseudo-atomic
+                (when label
+                  (inst lea temp (rip-relative-ea label (ash simple-fun-insts-offset word-shift)))
+                  (storew temp closure closure-fun-slot fun-pointer-lowtag)))))
 
 ;;;; automatic allocators for primitive objects
 
