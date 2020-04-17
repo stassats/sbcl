@@ -557,12 +557,6 @@
            while ,node-var
            do (progn ,@body))))
 
-(defmacro do-nested-cleanups ((cleanup-var lexenv &optional return-value)
-                              &body body)
-  `(block nil
-     (map-nested-cleanups
-      (lambda (,cleanup-var) ,@body) ,lexenv ,return-value)))
-
 ;;; Bind the IR1 context variables to the values associated with NODE,
 ;;; so that new, extra IR1 conversion related to NODE can be done
 ;;; after the original conversion pass has finished.

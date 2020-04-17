@@ -437,109 +437,133 @@
   (values))
 
 ;;;; cleanup emission
+(defun cleanup-code (cleanup)
+  (let* ((node (cleanup-mess-up cleanup))
+         (args (when (basic-combination-p node)
+                 (basic-combination-args node))))
+    (ecase (cleanup-kind cleanup)
+      (:special-bind
+       `(%special-unbind ',(lvar-value (car args))))
+      (:catch
+          `(%catch-breakup ,(opaquely-quote (car (cleanup-info cleanup)))))
+      (:unwind-protect
+           (values `(%unwind-protect-breakup ,(opaquely-quote (car (cleanup-info cleanup))))
+                   (let ((fun (ref-leaf (lvar-uses (second args)))))
+                     (when (functional-p fun)
+                       fun))))
+      ((:block :tagbody)
+       (when (cleanup-info cleanup)
+         `(progn
+            ,@(loop for nlx in (cleanup-info cleanup)
+                    collect `(%lexical-exit-breakup ,(opaquely-quote nlx))))))
+      (:dynamic-extent
+       (when (cleanup-info cleanup)
+         `(%cleanup-point)))
+      (:restore-nsp
+       `(%primitive set-nsp ,(ref-leaf node))))))
 
-;;; Zoom up the cleanup nesting until we hit CLEANUP1, accumulating
-;;; cleanup code as we go. When we are done, convert the cleanup code
-;;; in an implicit MV-PROG1. We have to force local call analysis of
-;;; new references to UNWIND-PROTECT cleanup functions. If we don't
-;;; actually have to do anything, then we don't insert any cleanup
-;;; code. (FIXME: There's some confusion here, left over from CMU CL
-;;; comments. CLEANUP1 isn't mentioned in the code of this function.
-;;; It is in code elsewhere, but if the comments for this function
-;;; mention it they should explain the relationship to the other code.)
-;;;
-;;; If we do insert cleanup code, we check that BLOCK1 doesn't end in
-;;; a "tail" local call.
-;;;
-;;; We don't need to adjust the ending cleanup of the cleanup block,
-;;; since the cleanup blocks are inserted at the start of the DFO, and
-;;; are thus never scanned.
-(defun emit-cleanups (pred-blocks succ-block)
-  (collect ((code)
-            (reanalyze-funs))
-    (let ((succ-cleanup (block-start-cleanup succ-block)))
-      (do-nested-cleanups (cleanup (block-end-lexenv (car pred-blocks)))
-        (when (eq cleanup succ-cleanup)
-          (return))
-        (let* ((node (cleanup-mess-up cleanup))
-               (args (when (basic-combination-p node)
-                       (basic-combination-args node))))
-          (ecase (cleanup-kind cleanup)
-            (:special-bind
-             (code `(%special-unbind ',(lvar-value (car args)))))
-            (:catch
-             (code `(%catch-breakup ,(opaquely-quote (car (cleanup-info cleanup))))))
-            (:unwind-protect
-             (code `(%unwind-protect-breakup ,(opaquely-quote (car (cleanup-info cleanup)))))
-             (let ((fun (ref-leaf (lvar-uses (second args)))))
-                (when (functional-p fun)
-                  (reanalyze-funs fun)
-                  (code `(%funcall ,fun)))))
-            ((:block :tagbody)
-             (dolist (nlx (cleanup-info cleanup))
-               (code `(%lexical-exit-breakup ,(opaquely-quote nlx)))))
-            (:dynamic-extent
-             (when (cleanup-info cleanup)
-               (code `(%cleanup-point))))
-            (:restore-nsp
-             (code `(%primitive set-nsp ,(ref-leaf node))))))))
-    (flet ((coalesce-unbinds (code)
-             code
-              #+(vop-named sb-c:unbind-n)
-              (loop with cleanup
-                    while code
-                    do (setf cleanup (pop code))
-                    collect (if (eq (car cleanup) '%special-unbind)
-                                `(%special-unbind
-                                  ,(cadr cleanup)
-                                  ,@(loop while (eq (caar code) '%special-unbind)
-                                          collect (cadar code)
-                                          do (pop code)))
-                                cleanup))))
-     (when (code)
-       (aver (not (node-tail-p (block-last (car pred-blocks)))))
-       (insert-cleanup-code
-        pred-blocks succ-block (block-last (car pred-blocks))
-        `(progn ,@(coalesce-unbinds (code))))
-       (dolist (fun (reanalyze-funs))
-         (locall-analyze-fun-1 fun)))))
-  (values))
-
-;;; Loop over the blocks in COMPONENT, calling EMIT-CLEANUPS when we
-;;; see a successor in the same environment with a different cleanup.
-;;; We ignore the cleanup transition if it is to a cleanup enclosed by
-;;; the current cleanup, since in that case we are just messing up the
-;;; environment, hence this is not the place to clean it.
+;;; Go through the points where the extent of things like special bindings, unwind-protect, etc. ends
+;;; and insert the code needed to clean them up (unbind, unlink unwind-block)
+;;; before the control proceeds to the next block.
 (defun find-cleanup-points (component)
   (declare (type component component))
-  (do-blocks (block1 component)
-    (unless (block-to-be-deleted-p block1)
-      (let ((env1 (block-physenv block1))
-            (cleanup1 (block-end-cleanup block1)))
-        (dolist (block2 (block-succ block1))
-          (when (block-start block2)
-            (let ((env2 (block-physenv block2))
-                  (cleanup2 (block-start-cleanup block2)))
-              (unless (or (not (eq env2 env1))
-                          (eq cleanup1 cleanup2)
-                          (and cleanup2
-                               (eq (node-enclosing-cleanup
-                                    (cleanup-mess-up cleanup2))
-                                   cleanup1)))
-                ;; If multiple blocks with the same cleanups end up at the same block
-                ;; issue only one cleanup, e.g. (let (*) (if x 1 2))
-                ;;
-                ;; Possible improvement: (let (*) (if x (let (**) 1) 2))
-                ;; unbinding * only once.
-                (emit-cleanups (loop for pred in (block-pred block2)
-                                     when (or (eq pred block1)
-                                              (and
-                                               (block-start pred)
-                                               (eq (block-end-cleanup pred) cleanup1)
-                                               (eq (block-physenv pred) env2)))
-                                     collect pred)
-                               block2))))))))
+  (let ((*current-component* component))
+    (do-blocks (succ-block component)
+      (unless (and (block-to-be-deleted-p succ-block)
+                   (block-start succ-block))
+        (let* ((succ-env (block-physenv succ-block))
+               (start-node (block-start-node succ-block))
+               (succ-cleanup (node-enclosing-cleanup start-node))
+               (lexenv (node-lexenv start-node))
+               (messup-cleanup (and succ-cleanup
+                                    (node-enclosing-cleanup
+                                     (cleanup-mess-up succ-cleanup))))
+               (functionals nil))
+          (declare (special functionals))
+          (let ((all-cleanups
+                  (loop for pred in (block-pred succ-block)
+                        when (and (block-start pred)
+                                  (neq (block-end-cleanup pred) succ-cleanup)
+                                  (eq (block-physenv pred) succ-env)
+                                  ;; Ignore the cleanup transition if it is to a cleanup enclosed by
+                                  ;; the current cleanup, since in that case we are just messing up the
+                                  ;; environment, hence this is not the place to clean it.
+                                  (not (and succ-cleanup
+                                            (eq messup-cleanup
+                                                (block-end-cleanup pred))))
+                                  (cleanups-up-to pred lexenv succ-cleanup))
+                        collect it)))
+            (when all-cleanups
+              (setf (component-reanalyze component) t)
+              (let ((*current-path* (node-source-path (block-start-node succ-block))))
+                (labels ((insert (succ-block lexenv form)
+                           (with-component-last-block (component
+                                                       (block-next (component-head component)))
+                             (let* ((start (make-ctran))
+                                    (block (ctran-starts-block start))
+                                    (next (make-ctran))
+                                    (*lexenv* lexenv))
+                               (link-blocks block succ-block)
+                               (ir1-convert start next nil form)
+                               (setf (block-last block) (ctran-use next))
+                               (setf (node-next (block-last block)) nil)
+                               block)))
+                         (split-equal (cleanups)
+                           (let ((result))
+                             (loop for cleanup in cleanups
+                                   for cons = (find (cdar cleanup) result :key #'cdaar :test #'equal-opaque-box)
+                                   if cons
+                                   do (push cleanup (cdr cons))
+                                   else
+                                   do (push (list cleanup) result))
+                             result))
+                         (emit-cleanups (succ all-cleanups)
+                           (loop for common-cleanups in (split-equal all-cleanups)
+                                 for new-block = (insert succ (cadaar common-cleanups) (cddaar common-cleanups))
+                                 do
+                                 (let (remaining)
+                                   (loop for (((block) . rest)) on common-cleanups
+                                         if rest
+                                         do (push rest remaining)
+                                         else
+                                         do (change-block-successor block succ-block new-block))
+                                   (emit-cleanups new-block remaining)))))
+                  ;; Many blocks end up with the same cleanups
+                  ;; e.g. (let (*) (if x 1 2))
+                  ;; Or with more complicated diverging paths
+                  ;; e.g. (let (*) (if x (let (**) 1) 2))
+                  ;; This goes backwards from * and inserts the same
+                  ;; cleanups until the paths diverge.
+                  (emit-cleanups succ-block all-cleanups)))
+              (dolist (fun functionals)
+                (locall-analyze-fun-1 fun))))))))
   (values))
+
+(defun cleanups-up-to (block lexenv cleanup)
+  (declare (special functionals))
+  (let (cleanups)
+    (block nil
+      (map-nested-cleanups-and-lexenvs
+       (lambda (current-cleanup current-lexenv)
+         (when (eq current-cleanup cleanup)
+           (return))
+         (when (eq (cleanup-kind current-cleanup) :dynamic-extent)
+           ;; After this point only STACK-ANALYZE cares about cleanups,
+           ;; and only of the :dynamic-extent kind. Force the previously
+           ;; collected cleanups to have a DX cleanup.
+           ;; Could make each cleanup use its own lexenv, but then the
+           ;; cleanups with identical code wouldn't be shared.
+           (loop for cleanup in cleanups
+                 when (eq (cadr cleanup) lexenv)
+                 do (setf (cadr cleanup) current-lexenv)))
+         (multiple-value-bind (code fun) (cleanup-code current-cleanup)
+           (when code
+             (push (list* block lexenv code) cleanups)
+             (when fun
+               (push `(,block ,lexenv . (%funcall ,fun)) cleanups)
+               (pushnew fun functionals :test #'eq)))))
+       (block-end-lexenv block)))
+    cleanups))
 
 ;;; Mark optimizable tail-recursive uses of function result
 ;;; continuations with the corresponding TAIL-SET.

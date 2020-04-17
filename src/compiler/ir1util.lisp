@@ -22,6 +22,14 @@
     (awhen (lexenv-cleanup lexenv2)
       (return it))))
 
+(defun lexenv-enclosing-cleanup-lexenv (lexenv)
+  (declare (type lexenv lexenv))
+  (do ((lexenv2 lexenv
+               (lambda-call-lexenv (lexenv-lambda lexenv2))))
+      ((null lexenv2) nil)
+    (awhen (lexenv-cleanup lexenv2)
+      (return (values it lexenv2)))))
+
 ;;; Return the innermost cleanup enclosing NODE, or NIL if there is
 ;;; none in its function. If NODE has no cleanup, but is in a LET,
 ;;; then we must still check the environment that the call is in.
@@ -35,6 +43,20 @@
                 (node-enclosing-cleanup (cleanup-mess-up cleanup))))
       ((not cleanup) return-value)
     (funcall function cleanup)))
+
+(defun map-nested-cleanups-and-lexenvs (function lexenv)
+  (declare (type lexenv lexenv))
+  (multiple-value-bind (cleanup lexenv) (lexenv-enclosing-cleanup-lexenv lexenv)
+    (loop while cleanup
+          do (funcall function cleanup lexenv)
+             (setf (values cleanup lexenv)
+                   (lexenv-enclosing-cleanup-lexenv (node-lexenv (cleanup-mess-up cleanup)))))))
+
+(defmacro do-nested-cleanups ((cleanup-var lexenv &optional return-value)
+                              &body body)
+  `(block nil
+     (map-nested-cleanups
+      (lambda (,cleanup-var) ,@body) ,lexenv ,return-value)))
 
 ;;; Convert the FORM in a block inserted between BLOCK1 and BLOCK2 as
 ;;; an implicit MV-PROG1. The inserted block is returned. NODE is used
@@ -3395,3 +3417,16 @@ is :ANY, the function name is not checked."
                             (eq (lambda-component home-lambda)
                                 *current-component*))))
             (return functional)))))))
+
+(defun equal-opaque-box (x y)
+  (cond ((eql x y)
+         t)
+        ((consp x)
+         (and (consp y)
+              (equal-opaque-box (car x) (car y))
+              (equal-opaque-box (cdr x) (cdr y))))
+        ((opaque-box-p x)
+         (and (opaque-box-p y)
+              (equal-opaque-box
+               (opaque-box-value x)
+               (opaque-box-value y))))))
