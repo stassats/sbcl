@@ -274,6 +274,43 @@
   (:generator 3
     (inst mul r x y)))
 
+(define-vop (fixnum*)
+  (:translate sb-c::fixnum*)
+  (:args (x :scs (signed-reg) :to :result)
+         (y :scs (signed-reg) :to :result))
+  (:arg-types tagged-num tagged-num)
+  (:temporary (:scs (non-descriptor-reg)) high low)
+  (:temporary (:sc non-descriptor-reg) pa-flag high-extended-p)
+  (:temporary (:scs (interior-reg)) lip)
+  (:results (r :scs (any-reg descriptor-reg) :from :eval))
+  (:note "inline (signed-byte 64) arithmetic")
+  (:policy :fast-safe)
+  (:generator 2
+    (inst smulh high x y)
+    (inst add high-extended-p high 1)
+    (inst mul low x y)
+    (inst cmp high-extended-p 1)
+    (inst b :hi allocate)
+    (inst adds r low low)
+    (inst eor pa-flag high low)
+    (inst tbz pa-flag 63 check-overflow)
+    (inst mov high-extended-p 2)
+    (inst b allocate)
+    check-overflow
+    (inst b :vc DONE)
+    allocate
+    (with-fixed-allocation
+        (r pa-flag bignum-widetag (+ 2 bignum-digits-offset) :lip lip
+                                                             :store-type-code nil)
+      (inst cmp high-extended-p 1)
+      (inst b :hi STORE)
+      (load-immediate-word pa-flag (compute-object-header (+ 1 bignum-digits-offset) bignum-widetag))
+      STORE
+      ;; See the comment in move-from-signed
+      (storew-pair pa-flag 0 low bignum-digits-offset tmp-tn)
+      (storew high tmp-tn 2))
+    DONE))
+
 ;;; Division
 (define-vop (fast-truncate/signed=>signed fast-safe-arith-op)
   (:translate truncate)

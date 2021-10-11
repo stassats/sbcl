@@ -481,25 +481,7 @@
 
 (defun multiply-fixnums (a b)
   (declare (fixnum a b))
-  (declare (muffle-conditions compiler-note)) ; returns lispobj, so what.
-  (let* ((a-minusp (minusp a))
-         (b-minusp (minusp b)))
-    (multiple-value-bind (high low)
-        (%multiply (if a-minusp (- a) a)
-                   (if b-minusp (- b) b))
-      (declare (type bignum-element-type high low))
-      (if (and (zerop high)
-               (%digit-0-or-plusp low))
-          (let ((low (truly-the (unsigned-byte #.(1- sb-vm:n-word-bits))
-                                (%fixnum-digit-with-correct-sign low))))
-            (if (eq a-minusp b-minusp)
-                low
-                (- low)))
-          (let ((res (%allocate-bignum 2)))
-            (%bignum-set res 0 low)
-            (%bignum-set res 1 high)
-            (unless (eq a-minusp b-minusp) (negate-bignum-in-place res))
-            (%normalize-bignum res 2))))))
+  (sb-c::fixnum* a b))
 
 ;;;; BIGNUM-REPLACE and WITH-BIGNUM-BUFFERS
 

@@ -2710,6 +2710,12 @@
         `(- (ash x ,len))
         `(ash x ,len))))
 
+;; (deftransform * ((x y) (fixnum fixnum) * :result result)
+;;   (give-up-ir1-transform)
+;;   (when (csubtypep (lvar-type result) (specifier-type 'fixnum))
+;;     (give-up-ir1-transform))
+;;   `(fixnum* x y))
+
 ;;; These must come before the ones below, so that they are tried
 ;;; first.
 (deftransform floor ((number divisor))

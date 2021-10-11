@@ -257,6 +257,9 @@
 
 (defknown (+ *) (&rest number) number
   (movable foldable flushable commutative))
+(defknown fixnum* (fixnum fixnum) t
+  (movable foldable unsafely-flushable commutative))
+
 (defknown - (number &rest number) number
   (movable foldable flushable))
 (defknown / (number &rest number) number
