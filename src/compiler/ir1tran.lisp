@@ -1710,20 +1710,16 @@
          :default res
          :flushable (cdr spec)))
        (current-defmethod
-        (let* ((gfs (or *methods-in-compilation-unit*
-                        (setf *methods-in-compilation-unit*
-                              (make-hash-table :test #'equal))))
-               (name (cadr spec))
-               (signuature (cddr spec))
-               (methods (gethash name gfs))
-               (existing (find signuature methods
-                               :test (lambda (x y)
-                                       (and (equal (first x) (first y))
-                                            (equal (second x) (second y)))))))
-          (setf (gethash name gfs)
-                (if existing
-                    (substitute signuature existing methods)
-                    (cons signuature methods))))
+        (destructuring-bind (name qualifiers specializers lambda-list)
+            (cdr spec)
+          (let* ((gfs (or *methods-in-compilation-unit*
+                          (setf *methods-in-compilation-unit*
+                                (make-hash-table :test #'equal))))
+                 (methods (or (gethash name gfs)
+                              (setf (gethash name gfs)
+                                    (make-hash-table :test #'equal)))))
+            (setf (gethash (cons qualifiers specializers) methods)
+                  lambda-list)))
         res)
        (no-constraints
         (process-no-constraints-decl spec vars)
