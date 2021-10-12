@@ -516,15 +516,16 @@
                          (if (and (member '&rest ll) (not (member '&key ll)))
                              ll
                              (generic-function-pretty-arglist gf methods-in-compilation-unit)))))
-             (unless methods-in-compilation-unit ;; it's not yet added, don't store
-               ;; It would be nice if globaldb were transactional,
-               ;; so that either both updates or neither occur.
-               (setf (info :function :type name) type
-                     (info :function :where-from name) :defined-method))
-             type))
+
+             ;; It would be nice if globaldb were transactional,
+             ;; so that either both updates or neither occur.
+             (setf (info :function :where-from name) :defined-method
+                   (info :function :type name) type)))
           (methods-in-compilation-unit
-           (sb-c::ftype-from-lambda-list
-            (gf-merge-arglists methods-in-compilation-unit)))
+           (setf (info :function :where-from name) :defined-method
+                 (info :function :type name)
+                 (sb-c::ftype-from-lambda-list
+                  (gf-merge-arglists methods-in-compilation-unit))))
           (t
            ;; The defaulting expression for (:FUNCTION :TYPE) does not store
            ;; the default. For :GENERIC-FUNCTION that is not FBOUNDP we also
