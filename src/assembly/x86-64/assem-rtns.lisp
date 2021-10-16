@@ -312,20 +312,30 @@
   (:generator 0
     (inst ret)))
 
+(define-vop ()
+  (:translate sb-c::%continue-unwind-return-address-and-stack)
+  (:results (lr :scs (unsigned-reg))
+            (csp :scs (unsigned-reg)))
+  (:result-types unsigned-num unsigned-num)
+  (:policy :fast-safe)
+  (:generator 0
+    (inst mov lr (ea rsp-tn))
+    (inst lea csp (ea 8 rsp-tn))))
+
 (define-assembly-routine (unwind
                           (:return-style :none)
                           (:translate %unwind)
                           (:policy :fast-safe))
-                         ((:arg block (any-reg descriptor-reg) rax-offset)
-                          (:arg start (any-reg descriptor-reg) rbx-offset)
-                          (:arg count (any-reg descriptor-reg) rcx-offset)
-                          (:temp uwp unsigned-reg rsi-offset)
-                          ;; for unbind-to-here
-                          (:temp where unsigned-reg r8-offset)
-                          (:temp symbol unsigned-reg r9-offset)
-                          (:temp value unsigned-reg r10-offset)
-                          (:temp bsp-temp unsigned-reg r11-offset)
-                          (:temp zero complex-double-reg float0-offset))
+    ((:arg block (any-reg descriptor-reg) rax-offset)
+     (:arg start (any-reg descriptor-reg) rbx-offset)
+     (:arg count (any-reg descriptor-reg) rcx-offset)
+     (:temp uwp unsigned-reg rsi-offset)
+     ;; for unbind-to-here
+     (:temp where unsigned-reg r8-offset)
+     (:temp symbol unsigned-reg r9-offset)
+     (:temp value unsigned-reg r10-offset)
+     (:temp bsp-temp unsigned-reg r11-offset)
+     (:temp zero complex-double-reg float0-offset))
   AGAIN
   (let ((error (generate-error-code nil 'invalid-unwind-error)))
     (inst test block block)             ; check for NULL pointer

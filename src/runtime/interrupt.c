@@ -991,6 +991,8 @@ void
 interrupt_internal_error(os_context_t *context, boolean continuable)
 {
     DX_ALLOC_SAP(context_sap, context);
+    lispobj unwinding = 0;
+    DX_ALLOC_SAP(unwinding_sap, &unwinding);
 
     fake_foreign_function_call(context);
 
@@ -1020,11 +1022,11 @@ interrupt_internal_error(os_context_t *context, boolean continuable)
      * confused, we have a chance to determine what's going on. */
     describe_internal_error(context);
 #endif
-    funcall2(StaticSymbolFunction(INTERNAL_ERROR), context_sap,
-             continuable ? T : NIL);
+    funcall3(StaticSymbolFunction(INTERNAL_ERROR), context_sap,
+             continuable ? T : NIL, unwinding_sap);
 
     undo_fake_foreign_function_call(context); /* blocks signals again */
-    if (continuable)
+    if (continuable && !unwinding)
         arch_skip_instruction(context);
 }
 

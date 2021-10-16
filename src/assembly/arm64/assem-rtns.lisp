@@ -330,3 +330,20 @@
   (:generator 0
     (inst ldr lr-tn (@ csp-tn -8 :pre-index))
     (inst ret)))
+
+(define-vop ()
+  (:translate %continue-unwind)
+  (:policy :fast-safe)
+  (:generator 0
+    (inst ldr lr-tn (@ csp-tn -8 :pre-index))
+    (inst ret)))
+
+(define-vop ()
+  (:translate sb-c::%continue-unwind-return-address-and-stack)
+  (:results (lr :scs (unsigned-reg))
+            (csp :scs (unsigned-reg)))
+  (:result-types unsigned-num unsigned-num)
+  (:policy :fast-safe)
+  (:generator 0
+    (inst ldr lr (@ csp-tn -8))
+    (inst sub csp csp-tn 8)))

@@ -410,15 +410,16 @@
 #+unwind-to-frame-and-call-vop
 (defvar *interr-current-bsp* nil)
 
-(defun internal-error (context continuable)
-  (declare (type system-area-pointer context))
+(defun internal-error (context continuable unwinding)
+  (declare (type system-area-pointer context context))
   (declare (ignore continuable))
-  (let (#+unwind-to-frame-and-call-vop
-        (*interr-current-bsp*
-          ;; Needs to be done before anything is bound
-          (%primitive sb-c:current-binding-pointer)))
-    (infinite-error-protect
-     (let ((alien-context (sap-alien context (* os-context-t))))
+  (sb-unix::protect-signal-unwinding (context unwinding)
+    (let* (;#+unwind-to-frame-and-call-vop
+           (*interr-current-bsp*
+             ;; Needs to be done before anything is bound
+             (%primitive sb-c:current-binding-pointer))
+           (alien-context (sap-alien context (* os-context-t))))
+      (infinite-error-protect
        (multiple-value-bind (error-number arguments
                              *current-internal-trap-number*)
            (sb-vm::with-pinned-context-code-object (alien-context)

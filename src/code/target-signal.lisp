@@ -77,12 +77,30 @@
   ;; feasible, is definitely not what was intended.
   nil)
 
+(defmacro protect-signal-unwinding ((context &optional unwinding) &body body)
+  `(block nil
+    (sb-c::inspect-unwinding
+     (progn ,@body)
+     (lambda (block)
+       (declare (ignore block))
+       (let ((alien-context (sap-alien ,context (* sb-sys:os-context-t))))
+         (multiple-value-bind (lr csp) (sb-c::%continue-unwind-return-address-and-stack)
+           (sb-vm::set-context-pc alien-context lr)
+
+           (setf (sb-vm:context-register alien-context #+arm64 sb-vm::csp-offset
+                                                       #+x86-64 sb-vm::rsp-offset)
+                 csp)
+           ,(when unwinding
+              `(setf (sap-ref-word ,unwinding 0) 1))))
+       (return)))))
+
 (defun %install-handler (signal handler)
   (flet ((run-handler (signo info-sap context-sap)
            #-(or c-stack-is-control-stack sb-safepoint) ;; able to do that in interrupt_handle_now()
            (unblock-gc-signals)
-           (in-interruption ()
-             (funcall handler signo info-sap context-sap))))
+           (protect-signal-unwinding (context-sap)
+             (in-interruption ()
+               (funcall handler signo info-sap context-sap)))))
     (with-pinned-objects (#'run-handler)
       ;; 0 and 1 probably coincide with SIG_DFL and SIG_IGN, but those
       ;; constants are opaque. We use our own explicit translation
