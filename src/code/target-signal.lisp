@@ -90,7 +90,8 @@
             (setf (sb-vm:context-register alien-context #+arm64 sb-vm::csp-offset
                                                         #+x86-64 sb-vm::rsp-offset)
                   csp)
-            (setf (sb-vm:context-register alien-context sb-vm::thread-offset)
+            (setf (sb-vm:context-register alien-context #+arm64 sb-vm::thread-offset
+                                                        #+x86-64 sb-vm::r13-offset) ;; thread-base-tn
                   (sap-int (sb-vm::current-thread-offset-sap sb-vm::thread-this-slot)))
             #+arm64
             (setf (sb-vm:context-register alien-context sb-vm::null-offset)
