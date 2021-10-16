@@ -414,7 +414,7 @@
   (declare (type system-area-pointer context context))
   (declare (ignore continuable))
   (sb-unix::protect-signal-unwinding (context unwinding)
-    (let* (;#+unwind-to-frame-and-call-vop
+    (let* (#+unwind-to-frame-and-call-vop
            (*interr-current-bsp*
              ;; Needs to be done before anything is bound
              (%primitive sb-c:current-binding-pointer))

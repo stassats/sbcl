@@ -79,20 +79,25 @@
 
 (defmacro protect-signal-unwinding ((context &optional unwinding) &body body)
   `(block nil
-    (sb-c::inspect-unwinding
-     (progn ,@body)
-     (lambda (block)
-       (declare (ignore block))
-       (let ((alien-context (sap-alien ,context (* sb-sys:os-context-t))))
-         (multiple-value-bind (lr csp) (sb-c::%continue-unwind-return-address-and-stack)
-           (sb-vm::set-context-pc alien-context lr)
+     (sb-c::inspect-unwinding
+      (progn ,@body)
+      (lambda (block)
+        (declare (ignore block))
+        (let ((alien-context (sap-alien ,context (* sb-sys:os-context-t))))
+          (multiple-value-bind (lr csp) (sb-c::%continue-unwind-return-address-and-stack)
+            (sb-vm::set-context-pc alien-context lr)
 
-           (setf (sb-vm:context-register alien-context #+arm64 sb-vm::csp-offset
-                                                       #+x86-64 sb-vm::rsp-offset)
-                 csp)
-           ,(when unwinding
-              `(setf (sap-ref-word ,unwinding 0) 1))))
-       (return)))))
+            (setf (sb-vm:context-register alien-context #+arm64 sb-vm::csp-offset
+                                                        #+x86-64 sb-vm::rsp-offset)
+                  csp)
+            (setf (sb-vm:context-register alien-context sb-vm::thread-offset)
+                  (sap-int (sb-vm::current-thread-offset-sap sb-vm::thread-this-slot)))
+            #+arm64
+            (setf (sb-vm:context-register alien-context sb-vm::null-offset)
+                  sb-vm:nil-value)
+            ,(when unwinding
+               `(setf (sap-ref-word ,unwinding 0) 1))))
+        (return)))))
 
 (defun %install-handler (signal handler)
   (flet ((run-handler (signo info-sap context-sap)
