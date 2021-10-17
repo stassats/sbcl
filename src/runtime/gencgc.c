@@ -3634,21 +3634,22 @@ garbage_collect_generation(generation_index_t generation, int raise)
             }
 #  endif
 # elif defined(LISP_FEATURE_SB_THREAD)
+            {
+              sword_t i,free;
+              lispobj* esp1;
+              free=fixnum_value(read_TLS(FREE_INTERRUPT_CONTEXT_INDEX,th));
+              for(i=free-1;i>=0;i--) {
+                os_context_t *c = nth_interrupt_context(i, th);
+                esp1 = (lispobj*) *os_context_register_addr(c,reg_SP);
+                if (esp1 >= th->control_stack_start && esp1 < th->control_stack_end) {
+                  if ((void*)esp1<esp) esp = esp1;
+                  preserve_context_registers((void(*)(os_context_register_t))preserve_pointer,
+                                             c);
+                }
+              }
+            }
             if(th==get_sb_vm_thread()) {
                 esp = (void*)&raise;
-            } else {
-                sword_t i,free;
-                lispobj* esp1;
-                free=fixnum_value(read_TLS(FREE_INTERRUPT_CONTEXT_INDEX,th));
-                for(i=free-1;i>=0;i--) {
-                    os_context_t *c = nth_interrupt_context(i, th);
-                    esp1 = (lispobj*) *os_context_register_addr(c,reg_SP);
-                    if (esp1 >= th->control_stack_start && esp1 < th->control_stack_end) {
-                        if ((void*)esp1<esp) esp = esp1;
-                        preserve_context_registers((void(*)(os_context_register_t))preserve_pointer,
-                                                   c);
-                    }
-                }
             }
 # else
             esp = (void*)&raise;
