@@ -571,7 +571,7 @@
     (inst .skip (* (1- simple-fun-insts-offset) n-word-bytes))
 
     (loop for first = t then nil
-          for reg from 19 to 27 by 2
+          for reg from 19 to 29 by 2
           for offset from 0 by 16
           do
           (inst stp (make-random-tn
@@ -583,10 +583,10 @@
                  :sc (sc-or-lose 'descriptor-reg)
                  :offset (1+ reg))
                 (if first
-                    (@ nsp-tn -144 :pre-index)
+                    (@ nsp-tn -160 :pre-index)
                     (@ nsp-tn offset))))
     (loop for reg from 8 to 14 by 2
-          for offset from 80 by 16
+          for offset from 96 by 16
           do
           (inst stp (make-random-tn
                      :kind :normal
@@ -602,7 +602,7 @@
     (inst and r0 r0 -8)
     (inst ldr r1 (@ r0 (ash 257 3)))
     (inst ldr thread-tn (@ r1))
-    
+    (load-immediate-word  null-tn nil-value)
     (loop for reg in (list r3-offset r4-offset r5-offset r6-offset r7-offset
                            r8-offset r9-offset
                            #-darwin r10-offset
@@ -625,8 +625,7 @@
           (inst sub nfp-tn nsp-tn nbytes)
           (inst mov-sp nsp-tn nfp-tn))))
 
-    (inst str r2 (@ cfp-tn))
-    (inst str lip (@ cfp-tn (* lra-save-offset n-word-bytes)))))
+    (inst str r2 (@ cfp-tn))))
 
 (define-vop (alien-return)
   (:args (old-fp)
@@ -642,14 +641,12 @@
       (when cur-nfp
         (inst add nsp-tn cur-nfp (add-sub-immediate
                                   (bytes-needed-for-non-descriptor-stack-frame)))))
-    ;; Interrupts leave two words of space for the new frame, so it's safe
-    ;; to deallocate the frame before accessing OCFP/LR.
     (move csp-tn cfp-tn)
-    (loadw-pair ocfp-tn ocfp-save-offset lip lra-save-offset cfp-tn)
+    (loadw ocfp-tn cfp-tn ocfp-save-offset)
     (storew-pair ocfp-tn thread-control-frame-pointer-slot cfp-tn thread-control-stack-pointer-slot thread-tn)
     (loop 
       for reg downfrom 14 to 7 by 2
-      for offset downfrom 128 by 16
+      for offset downfrom 144 by 16
       do
       (inst ldp (make-random-tn
                  :kind :normal
@@ -660,8 +657,8 @@
              :sc (sc-or-lose 'double-reg)
              :offset (1+ reg))
             (@ nsp-tn offset)))
-    (loop for reg from 27 downto 19 by 2
-          for offset downfrom 64 by 16
+    (loop for reg from 29 downto 19 by 2
+          for offset downfrom 80 by 16
           for last = (= reg 19)
           do
           (inst ldp (make-random-tn
@@ -673,7 +670,7 @@
                  :sc (sc-or-lose 'descriptor-reg)
                  :offset (1+ reg))
                 (if last
-                    (@ nsp-tn 144 :post-index)
+                    (@ nsp-tn 160 :post-index)
                     (@ nsp-tn offset))))
     (inst ret)))
 
