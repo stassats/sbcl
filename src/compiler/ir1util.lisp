@@ -1744,7 +1744,7 @@
               (ecase (functional-kind leaf)
                 ((nil :let :mv-let :assignment :escape :cleanup)
                  (delete-lambda leaf))
-                (:external
+                ((:external :external-alien)
                  (unless (functional-has-external-references-p leaf)
                    (delete-lambda leaf)))
                 ((:deleted :zombie :optional))))

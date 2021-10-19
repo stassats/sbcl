@@ -218,47 +218,6 @@
     (load-inline-constant res `(:fixup ,foreign-symbol :foreign-dataref) lip)
     (inst ldr res (@ res))))
 
-(defun emit-c-call (vop nfp-save temp temp2 lip cfunc function)
-  (let ((cur-nfp (current-nfp-tn vop)))
-    (when cur-nfp
-      (store-stack-tn nfp-save cur-nfp))
-    (if (stringp function)
-        (load-inline-constant cfunc `(:fixup ,function :foreign) lip)
-        (sc-case function
-          (sap-reg (move cfunc function))
-          (sap-stack
-           (load-stack-offset cfunc cur-nfp function))))
-    (assemble ()
-      #+sb-thread
-      (progn
-        (inst add temp csp-tn (* 2 n-word-bytes))
-        ;; Build a new frame to stash a pointer to the current code object
-        ;; for the GC to see.
-        (inst adr temp2 return)
-        (inst stp cfp-tn temp2 (@ csp-tn))
-        (storew-pair csp-tn thread-control-frame-pointer-slot temp thread-control-stack-pointer-slot thread-tn)
-        (inst blr cfunc)
-
-        (loop for reg in (list r0-offset r1-offset r2-offset r3-offset
-                               r4-offset r5-offset r6-offset r7-offset
-                               #-darwin r10-offset)
-              do
-              (inst mov
-                    (make-random-tn
-                     :kind :normal
-                     :sc (sc-or-lose 'descriptor-reg)
-                     :offset reg)
-                    0))
-        (storew zr-tn thread-tn thread-control-stack-pointer-slot))
-      return
-      #-sb-thread
-      (progn
-        temp2
-        (load-inline-constant temp '(:fixup "call_into_c" :foreign) lip)
-        (inst blr temp))
-      (when cur-nfp
-        (load-stack-tn cur-nfp nfp-save)))))
-
 (eval-when (#-sb-xc :compile-toplevel :load-toplevel :execute)
   (defun destroyed-c-registers ()
     (let ((gprs (list nl0-offset nl1-offset nl2-offset nl3-offset
@@ -290,7 +249,45 @@
   (:temporary (:scs (interior-reg)) lip)
   (:vop-var vop)
   (:generator 0
-    (emit-c-call vop nfp-save temp temp2 lip cfunc function))
+    (let ((cur-nfp (current-nfp-tn vop)))
+      (when cur-nfp
+        (store-stack-tn nfp-save cur-nfp))
+      (if (stringp function)
+          (load-inline-constant cfunc `(:fixup ,function :foreign) lip)
+          (sc-case function
+            (sap-reg (move cfunc function))
+            (sap-stack
+             (load-stack-offset cfunc cur-nfp function))))
+      (assemble ()
+        #+sb-thread
+        (progn
+          (inst add temp csp-tn (* 2 n-word-bytes))
+          ;; Build a new frame to stash a pointer to the current code object
+          ;; for the GC to see.
+          (inst adr temp2 return)
+          (inst stp cfp-tn temp2 (@ csp-tn))
+          (storew-pair csp-tn thread-control-frame-pointer-slot temp thread-control-stack-pointer-slot thread-tn)
+          (inst blr cfunc)
+
+          (loop for reg in (list r0-offset r1-offset r2-offset r3-offset
+                                 r4-offset r5-offset r6-offset r7-offset
+                                 #-darwin r10-offset)
+                do
+                (inst mov
+                      (make-random-tn
+                       :kind :normal
+                       :sc (sc-or-lose 'descriptor-reg)
+                       :offset reg)
+                      0))
+          (storew zr-tn thread-tn thread-control-stack-pointer-slot))
+        return
+        #-sb-thread
+        (progn
+          temp2
+          (load-inline-constant temp '(:fixup "call_into_c" :foreign) lip)
+          (inst blr temp))
+        (when cur-nfp
+          (load-stack-tn cur-nfp nfp-save)))))
   .
   #. (destroyed-c-registers))
 
@@ -555,3 +552,147 @@
                                  unsigned-long))
          sap (length buffer))
         vector))))
+
+
+(define-vop (xep-alien-allocate-frame)
+  (:info start-lab)
+  (:temporary (:scs (interior-reg)) lip)
+  (:temporary (:sc any-reg :offset r0-offset) r0)
+  (:temporary (:sc any-reg :offset r1-offset) r1)
+  (:temporary (:sc any-reg :offset r2-offset) r2)
+  (:vop-var vop)
+  (:generator 1
+    ;; Make sure the function is aligned, and drop a label pointing to this
+    ;; function header.
+    (emit-alignment n-lowtag-bits)
+    (emit-label start-lab)
+    ;; Allocate function header.
+    (inst simple-fun-header-word)
+    (inst .skip (* (1- simple-fun-insts-offset) n-word-bytes))
+
+    (loop for first = t then nil
+          for reg from 19 to 27 by 2
+          for offset from 0 by 16
+          do
+          (inst stp (make-random-tn
+                     :kind :normal
+                     :sc (sc-or-lose 'descriptor-reg)
+                     :offset reg)
+                (make-random-tn
+                 :kind :normal
+                 :sc (sc-or-lose 'descriptor-reg)
+                 :offset (1+ reg))
+                (if first
+                    (@ nsp-tn -144 :pre-index)
+                    (@ nsp-tn offset))))
+    (loop for reg from 8 to 14 by 2
+          for offset from 80 by 16
+          do
+          (inst stp (make-random-tn
+                     :kind :normal
+                     :sc (sc-or-lose 'double-reg)
+                     :offset reg)
+                (make-random-tn
+                 :kind :normal
+                 :sc (sc-or-lose 'double-reg)
+                 :offset (1+ reg))
+                (@ nsp-tn offset)))
+
+    (inst mrs r0 :tpidrro_el0)
+    (inst and r0 r0 -8)
+    (inst ldr r1 (@ r0 (ash 257 3)))
+    (inst ldr thread-tn (@ r1))
+    
+    (loop for reg in (list r3-offset r4-offset r5-offset r6-offset r7-offset
+                           r8-offset r9-offset
+                           #-darwin r10-offset
+                           lexenv-offset)
+          do
+          (inst mov
+                (make-random-tn
+                 :kind :normal
+                 :sc (sc-or-lose 'descriptor-reg)
+                 :offset reg)
+                0))
+    (loadw-pair r2 thread-control-frame-pointer-slot cfp-tn thread-control-stack-pointer-slot thread-tn)
+    (storew zr-tn thread-tn thread-control-stack-pointer-slot)
+
+    (inst add csp-tn cfp-tn
+      (add-sub-immediate (* n-word-bytes (sb-allocated-size 'control-stack))))
+    (let ((nfp-tn (current-nfp-tn vop)))
+      (when nfp-tn
+        (let ((nbytes (bytes-needed-for-non-descriptor-stack-frame)))
+          (inst sub nfp-tn nsp-tn nbytes)
+          (inst mov-sp nsp-tn nfp-tn))))
+
+    (inst str r2 (@ cfp-tn))
+    (inst str lip (@ cfp-tn (* lra-save-offset n-word-bytes)))))
+
+(define-vop (alien-return)
+  (:args (old-fp)
+         (return-pc)
+         (value))
+  (:temporary (:scs (interior-reg)) lip)
+  (:ignore value old-fp return-pc)
+  (:vop-var vop)
+  (:generator 6
+    ;; Clear the number stack.
+    
+    (let ((cur-nfp (current-nfp-tn vop)))
+      (when cur-nfp
+        (inst add nsp-tn cur-nfp (add-sub-immediate
+                                  (bytes-needed-for-non-descriptor-stack-frame)))))
+    ;; Interrupts leave two words of space for the new frame, so it's safe
+    ;; to deallocate the frame before accessing OCFP/LR.
+    (move csp-tn cfp-tn)
+    (loadw-pair ocfp-tn ocfp-save-offset lip lra-save-offset cfp-tn)
+    (storew-pair ocfp-tn thread-control-frame-pointer-slot cfp-tn thread-control-stack-pointer-slot thread-tn)
+    (loop 
+      for reg downfrom 14 to 7 by 2
+      for offset downfrom 128 by 16
+      do
+      (inst ldp (make-random-tn
+                 :kind :normal
+                 :sc (sc-or-lose 'double-reg)
+                 :offset reg)
+            (make-random-tn
+             :kind :normal
+             :sc (sc-or-lose 'double-reg)
+             :offset (1+ reg))
+            (@ nsp-tn offset)))
+    (loop for reg from 27 downto 19 by 2
+          for offset downfrom 64 by 16
+          for last = (= reg 19)
+          do
+          (inst ldp (make-random-tn
+                     :kind :normal
+                     :sc (sc-or-lose 'descriptor-reg)
+                     :offset reg)
+                (make-random-tn
+                 :kind :normal
+                 :sc (sc-or-lose 'descriptor-reg)
+                 :offset (1+ reg))
+                (if last
+                    (@ nsp-tn 144 :post-index)
+                    (@ nsp-tn offset))))
+    (inst ret)))
+
+(define-vop (get-tls)
+  (:args (tls :scs (unsigned-reg) :to :save))
+  (:arg-types unsigned-num)
+  (:results (res :scs (unsigned-reg)))
+  (:result-types unsigned-num)
+  (:policy :fast-safe)
+  (:generator 0
+    (inst mrs res :tpidrro_el0)
+    (inst and res res -8)
+    (inst ldr res (@ res (extend tls :lsl 3)))
+    (inst ldr res (@ res))))
+
+(defun alien-standard-arg-locations  (n)
+  (let ((arg-state (make-arg-state)))
+    (loop for i below n
+          collect (invoke-alien-type-method :arg-tn (sb-c::parse-alien-type  'sb-alien:unsigned-long nil) arg-state))))
+
+(defun alien-return-location ()
+  (make-wired-tn* 'unsigned-byte-64 unsigned-reg-sc-number nl0-offset))

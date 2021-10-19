@@ -201,7 +201,8 @@
                                 debug-name
                                 (note-lexical-bindings t)
                                 post-binding-lexenv
-                                system-lambda)
+                                system-lambda
+                                alien)
   (declare (list body vars aux-vars aux-vals))
 
   ;; We're about to try to put new blocks into *CURRENT-COMPONENT*.
@@ -212,7 +213,8 @@
                   :bind bind
                   :%source-name source-name
                   :%debug-name debug-name
-                  :system-lambda-p system-lambda))
+                  :system-lambda-p system-lambda
+                  :alien alien))
          (result-ctran (make-ctran))
          (result-lvar (make-lvar)))
     ;; just to check: This function should fail internal assertions if
@@ -872,7 +874,7 @@
 ;;; Convert a LAMBDA form into a LAMBDA leaf or an OPTIONAL-DISPATCH leaf.
 (defun ir1-convert-lambda (form &key (source-name '.anonymous.)
                            debug-name maybe-add-debug-catch
-                           system-lambda)
+                           system-lambda alien)
   (unless (consp form)
     (compiler-error "A ~S was found when expecting a lambda expression:~%  ~S"
                     (type-of form)
@@ -924,7 +926,8 @@
                                                         :post-binding-lexenv post-binding-lexenv
                                                         :source-name source-name
                                                         :debug-name debug-name
-                                                        :system-lambda system-lambda)))))
+                                                        :system-lambda system-lambda
+                                                        :alien alien)))))
           (when explicit-check
             (setf (getf (functional-plist res) 'explicit-check) explicit-check))
           (setf (functional-inline-expansion res) (or source-form form))
@@ -1036,6 +1039,13 @@
                                :maybe-add-debug-catch t
                                :debug-name
                                (or name (name-lambdalike thing))))))
+    ((alien-lambda)
+     (let* ((name (cadr thing))
+            (lambda-expression `(lambda ,@(cddr thing))))
+       (ir1-convert-lambda lambda-expression
+                           :maybe-add-debug-catch t
+                           :source-name name
+                           :alien t)))
     ((lambda-with-lexenv)
      (ir1-convert-inline-lambda thing
                                 :source-name source-name

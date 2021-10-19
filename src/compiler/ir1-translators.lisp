@@ -545,7 +545,7 @@ Return VALUE without evaluating it."
 ;;;; FUNCTION and NAMED-LAMBDA
 (defun name-lambdalike (thing)
   (case (car thing)
-    ((named-lambda)
+    ((named-lambda alien-lambda)
      (or (second thing)
          `(lambda ,(strip-lambda-list (third thing) :name) ,(name-context))))
     ((lambda)
@@ -569,7 +569,7 @@ Return VALUE without evaluating it."
 ;;; apparent function associated to it.
 (defun find-or-convert-fun-leaf (thing start)
   (cond
-    ((typep thing '(cons (member lambda named-lambda lambda-with-lexenv)))
+    ((typep thing '(cons (member lambda named-lambda alien-lambda lambda-with-lexenv)))
      (let ((ctran (make-ctran))
            (leaf (ir1-convert-lambdalike thing
                                          :debug-name (name-lambdalike thing))))

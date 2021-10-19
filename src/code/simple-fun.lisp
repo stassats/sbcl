@@ -511,9 +511,10 @@
 (declaim (inline sb-vm:simple-fun-entry-sap))
 (defun sb-vm:simple-fun-entry-sap (fun)
   #-(or x86 x86-64)
-  (int-sap (+ (get-lisp-obj-address fun)
-              (- sb-vm:fun-pointer-lowtag)
-              (ash sb-vm:simple-fun-insts-offset sb-vm:word-shift)))
+  (int-sap (truly-the (unsigned-byte 64)
+                      (+ (get-lisp-obj-address fun)
+                         (- sb-vm:fun-pointer-lowtag)
+                         (ash sb-vm:simple-fun-insts-offset sb-vm:word-shift))))
   ;; The preceding case would actually work, but I'm anticipating a change
   ;; in which simple-fun headers are all contiguous in their code component,
   ;; followed by all the machine instructions for all the simple-funs.

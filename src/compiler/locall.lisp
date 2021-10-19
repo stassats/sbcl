@@ -169,10 +169,14 @@
      (let* ((n-supplied (sb-xc:gensym))
             (nargs (length (lambda-vars fun)))
             (temps (make-gensym-list nargs)))
-       `(lambda (,n-supplied ,@temps)
-          (declare (type index ,n-supplied)
-                   (ignore ,n-supplied))
-          (%funcall ,fun ,@temps))))
+       (if (lambda-alien fun)
+           `(lambda (,@temps)
+              (declare (ignore ,n-supplied))
+              (%funcall ,fun ,@temps))
+           `(lambda (,n-supplied ,@temps)
+              (declare (type index ,n-supplied)
+                       (ignore ,n-supplied))
+              (%funcall ,fun ,@temps)))))
     (optional-dispatch
      ;; Force conversion of all entries
      (optional-dispatch-entry-point-fun fun 0)
@@ -275,7 +279,8 @@
     (let ((xep (ir1-convert-lambda (make-xep-lambda-expression fun)
                                    :debug-name (debug-name
                                                 'xep (leaf-debug-name fun))
-                                   :system-lambda t)))
+                                   :system-lambda t
+                                   :alien (functional-alien fun))))
       (setf (functional-kind xep) :external
             (leaf-ever-used xep) t
             (functional-entry-fun xep) fun

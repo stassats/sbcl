@@ -1775,6 +1775,10 @@ symbol-case giving up: case=((V U) (F))
   (declare (ignore name args body))
   `#',whole)
 
+(sb-xc:defmacro sb-c::alien-lambda (&whole whole name args &body body)
+  (declare (ignore name args body))
+  `#',whole)
+
 (sb-xc:defmacro declaim (&rest specs)
   "DECLAIM Declaration*
   Do a declaration or declarations for the global environment."

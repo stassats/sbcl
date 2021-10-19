@@ -1398,6 +1398,42 @@
 
   (values))
 
+(defun init-alien-xep-environment (node block fun)
+  (declare (type bind node) (type ir2-block block) (type clambda fun))
+  (let ((start-label (entry-info-offset (leaf-info fun)))
+        (env (physenv-info (node-physenv node))))
+    (vop sb-vm::xep-alien-allocate-frame node block start-label)
+    ;; Arg verification needs to be done before the stack pointer is adjusted
+    ;; so that the extra arguments are still present when the error is signalled
+
+    (when (ir2-physenv-closure env)
+      (let ((closure (make-normal-tn *backend-t-primitive-type*)))
+        (when (policy fun (> store-closure-debug-pointer 1))
+          ;; Save the closure pointer on the stack.
+          (let ((closure-save
+                  (make-representation-tn *backend-t-primitive-type*
+                                          sb-vm:control-stack-sc-number)))
+            (vop setup-closure-environment node block start-label
+                 closure-save)
+            (setf (ir2-physenv-closure-save-tn env) closure-save)
+            (component-live-tn closure-save)))
+        (vop setup-closure-environment node block start-label closure)
+        (let ((n -1))
+          (dolist (loc (ir2-physenv-closure env))
+            (vop closure-ref node block closure (incf n) (cdr loc))))))
+    (let ((vars (lambda-vars fun)))
+      (loop for var in vars
+            for arg in (sb-vm::alien-standard-arg-locations (length vars))
+            do
+            (when (leaf-refs var)
+              (let ((home (leaf-info var)))
+                (if (and (lambda-var-indirect var)
+                         (lambda-var-explicit-value-cell var))
+                    (emit-make-value-cell node block arg home)
+                    (emit-move node block arg home)))))))
+
+  (values))
+
 ;;; Emit function prolog code. This is only called on bind nodes for
 ;;; functions that allocate environments. All semantics of let calls
 ;;; are handled by IR2-CONVERT-LET.
@@ -1434,7 +1470,9 @@
                   '(nil :external :optional :toplevel :cleanup)))
 
     (cond ((xep-p fun)
-           (init-xep-environment node block fun)
+           (if (functional-alien fun)
+               (init-alien-xep-environment node block fun)
+               (init-xep-environment node block fun))
            #+sb-dyncount
            (when *collect-dynamic-statistics*
              (vop count-me node block *dynamic-counts-tn*
@@ -1510,6 +1548,13 @@
               (old-fp return-pc (reference-tn-list locs nil))
               (nil)
               (return-info-locations returns))))
+     ((lambda-alien fun)
+      (let* ((types (mapcar #'tn-primitive-type (ir2-lvar-locs 2lvar)))
+             (lvar-locs (lvar-tns node block lvar types))
+             (loc (sb-vm::alien-return-location)))
+        (assert (singleton-p lvar-locs))
+        (emit-move node block (car lvar-locs) loc)
+        (vop sb-vm::alien-return node block old-fp return-pc loc)))
      ((eq lvar-kind :fixed)
       (let* ((types (mapcar #'tn-primitive-type (ir2-lvar-locs 2lvar)))
              (lvar-locs (lvar-tns node block lvar types))

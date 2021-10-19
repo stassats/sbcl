@@ -376,6 +376,16 @@ GNAME(do_pending_interrupt):
         brk trap_PendingInterrupt
 	ret
 
+        .align 2
+	.global	GNAME(thread_tls)
+	TYPE(thread_tls)
+
+GNAME(thread_tls):
+        adrp    x0, _current_thread@TLVPPAGE
+        ldr     x0, [x0, _current_thread@TLVPPAGEOFF]
+        ldr     x0, [x0, 8]
+	ret
+
 #ifdef __ELF__
 // Mark the object as not requiring an executable stack.
 .section .note.GNU-stack,"",%progbits

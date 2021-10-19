@@ -1122,7 +1122,8 @@
   (inline-expanded nil)
   ;; Is it coming from a top-level NAMED-LAMBDA?
   (top-level-defun-p nil)
-  (ignore nil))
+  (ignore nil)
+  (alien nil :type boolean))
 
 (defun pretty-print-functional (functional stream)
   (let ((name (functional-debug-name functional)))

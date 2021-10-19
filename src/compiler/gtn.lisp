@@ -40,15 +40,17 @@
   (dolist (var (lambda-vars fun))
     (when (leaf-refs var)
       (let* (ptype-info
-             (type (if (lambda-var-indirect var)
-                       (if (lambda-var-explicit-value-cell var)
-                           *backend-t-primitive-type*
-                           (or (first
-                                (setf ptype-info
-                                      (primitive-type-indirect-cell-type
-                                       (primitive-type (leaf-type var)))))
-                               *backend-t-primitive-type*))
-                       (primitive-type (leaf-type var))))
+             (type (if (lambda-alien fun)
+                       (primitive-type-or-lose 'sb-vm::unsigned-byte-64)
+                       (if (lambda-var-indirect var)
+                           (if (lambda-var-explicit-value-cell var)
+                               *backend-t-primitive-type*
+                               (or (first
+                                    (setf ptype-info
+                                          (primitive-type-indirect-cell-type
+                                           (primitive-type (leaf-type var)))))
+                                   *backend-t-primitive-type*))
+                           (primitive-type (leaf-type var)))))
              (res (make-normal-tn type))
              (node (lambda-bind fun))
              (debug-variable-p (not (or (and let-p (policy node (< debug 3)))
