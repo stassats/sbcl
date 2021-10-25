@@ -1019,7 +1019,8 @@
          (:local
           (ltn-analyze-mv-bind node))
          ((:full :error)
-          (ltn-analyze-mv-call node)))))
+          (ltn-analyze-mv-call node))))
+      (transformed-node))
     (when (eq node (block-last block))
       (return))))
 

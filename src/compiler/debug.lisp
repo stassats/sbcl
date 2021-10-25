@@ -1049,7 +1049,10 @@
            (write-string "enclose ")
            (dolist (leaf (enclose-funs node))
              (print-leaf leaf)
-             (write-char #\space))))
+             (write-char #\space)))
+          (transformed-node
+           (princ "transformed-node")
+           (princ (node-source-form node))))
         (when (and *debug-print-types*
                    (valued-node-p node))
           (write-char #\space)

@@ -3421,3 +3421,12 @@
              (tagbody (progn v7))
              b))
       ((1 2) 1))))
+
+(with-test (:name :dead-code-note-after-transforms)
+  (assert
+   (typep (nth-value 4
+                     (checked-compile
+                      `(lambda (x)
+                         (when nil
+                           (funcall x)))))
+          '(cons sb-ext:code-deletion-note null))))

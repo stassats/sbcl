@@ -259,6 +259,11 @@
             (:copier nil))
   lambda-var)
 
+(defstruct (lvar-transformed-node-annotation
+            (:include lvar-annotation)
+            (:copier nil))
+  node)
+
 (defmethod print-object ((x lvar) stream)
   (print-unreadable-object (x stream :type t :identity t)
     (when (boundp '*compilation*)
@@ -344,6 +349,12 @@
         (*current-path* (node-source-path node)))
     (aver-live-component *current-component*)
     (funcall fun)))
+
+(defstruct (transformed-node
+            (:include node)
+            (:copier nil)))
+
+(defprinter (transformed-node))
 
 (defstruct (valued-node (:conc-name node-)
                         (:include node)

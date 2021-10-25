@@ -175,3 +175,36 @@
     (pseudo-atomic (pa-flag)
       (allocation nil bytes lowtag result :flag-tn pa-flag :lip lip)
       (storew header result 0 lowtag))))
+#+nil
+(define-vop (allocate-vector-on-heap)
+  (:args (type :scs (any-reg immediate))
+         (length :scs (any-reg immediate))
+         (words :scs (any-reg immediate)))
+  (:args-var args)
+  (:results (result :scs (descriptor-reg) :from :load))
+  (:arg-types positive-fixnum positive-fixnum positive-fixnum)
+  (:temporary (:sc unsigned-reg) temp)
+  (:temporary (:sc non-descriptor-reg) pa-flag)
+  (:policy :fast-safe)
+  (:generator 100
+    (pseudo-atomic (pa-flag)
+      (let ((size))
+        (cond ((sc-is length immediate)
+               (setf size (* (align-up (+ (tn-value words) vector-data-offset)
+                                       2)
+                             n-word-bytes)))
+              (t
+               (inst lsl temp words (- word-shift n-fixnum-tag-bits))
+               (inst add temp temp (* (1+ vector-data-offset) n-word-bytes))
+               (inst and temp temp (bic-mask lowtag-mask))  ; double-word align
+               (setf size temp)))
+        (allocation nil size other-pointer-lowtag result
+                    :flag-tn pa-flag :lip nil)) ;; keep LR intact as per above
+
+      (if (sc-is type immediate)
+          (inst mov temp (tn-value type))
+          (inst lsr temp type n-fixnum-tag-bits))
+      (when (sc-is length immediate)
+        (load-immediate-word pa-flag (tn-value length))
+        (setf length pa-flag))
+      (storew-pair temp 0 length vector-length-slot tmp-tn))))

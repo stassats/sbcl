@@ -248,6 +248,8 @@
                                 (eq dest (node-dest node)))
                        (go :next)))
                     (enclose
+                     (go :next))
+                    (transformed-node
                      (go :next)))))
              (t
               ;; Loops shouldn't cause a problem, either it will
@@ -1332,21 +1334,28 @@
   (declare (type cblock x y))
   (let ((ref-x (single-ref-block-p x))
         (ref-y (single-ref-block-p y)))
-    (and ref-x
-         ref-y
-         (equal (block-succ x) (block-succ y))
-         (eq (ref-lvar ref-x) (ref-lvar ref-y))
-         (eq (ref-leaf ref-x) (ref-leaf ref-y))
-         (eq (node-enclosing-cleanup ref-x)
-             (node-enclosing-cleanup ref-y)))))
+    (when (and ref-x
+               ref-y
+               (equal (block-succ x) (block-succ y))
+               (eq (ref-lvar ref-x) (ref-lvar ref-y))
+               (eq (ref-leaf ref-x) (ref-leaf ref-y))
+               (eq (node-enclosing-cleanup ref-x)
+                   (node-enclosing-cleanup ref-y)))
+      (values ref-x ref-y))))
 
 (defun single-ref-block-p (block)
-  (let ((start (block-start block)))
-    (when start
-      (let ((node (ctran-next start)))
-        (and (ref-p node)
-             (eq (block-last block) node)
-             node)))))
+  (when (block-start block)
+    (let (ref)
+      (do-nodes (node nil block)
+        (typecase node
+          (ref
+           (if ref
+               (return-from single-ref-block-p)
+               (setf ref node)))
+          (transformed-node)
+          (t
+           (return-from single-ref-block-p))))
+      ref)))
 
 ;;; (if x x nil)
 (defun if-test-redundant-p (test con alt)
@@ -1380,26 +1389,26 @@
                       (single-ref-block-p block1))
             do
             (loop for block2 in rest
-                  when (and (not (block-delete-p block1))
-                            (blocks-equivalent-p block1 block2))
+                  when (not (block-delete-p block2))
                   do
-                  (let* ((ref1 (block-start-node block1))
-                         (ref2 (block-start-node block2))
-                         (type1 (node-derived-type ref1))
-                         (type2 (node-derived-type ref2)))
-                    ;; Constraint propagation may have given the
-                    ;; references different types. Join them back.
-                    (unless (eq type1 type2)
-                      (derive-node-type ref1
-                                        (values-type-union type1 type2)
-                                        :from-scratch t))
-                    (setf (ref-constraints ref1)
-                          (intersection (ref-constraints ref1)
-                                        (ref-constraints ref2))))
-                  (loop for pred in (block-pred block2)
-                        do
-                        (change-block-successor pred block2 block1))
-                  (delete-block block2 t))))))
+                  (multiple-value-bind (ref1 ref2)
+                      (blocks-equivalent-p block1 block2)
+                    (when ref1
+                      (let* ((type1 (node-derived-type ref1))
+                             (type2 (node-derived-type ref2)))
+                        ;; Constraint propagation may have given the
+                        ;; references different types. Join them back.
+                        (unless (eq type1 type2)
+                          (derive-node-type ref1
+                                            (values-type-union type1 type2)
+                                            :from-scratch t))
+                        (setf (ref-constraints ref1)
+                              (intersection (ref-constraints ref1)
+                                            (ref-constraints ref2))))
+                      (loop for pred in (block-pred block2)
+                            do
+                            (change-block-successor pred block2 block1))
+                      (delete-block block2 t))))))))
 
 ;;; Unlink a block from the next/prev chain. We also null out the
 ;;; COMPONENT.
@@ -1772,6 +1781,13 @@
          (block (ctran-block prev)))
     (reoptimize-component (block-component block) t)
     (setf (block-flush-p block) t))
+  (let ((lvar (node-lvar node)))
+    (when lvar
+      (loop for annot in (lvar-annotations lvar)
+            do (typecase annot
+                 (lvar-transformed-node-annotation annot
+                  (when (lvar-transformed-node-annotation-node annot)
+                    (unlink-node (shiftf (lvar-transformed-node-annotation-node annot) nil))))))))
   (setf (node-lvar node) nil))
 
 ;;; This function is called by people who delete nodes; it provides a
@@ -1900,7 +1916,8 @@
       (cast
        (flush-dest (cast-value node)))
       (enclose)
-      (no-op)))
+      (no-op)
+      (transformed-node)))
 
   (remove-from-dfo block)
   (values))

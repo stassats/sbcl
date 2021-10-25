@@ -1174,6 +1174,16 @@
                          (record-call name (ctran-block start) *current-path*))
                        (when (show-transform-p *show-transforms-p* name)
                          (show-transform "src" name transformed))
+                       (when (zerop *transforming*)
+                         (let ((new-start (make-ctran))
+                               (node (make-transformed-node)))
+                           (link-node-to-previous-ctran node start)
+                           (use-ctran node new-start)
+                           (when result
+                             (add-annotation result
+                                             (make-lvar-transformed-node-annotation :node node)))
+                           (setf start new-start)))
+
                        (let ((*transforming* (1+ *transforming*)))
                          (ir1-convert start next result transformed)))))
               (ir1-convert-maybe-predicate start next result

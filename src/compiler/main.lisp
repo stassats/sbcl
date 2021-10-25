@@ -762,6 +762,10 @@ necessary, since type inference may take arbitrarily long to converge.")
     |#
 
     (maybe-mumble "Env ")
+
+    ;; Needs to be done before tail-annotate
+    ;(flush-no-ops component)
+
     (physenv-analyze component)
     (dfo-as-needed component)
 

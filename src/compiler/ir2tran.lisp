@@ -2345,7 +2345,8 @@ not stack-allocated LVAR ~S." source-lvar)))))
         (entry
          (ir2-convert-entry node 2block))
         (enclose
-         (ir2-convert-enclose node 2block)))))
+         (ir2-convert-enclose node 2block))
+        (transformed-node))))
 
   (finish-ir2-block block)
 

@@ -605,6 +605,13 @@
              (flush-dest (cast-value node))
              (unlink-node node)))))))
 
+(defun flush-no-ops (component)
+  (do-blocks (block component )
+    (do-nodes-backwards (node nil block :restart-p t)
+      (typecase node
+        (transformed-node
+         (unlink-node node))))))
+
 (declaim (end-block))
 
 
@@ -1706,6 +1713,13 @@
   (with-ir1-environment-from-node call
     (with-component-last-block (*current-component*
                                 (block-next (node-block call)))
+      (when (zerop *transforming*)
+        (let ((node (make-transformed-node)))
+          (insert-node-before call node)
+          (let ((lvar (node-lvar call)))
+            (when lvar
+              (add-annotation lvar
+                              (make-lvar-transformed-node-annotation :node node))))))
       (let* ((*transforming* (1+ *transforming*))
              (new-fun (ir1-convert-inline-lambda
                        res
