@@ -165,7 +165,8 @@
   ;; :UNUSED continuations.
   (block nil :type (or cblock null))
   ;; Entries created by the BLOCK special operator
-  (entries nil :type list))
+  (entries nil :type list)
+  (source-path nil :type list))
 
 (defmethod print-object ((x ctran) stream)
   (print-unreadable-object (x stream :type t :identity t)
