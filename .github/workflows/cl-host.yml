@@ -3,7 +3,8 @@ name: CL-host
 on: [push]
 
 jobs:
-
+  strategy:
+    max-parallel: 2
   ecl:
 
     runs-on: ubuntu-latest
