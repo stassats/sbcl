@@ -3,10 +3,8 @@ name: CL-host
 on: [push]
 
 jobs:
-  strategy:
-    max-parallel: 2
   ecl:
-
+    concurrency: test
     runs-on: ubuntu-latest
 
     steps:
@@ -39,7 +37,7 @@ jobs:
       run: ./make.sh --xc-host='ecl'
 
   clisp:
-
+    concurrency: test
     runs-on: ubuntu-latest
 
     steps:
@@ -54,7 +52,7 @@ jobs:
       run: ./make.sh --xc-host='clisp -on-error exit'
     
   ccl:
-
+    concurrency: test
     runs-on: ubuntu-latest
 
     steps:
@@ -69,7 +67,7 @@ jobs:
       run: ./make.sh --xc-host='ccl-host/lx86cl64 --batch'
 
   cmucl:
-
+    concurrency: test
     runs-on: ubuntu-latest
 
     steps:
