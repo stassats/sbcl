@@ -427,8 +427,9 @@
                  (t
                   (let ((shift ,shift))
                     (sc-case index
-                      (any-reg
-                       (decf shift n-fixnum-tag-bits)))
+                      ((any-reg)
+                       (decf shift n-fixnum-tag-bits))
+                      (t))
                     (inst add lip object (if (minusp shift)
                                              (asr index (- shift))
                                              (lsl index shift)))
@@ -472,7 +473,8 @@
                   (let ((shift ,shift))
                     (sc-case index
                       (any-reg
-                       (decf shift n-fixnum-tag-bits)))
+                       (decf shift n-fixnum-tag-bits))
+                      (t))
                     (inst add lip object (if (minusp shift)
                                              (asr index (- shift))
                                              (lsl index shift)))

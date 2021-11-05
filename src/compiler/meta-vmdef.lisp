@@ -1076,7 +1076,7 @@
     (dolist (sc-name (reverse scs))
       (let* ((load-sc (sc-or-lose sc-name))
              (load-scn (sc-number load-sc)))
-        (setf (svref costs load-scn) 0)
+        (setf (svref costs load-scn) -1)
         (setf (svref load-scs load-scn) t)
         (dolist (op-sc (append (when load-p
                                  (sc-constant-scs load-sc))
