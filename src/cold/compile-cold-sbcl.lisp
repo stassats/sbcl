@@ -110,68 +110,103 @@
 
 (setq sb-c::*track-full-called-fnames* :minimal) ; Change this as desired
 
+(defvar *stems* nil)
+
+(defun pipe ()
+  (multiple-value-bind (read write) (host-sb-unix:unix-pipe)
+    (values (host-sb-sys:make-fd-stream read :input t
+                                        :buffering :none
+                                        :element-type '(signed-byte 32))
+            (host-sb-sys:make-fd-stream write :output t
+                                         :buffering :none
+                                         :element-type '(signed-byte 32)))))
+(defconstant +end+ -1)
+(defconstant +start+ -2)
+
+(defun compile-subprocess (pid read write)
+  (write-byte +start+ write)
+  (let ((current-stem 0))
+    (loop for message = (read-byte read)
+          until (= message +end+)
+          do
+          (loop for index from current-stem below message
+                for (stem . flags) in (nthcdr current-stem *stems*)
+                do
+                (let ((*compile-for-effect-only* pid))
+                  (target-compile-stem stem flags)))
+          (setf current-stem (1+ message))
+          (destructuring-bind (stem . flags) (nth message *stems*)
+            (target-compile-stem stem flags))
+          (write-byte message write))))
+
+(defun make-subprocess ()
+  (multiple-value-bind (parent-read child-write)
+      (pipe)
+    (multiple-value-bind (child-read parent-write)
+        (pipe)
+      (let ((pid (sb-cold::posix-fork)))
+        (when (zerop pid)
+          (let* ((pid (sb-cold::getpid))
+                 (*standard-output*
+                   (open (format nil "output/~d.out" pid)
+                         :direction :output :if-exists :supersede))
+                 (*error-output*
+                   (open (format nil "output/~d.err" pid)
+                         :direction :output :if-exists :supersede)))
+            (handler-case (compile-subprocess pid child-read child-write)
+              (error (e)
+                (format *error-output* "~a~%" e)
+                (close *standard-output*)
+                (close *error-output*)
+                (sb-cold::exit-subprocess 1))
+              (:no-error (res)
+                (declare (ignore res))
+                (delete-file *standard-output*)
+                (delete-file *error-output*)
+                (sb-cold::exit-subprocess 0)))))
+        (list parent-read parent-write pid)))))
+
 (defun parallel-make-host-2 (max-jobs)
-  (let ((subprocess-count 0)
-        (subprocess-list nil)
-        stop)
-    (labels ((wait ()
-               (multiple-value-bind (pid status) (sb-cold::posix-wait)
-                 (format t "~&; Subprocess ~D exit status ~D~%"  pid status)
-                 (unless (zerop status)
-                   (let ((stem (cdr (assoc pid subprocess-list))))
-                     (format t "; File: ~a~%" stem)
-                     (show-log pid "out" "; Standard output:")
-                     (show-log pid "err" "; Error output:"))
-                   (setf stop t))
-                 (setq subprocess-list (delete pid subprocess-list :key #'car)))
-               (decf subprocess-count))
-             (show-log (pid logsuffix label)
-               (format t "~a~%" label)
-               (with-open-file (f (format nil "output/~d.~a" pid logsuffix))
-                 (loop (let ((line (read-line f nil)))
-                         (unless line (return))
-                         (write-string line)
-                         (terpri)))
-                 (delete-file f))))
-      #+sbcl (host-sb-ext:disable-debugger)
-      (sb-cold::with-subprocesses
-        (unwind-protect
-             (do-stems-and-flags (stem flags 2)
-               (unless (position :not-target flags)
-                 (when (>= subprocess-count max-jobs)
-                   (wait))
-                 (when stop
-                   (return))
-                 (let ((pid (sb-cold::posix-fork)))
-                   (when (zerop pid)
-                     (let ((pid (sb-cold::getpid)))
-                       (let ((*standard-output*
-                              (open (format nil "output/~d.out" pid)
-                                    :direction :output :if-exists :supersede))
-                             (*error-output*
-                              (open (format nil "output/~d.err" pid)
-                                    :direction :output :if-exists :supersede)))
-                         (handler-case (target-compile-stem stem flags)
-                           (error (e)
-                             (format *error-output* "~a~%" e)
-                             (close *standard-output*)
-                             (close *error-output*)
-                             (sb-cold::exit-subprocess 1))
-                           (:no-error (res)
-                             (declare (ignore res))
-                             (delete-file *standard-output*)
-                             (delete-file *error-output*)
-                             (sb-cold::exit-subprocess 0))))))
-                   (push (cons pid stem) subprocess-list))
-                 (incf subprocess-count)
-                 ;; Cause the compile-time effects from this file
-                 ;; to appear in subsequently forked children.
-                 (let ((*compile-for-effect-only* t))
-                   (target-compile-stem stem flags))))
-          (loop (if (plusp subprocess-count) (wait) (return)))
-          (when stop
-            (sb-cold::exit-process 1))))
-      (values))))
+  (let ((*stems* (remove-if (lambda (x)
+                              (position :not-target x))
+                            (get-stems-and-flags 2))))
+    #+sbcl (host-sb-ext:disable-debugger)
+    (let* ((processes (loop repeat max-jobs
+                            collect (make-subprocess)))
+           (nfds (1+ (reduce #'max processes :key (lambda (x)
+                                                    (host-sb-sys:fd-stream-fd (car x))))))
+           (current-stem 0)
+           (n-stems (length *stems*)))
+      (host-sb-alien:with-alien ((fds (host-sb-alien:struct host-sb-unix:fd-set)))
+        (loop while processes
+              do
+              (host-sb-unix:fd-zero fds)
+              (loop for (stream) in processes
+                    do
+                    (host-sb-unix:fd-set (host-sb-sys:fd-stream-fd stream) fds))
+              (multiple-value-bind (result errno)
+                  (host-sb-unix:unix-fast-select nfds
+                                                 (host-sb-alien:addr fds) nil nil nil nil)
+                (unless (eql errno host-sb-unix:eintr)
+                  (case result
+                    ((nil)
+                     (error "Select error fd ~a" (sb-int:strerror errno)))
+                    (t
+                     (loop for process in processes
+                           for (read write pid) = process
+                           when (host-sb-unix:fd-isset (host-sb-sys:fd-stream-fd read) fds)
+                           do (let ((message (read-byte read)))
+                                (cond ((< current-stem n-stems)
+                                       (format t "pid ~a ~a~%" pid (car (nth current-stem *stems*)))
+                                       (write-byte current-stem write)
+                                       (incf current-stem))
+                                      (t
+                                       (write-byte +end+ write)
+                                       (setf processes (remove process processes))))))))))))
+      (loop for (stem . flags) in *stems*
+            do
+            (let ((*compile-for-effect-only* t))
+              (target-compile-stem stem flags))))))
 
 ;;; See whether we're in individual file mode
 (cond

@@ -544,7 +544,10 @@
          ;; so we need the for-effect output not to stomp on the real output.
          (tmp-obj
            (concatenate 'string obj
-                        (if *compile-for-effect-only* "-scratch" "-tmp")))
+                        (if *compile-for-effect-only*
+                            (format nil "-~a-scratch"
+                                    *compile-for-effect-only*)
+                            "-tmp")))
          (compile-file (ecase mode
                          (:host-compile
                           #+abcl ; ABCL complains about its own deficiency and then returns T
