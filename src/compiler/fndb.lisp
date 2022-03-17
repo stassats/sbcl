@@ -2195,3 +2195,5 @@
 (defknown fixnum* (fixnum fixnum t) fixnum
   (movable foldable unsafely-flushable commutative
            always-translatable))
+(defknown range (fixnum fixnum fixnum) boolean
+  (movable foldable))

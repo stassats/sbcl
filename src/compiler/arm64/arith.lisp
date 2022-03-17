@@ -1368,3 +1368,20 @@
       (storew-pair header 0 low bignum-digits-offset tmp-tn)
       (storew high tmp-tn 2))
     DONE))
+
+
+(define-vop ()
+  (:translate sb-c::range)
+  (:args (x :scs (any-reg)))
+  (:arg-types tagged-num (:constant t) (:constant t))
+  (:info lo hi)
+  (:temporary (:sc signed-reg) temp)
+  (:conditional :ls)
+  (:policy :fast-safe)
+  (:generator 2
+    (let ((lo (fixnumize lo))
+          (hi  (fixnumize hi)))
+      (if (plusp lo)
+          (inst sub temp x lo)
+          (inst add temp x (abs lo)))
+      (inst cmp temp (- hi lo)))))
