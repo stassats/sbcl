@@ -280,7 +280,8 @@
          ;; ones can use a NOP which helps the disassembler not lose sync.
          (filler-pattern 0)
          (asmstream (make-asmstream))
-         (*asmstream* asmstream))
+         (*asmstream* asmstream)
+         (constants (ir2-component-constants ir2-component)))
 
     (emit (asmstream-elsewhere-section asmstream)
           (asmstream-elsewhere-label asmstream))
@@ -353,11 +354,11 @@
         ;; so extending can be done with impunity.
         #+arm64
         (vector-push-extend (cons :coverage-marks (length coverage-map))
-                            (ir2-component-constants ir2-component))
+                            constants)
         (vector-push-extend
          (make-constant (cons 'coverage-map
                               (map-into coverage-map #'car coverage-map)))
-         (ir2-component-constants ir2-component))
+         constants)
         ;; Allocate space in the data section for coverage marks.
         #-arm64
         (emit (asmstream-data-section asmstream)
@@ -365,21 +366,35 @@
 
     (emit-inline-constants)
 
-    (let* ((n-boxed (length (ir2-component-constants ir2-component)))
+    (let* ((n-boxed (length constants))
            ;; Skew is either 0 or N-WORD-BYTES depending on whether the boxed
            ;; header length is even or odd
            (skew (if (and (= code-boxed-words-align 1) (oddp n-boxed))
                      sb-vm:n-word-bytes
-                     0)))
+                     0))
+           pa-map)
+      (when (ir2-component-pseudo-atomic-map ir2-component)
+        (setf pa-map
+              (make-array (* (length (ir2-component-pseudo-atomic-map ir2-component)) 2)))
+        (vector-push-extend (make-constant 'pseudo-atomic) constants)
+        (vector-push-extend (make-constant pa-map) constants))
       (multiple-value-bind (segment text-length fixup-notes fun-table)
           (assemble-sections
            asmstream
            (mapcar #'entry-info-offset (ir2-component-entries ir2-component))
            (make-segment :header-skew skew
                          :run-scheduler (default-segment-run-scheduler)))
+        (when pa-map
+          (populate-pa-map pa-map (ir2-component-pseudo-atomic-map ir2-component)))
         (values segment text-length fun-table
                 (asmstream-elsewhere-label asmstream) fixup-notes
                 (sb-assem::get-allocation-points asmstream))))))
+
+(defun populate-pa-map (constants-map map)
+  (loop for i by 2
+        for (start end) in map
+        do (setf (aref constants-map i) (label-position start)
+                 (aref constants-map (1+ i)) (label-position end))))
 
 (defun label-elsewhere-p (label-or-posn kind)
   (let ((elsewhere (label-position *elsewhere-label*))

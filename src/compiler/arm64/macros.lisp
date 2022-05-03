@@ -495,3 +495,16 @@
   `(inst str ,reg (@ thread-tn ,(info :variable :wired-tls symbol)))
   #-sb-thread
   `(store-symbol-value ,reg ,symbol))
+
+
+;;;;;;;;
+(define-vop (test)
+  (:generator 8
+    pa-start
+    (inst nop)
+    (inst nop)
+    pa-end
+    (sb-c::note-pa-location pa-start pa-end)))
+(defun test ()
+  (%primitive test)
+  'a)

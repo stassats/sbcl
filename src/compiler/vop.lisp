@@ -379,7 +379,8 @@
   ;; an array of references to lists of original source paths covered
   ;; for coverage instrumentation.
   (coverage-map (make-array 0 :fill-pointer 0 :adjustable t)
-                :type vector :read-only t))
+                :type vector :read-only t)
+  pseudo-atomic-map)
 
 ;;; An ENTRY-INFO condenses all the information that the dumper needs
 ;;; to create each XEP's function entry data structure. ENTRY-INFO
