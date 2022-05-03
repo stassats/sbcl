@@ -182,34 +182,33 @@
         (inst and tmp-tn tmp-tn (lognot lowtag-mask))
         (inst add csp-tn tmp-tn (add-sub-immediate size result-tn))
         (inst add result-tn tmp-tn lowtag))
-      (let ((alloc (gen-label))
-            #+sb-thread (tlab (if (eq type 'list) thread-cons-tlab-slot thread-mixed-tlab-slot))
-            #-sb-thread (region (if (eq type 'list) cons-region mixed-region))
-            (back-from-alloc (gen-label)))
-        #-sb-thread
-        (progn
-          ;; load-pair can't base off null-tn because the displacement
-          ;; has to be a multiple of 8
-          (load-immediate-word flag-tn region)
-          (inst ldp result-tn flag-tn (@ flag-tn 0)))
-        #+sb-thread
-        (inst ldp tmp-tn flag-tn (@ thread-tn (* n-word-bytes tlab)))
-        (inst add result-tn tmp-tn (add-sub-immediate size result-tn))
-        (inst cmp result-tn flag-tn)
-        (inst b :hi ALLOC)
-        #-sb-thread (inst str result-tn (@ null-tn (load-store-offset (- region nil-value))))
-        #+sb-thread (storew result-tn thread-tn tlab)
+      (let (#+sb-thread (tlab (if (eq type 'list) thread-cons-tlab-slot thread-mixed-tlab-slot))
+            #-sb-thread (region (if (eq type 'list) cons-region mixed-region)))
+        (assemble ()
+          #-sb-thread
+          (progn
+            ;; load-pair can't base off null-tn because the displacement
+            ;; has to be a multiple of 8
+            (load-immediate-word flag-tn region)
+            (inst ldp result-tn flag-tn (@ flag-tn 0)))
+          #+sb-thread
+          (inst ldp tmp-tn flag-tn (@ thread-tn (* n-word-bytes tlab)))
+          (inst add result-tn tmp-tn (add-sub-immediate size result-tn))
+          (inst cmp result-tn flag-tn)
+          (inst b :ls ALLOC)
 
-        (emit-label BACK-FROM-ALLOC)
-        (inst add result-tn tmp-tn lowtag)
-        (assemble (:elsewhere)
-          (emit-label ALLOC)
           (if overflow
               (funcall overflow)
               (allocation-tramp type
                                 result-tn
                                 size
-                                BACK-FROM-ALLOC))))))
+                                BACK-FROM-ALLOC))
+          alloc
+          #-sb-thread (inst str result-tn (@ null-tn (load-store-offset (- region nil-value))))
+          #+sb-thread (storew result-tn thread-tn tlab)
+
+          BACK-FROM-ALLOC
+          (inst add result-tn tmp-tn lowtag)))))
 
 (defmacro with-fixed-allocation ((result-tn flag-tn type-code size
                                             &key (lowtag other-pointer-lowtag)
