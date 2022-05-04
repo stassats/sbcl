@@ -502,9 +502,12 @@
   (:generator 8
     pa-start
     (inst nop)
+    x
+    (inst b x)
     (inst nop)
     pa-end
     (sb-c::note-pa-location pa-start pa-end)))
+#+nil
 (defun test ()
   (%primitive test)
   'a)

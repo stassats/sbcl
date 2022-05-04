@@ -237,7 +237,8 @@
      %%data-vector-reffers%%
      %%data-vector-reffers/check-bounds%%
      %%data-vector-setters%%
-     %%data-vector-setters/check-bounds%%))
+     %%data-vector-setters/check-bounds%%)
+    sb-c::pseudo-atomic)
   #'equalp)
 
 ;;; Refer to the lengthy comment in 'src/runtime/interrupt.h' about
