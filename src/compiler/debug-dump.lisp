@@ -79,8 +79,9 @@
   (values))
 
 (defun note-pa-location (start end)
-  (push (list start end)
-        (ir2-component-pseudo-atomic-map (component-info *component-being-compiled*))))
+  (when (boundp '*component-being-compiled*)
+    (push (list start end)
+          (ir2-component-pseudo-atomic-map (component-info *component-being-compiled*)))))
 
 (declaim (inline ir2-block-environment))
 (defun ir2-block-environment (2block)

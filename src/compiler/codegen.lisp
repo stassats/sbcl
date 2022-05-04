@@ -375,8 +375,8 @@
            pa-map)
       (when (ir2-component-pseudo-atomic-map ir2-component)
         (setf pa-map
-              (make-array (* (length (ir2-component-pseudo-atomic-map ir2-component)) 2)
-                          :element-type 'sb-vm:signed-word))
+              (sb-xc:make-array (* (length (ir2-component-pseudo-atomic-map ir2-component)) 2)
+                                :element-type 'sb-vm:signed-word))
         (vector-push-extend (make-constant 'pseudo-atomic) constants)
         (vector-push-extend (make-constant pa-map) constants))
       (multiple-value-bind (segment text-length fixup-notes fun-table)

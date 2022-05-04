@@ -514,6 +514,7 @@ during backtrace.
   #+(or sb-thread sparc ppc)
   (pseudo-atomic-bits #+(or x86 x86-64) :special #+(or x86 x86-64) *pseudo-atomic-bits*
                       :c-type "pa_bits_t")
+  (pa-instruction :c-type "int")
   (alien-stack-pointer :c-type "lispobj *" :pointer t
                        :special *alien-stack-pointer*)
   ;; Deterministic consing profile recording area.

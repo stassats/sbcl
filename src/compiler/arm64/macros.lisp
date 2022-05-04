@@ -301,7 +301,7 @@
   #+sb-safepoint
   `(progn ,@forms (emit-safepoint))
   #-sb-safepoint
-  `(progn
+  `(let (start end)
      (unless ,elide-if
        (without-scheduling ()
          #-sb-thread
@@ -309,7 +309,8 @@
          #+sb-thread
          (inst str (32-bit-reg null-tn)
                (@ thread-tn
-                  (* n-word-bytes thread-pseudo-atomic-bits-slot)))))
+                  (* n-word-bytes thread-pseudo-atomic-bits-slot))))
+       (emit-label (setf start (gen-label "pa-start"))))
      (assemble ()
        ,@forms)
      (unless ,elide-if
@@ -331,7 +332,9 @@
          (let ((not-interrputed (gen-label)))
            (inst cbz ,flag-tn not-interrputed)
            (inst brk pending-interrupt-trap)
-           (emit-label not-interrputed))))))
+           (emit-label not-interrputed))
+         (emit-label (setf end (gen-label "pa-end")))
+         (sb-c::note-pa-location start end)))))
 
 ;;;; memory accessor vop generators
 

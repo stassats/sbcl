@@ -4797,7 +4797,7 @@ void gc_allocate_ptes()
  *
  * The check for a GC trigger is only performed when the current
  * region is full, so in most cases it's not needed. */
-
+void interrupt_static_pa(struct thread *thread);
 int gencgc_alloc_profiler;
 static NO_SANITIZE_MEMORY lispobj*
 lisp_alloc(int largep, struct alloc_region *region, sword_t nbytes,
@@ -4863,7 +4863,8 @@ lisp_alloc(int largep, struct alloc_region *region, sword_t nbytes,
 #ifdef LISP_FEATURE_SB_SAFEPOINT
                 thread_register_gc_trigger();
 #else
-                set_pseudo_atomic_interrupted(thread);
+                interrupt_static_pa(thread);
+                //set_pseudo_atomic_interrupted(thread);
 #if HAVE_ALLOCATION_TRAP_CONTEXT
                 {
                     os_context_t *context =

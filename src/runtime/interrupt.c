@@ -1021,6 +1021,60 @@ interrupt_internal_error(os_context_t *context, boolean continuable)
         arch_skip_instruction(context);
 }
 
+void deposit_pending_interrupt (struct thread *thread, int* addr) {
+    thread->pa_instruction = *addr;
+    THREAD_JIT(0);
+    *addr = 0xD4200120;
+    THREAD_JIT(1);
+    os_flush_icache((char*)addr, 4);
+}
+
+void remove_pending_interrupt(struct thread *thread, os_context_t *context) {
+    int* pc = (int*)os_context_pc(context);
+    THREAD_JIT(0);
+    *pc = thread->pa_instruction;
+    THREAD_JIT(1);
+    os_flush_icache((char*)pc, 4);
+    thread->pa_instruction = 0;
+
+}
+
+boolean trip_static_pa (struct thread *thread, uword_t pc) {
+    struct code* code = (struct code*)dynamic_space_code_from_pc((char *)pc);
+    lispobj *constants = ((lispobj*)code);
+    if(code) {
+        sword_t n_header_words = code_header_words(code);
+        if (constants[n_header_words-1] == 0) {
+            n_header_words--;
+        }
+        if(constants[n_header_words-2] == PSEUDO_ATOMIC) {
+            struct vector* map = VECTOR(constants[n_header_words-1]);
+            char* code_start =  code_text_start(code);
+            sword_t offset = pc - (uword_t)code_start;
+
+            for (int i = 0; i < vector_len(map); i += 2) {
+                sword_t start = map->data[i];
+                sword_t end = map->data[i+1];
+                if (start <= offset && offset < end) {
+                    deposit_pending_interrupt(thread, (int*)(code_start + end));
+                    return 1;
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+boolean static_pa_p (struct thread *thread, os_context_t *context) {
+    uword_t pc = os_context_pc(context);
+    return trip_static_pa(thread, pc);
+}
+
+void interrupt_static_pa(struct thread *thread) {
+  lispobj lr = thread->control_stack_pointer[1];
+  trip_static_pa(thread, lr);
+}
+
 boolean
 interrupt_handler_pending_p(void)
 {
@@ -1055,8 +1109,14 @@ interrupt_handle_pending(os_context_t *context)
     struct thread *thread = get_sb_vm_thread();
     struct interrupt_data *data = &thread_interrupt_data(thread);
 
-    if (arch_pseudo_atomic_atomic(context)) {
-        lose("Handling pending interrupt in pseudo atomic.");
+    if (thread->pa_instruction) {
+        remove_pending_interrupt(thread, context);
+    }
+    else {
+        arch_skip_instruction(context);
+        if (arch_pseudo_atomic_atomic(context)) {
+            lose("Handling pending interrupt in pseudo atomic.");
+        }
     }
 
     FSHOW_SIGNAL((stderr, "/entering interrupt_handle_pending\n"));
@@ -1308,38 +1368,6 @@ store_signal_data_for_later (struct interrupt_data *data, void *handler,
     sigcopyset(&data->pending_mask, os_context_sigmask_addr(context));
     sigaddset_deferrable(os_context_sigmask_addr(context));
 }
-void deposit_pending_interrupt (int* addr) {
-    THREAD_JIT(0);
-    *addr = 0xD4200120;
-    THREAD_JIT(1);
-    os_flush_icache((char*)addr, 4);
-}
-boolean static_pa_p (os_context_t *context) {
-    uword_t pc = os_context_pc(context);
-    struct code* code = (struct code*)dynamic_space_code_from_pc((char *)pc);
-    lispobj *constants = ((lispobj*)code);
-    if(code) {
-        sword_t n_header_words = code_header_words(code);
-        if (constants[n_header_words-1] == 0) {
-            n_header_words--;
-        }
-        if(constants[n_header_words-2] == PSEUDO_ATOMIC) {
-            struct vector* map = VECTOR(constants[n_header_words-1]);
-            char* code_start =  code_text_start(code);
-            sword_t offset = pc - (uword_t)code_start;
-            
-            for (int i = 0; i < vector_len(map); i += 2) {
-                sword_t start = map->data[i];
-                sword_t end = map->data[i+1];
-                if (start <= offset && offset < end) {
-                    deposit_pending_interrupt((int*)(code_start + end));
-                    return 1;
-                }
-            }
-        }
-    }
-    return 0;
-}
 
 static boolean
 can_handle_now(void *handler, struct interrupt_data *data,
@@ -1390,7 +1418,7 @@ can_handle_now(void *handler, struct interrupt_data *data,
         arch_set_pseudo_atomic_interrupted(context);
         answer = 0;
     }
-    static_pa_p(context);
+    //static_pa_p(thread, context);
 
     check_interrupt_context_or_lose(context);
 
@@ -2200,7 +2228,6 @@ handle_trap(os_context_t *context, int trap)
 #ifndef LISP_FEATURE_WIN32
     case trap_PendingInterrupt:
         FSHOW((stderr, "/<trap pending interrupt>\n"));
-        arch_skip_instruction(context);
         interrupt_handle_pending(context);
         break;
 #endif
