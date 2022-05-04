@@ -1308,6 +1308,38 @@ store_signal_data_for_later (struct interrupt_data *data, void *handler,
     sigcopyset(&data->pending_mask, os_context_sigmask_addr(context));
     sigaddset_deferrable(os_context_sigmask_addr(context));
 }
+void deposit_pending_interrupt (int* addr) {
+    THREAD_JIT(0);
+    *addr = 0xD4200120;
+    THREAD_JIT(1);
+    os_flush_icache((char*)addr, 4);
+}
+boolean static_pa_p (os_context_t *context) {
+    uword_t pc = os_context_pc(context);
+    struct code* code = (struct code*)dynamic_space_code_from_pc((char *)pc);
+    lispobj *constants = ((lispobj*)code);
+    if(code) {
+        sword_t n_header_words = code_header_words(code);
+        if (constants[n_header_words-1] == 0) {
+            n_header_words--;
+        }
+        if(constants[n_header_words-2] == PSEUDO_ATOMIC) {
+            struct vector* map = VECTOR(constants[n_header_words-1]);
+            char* code_start =  code_text_start(code);
+            sword_t offset = pc - (uword_t)code_start;
+            
+            for (int i = 0; i < vector_len(map); i += 2) {
+                sword_t start = map->data[i];
+                sword_t end = map->data[i+1];
+                if (start <= offset && offset < end) {
+                    deposit_pending_interrupt((int*)(code_start + end));
+                    return 1;
+                }
+            }
+        }
+    }
+    return 0;
+}
 
 static boolean
 can_handle_now(void *handler, struct interrupt_data *data,
@@ -1358,6 +1390,7 @@ can_handle_now(void *handler, struct interrupt_data *data,
         arch_set_pseudo_atomic_interrupted(context);
         answer = 0;
     }
+    static_pa_p(context);
 
     check_interrupt_context_or_lose(context);
 
