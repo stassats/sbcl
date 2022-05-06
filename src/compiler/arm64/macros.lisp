@@ -296,21 +296,23 @@
                            other-pointer-lowtag)))))
 
 ;;; handy macro for making sequences look atomic
-(defmacro pseudo-atomic ((flag-tn &key elide-if (sync t)) &body forms)
+(defmacro pseudo-atomic ((flag-tn &key (static t) elide-if (sync t)) &body forms)
   (declare (ignorable sync))
   #+sb-safepoint
   `(progn ,@forms (emit-safepoint))
   #-sb-safepoint
   `(let (start end)
+     (declare (ignorable start end))
      (unless ,elide-if
-       (without-scheduling ()
-         #-sb-thread
-         (store-symbol-value csp-tn *pseudo-atomic-atomic*)
-         #+sb-thread
-         (inst str (32-bit-reg null-tn)
-               (@ thread-tn
-                  (* n-word-bytes thread-pseudo-atomic-bits-slot))))
-       (emit-label (setf start (gen-label "pa-start"))))
+       ,(if static
+            `(emit-label (setf start (gen-label "pa-start")))
+            `(without-scheduling ()
+               #-sb-thread
+               (store-symbol-value csp-tn *pseudo-atomic-atomic*)
+               #+sb-thread
+               (inst str (32-bit-reg null-tn)
+                     (@ thread-tn
+                        (* n-word-bytes thread-pseudo-atomic-bits-slot))))))
      (assemble ()
        ,@forms)
      (unless ,elide-if
@@ -320,21 +322,22 @@
            (store-symbol-value null-tn *pseudo-atomic-atomic*)
            (load-symbol-value ,flag-tn *pseudo-atomic-interrupted*))
          #+sb-thread
-         (progn
-           (when ,sync
-            (inst dmb))
-           (inst str (32-bit-reg zr-tn)
-                 (@ thread-tn
-                    (* n-word-bytes thread-pseudo-atomic-bits-slot)))
-           (inst ldr (32-bit-reg ,flag-tn)
-                 (@ thread-tn
-                    (+ (* n-word-bytes thread-pseudo-atomic-bits-slot) 4))))
-         (let ((not-interrputed (gen-label)))
-           (inst cbz ,flag-tn not-interrputed)
-           (inst brk pending-interrupt-trap)
-           (emit-label not-interrputed))
-         (emit-label (setf end (gen-label "pa-end")))
-         (sb-c::note-pa-location start end)))))
+         (when ,sync
+           (inst dmb))
+         #+sb-thread
+         ,@(if static
+               `((emit-label (setf end (gen-label "pa-end")))
+                 (sb-c::note-pa-location start end))
+               `((let ((not-interrputed (gen-label)))
+                   (inst str (32-bit-reg zr-tn)
+                         (@ thread-tn
+                            (* n-word-bytes thread-pseudo-atomic-bits-slot)))
+                   (inst ldr (32-bit-reg ,flag-tn)
+                         (@ thread-tn
+                            (+ (* n-word-bytes thread-pseudo-atomic-bits-slot) 4)))
+                   (inst cbz ,flag-tn not-interrputed)
+                   (inst brk pending-interrupt-trap)
+                   (emit-label not-interrputed))))))))
 
 ;;;; memory accessor vop generators
 

@@ -14,7 +14,7 @@
                               (- (* symbol-value-slot n-word-bytes)
                                  other-pointer-lowtag)
                               #+little-endian 4))
-  (pseudo-atomic (free-tls-index)
+  (pseudo-atomic (free-tls-index :static nil)
     (assemble ()
       RETRY
       ;; Acquire the lock

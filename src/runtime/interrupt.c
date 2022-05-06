@@ -1418,6 +1418,10 @@ can_handle_now(void *handler, struct interrupt_data *data,
         arch_set_pseudo_atomic_interrupted(context);
         answer = 0;
     }
+
+    if (thread->pa_instruction) {
+        answer = 0;
+    }
     //static_pa_p(thread, context);
 
     check_interrupt_context_or_lose(context);
@@ -1463,6 +1467,13 @@ sig_stop_for_gc_handler(int __attribute__((unused)) signal,
         FSHOW_SIGNAL((stderr,"sig_stop_for_gc deferred (PA)\n"));
         write_TLS(STOP_FOR_GC_PENDING,T,thread);
         arch_set_pseudo_atomic_interrupted(context);
+        maybe_save_gc_mask_and_block_deferrables
+            (os_context_sigmask_addr(context));
+        return;
+    } else if (static_pa_p(thread, context)){ 
+        FSHOW_SIGNAL((stderr,"sig_stop_for_gc deferred (PA)\n"));
+        printf("static pa\n");
+        write_TLS(STOP_FOR_GC_PENDING,T,thread);
         maybe_save_gc_mask_and_block_deferrables
             (os_context_sigmask_addr(context));
         return;
