@@ -325,19 +325,25 @@
          (when ,sync
            (inst dmb))
          #+sb-thread
-         ,@(if static
-               `((emit-label (setf end (gen-label "pa-end")))
-                 (sb-c::note-pa-location start end))
-               `((let ((not-interrputed (gen-label)))
-                   (inst str (32-bit-reg zr-tn)
-                         (@ thread-tn
-                            (* n-word-bytes thread-pseudo-atomic-bits-slot)))
-                   (inst ldr (32-bit-reg ,flag-tn)
-                         (@ thread-tn
-                            (+ (* n-word-bytes thread-pseudo-atomic-bits-slot) 4)))
-                   (inst cbz ,flag-tn not-interrputed)
-                   (inst brk pending-interrupt-trap)
-                   (emit-label not-interrputed))))))))
+         (let ((not-interrputed (gen-label)))
+          ,@(if static
+                `((emit-label (setf end (gen-label "pa-end")))
+                  (sb-c::note-pa-location start end)
+                  (inst ldr (32-bit-reg ,flag-tn)
+                        (@ thread-tn
+                           (+ (* n-word-bytes thread-pseudo-atomic-bits-slot) 4)))
+                  (inst cbz ,flag-tn not-interrputed)
+                  (inst brk pending-interrupt-trap)
+                  (emit-label not-interrputed))
+                `((inst str (32-bit-reg zr-tn)
+                        (@ thread-tn
+                           (* n-word-bytes thread-pseudo-atomic-bits-slot)))
+                  (inst ldr (32-bit-reg ,flag-tn)
+                        (@ thread-tn
+                           (+ (* n-word-bytes thread-pseudo-atomic-bits-slot) 4)))
+                  (inst cbz ,flag-tn not-interrputed)
+                  (inst brk pending-interrupt-trap)
+                  (emit-label not-interrputed))))))))
 
 ;;;; memory accessor vop generators
 

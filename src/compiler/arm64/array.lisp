@@ -603,3 +603,23 @@
                                other-pointer-lowtag))
     (inst add lip object offset)
     (inst ldaddal diff result lip)))
+
+
+(define-vop (allocate-vector-on-heap)
+  (:args (type :scs (unsigned-reg))
+         (length :scs (any-reg))
+         (words :scs (any-reg)))
+  (:results (result :scs (descriptor-reg) :from :load))
+  (:arg-types positive-fixnum positive-fixnum positive-fixnum)
+  (:temporary (:sc unsigned-reg) temp)
+  (:temporary (:scs (non-descriptor-reg) :offset lr-offset) lr)
+  (:policy :fast-safe)
+  (:generator 100
+    (pseudo-atomic (lr)
+      (inst lsl temp words (- word-shift n-fixnum-tag-bits))
+      (inst add temp temp (* (1+ vector-data-offset) n-word-bytes))
+      (inst and temp temp (bic-mask lowtag-mask)) ; double-word align
+      (allocation nil temp other-pointer-lowtag result
+                  :flag-tn lr)
+
+      (storew-pair type 0 length vector-length-slot tmp-tn))))

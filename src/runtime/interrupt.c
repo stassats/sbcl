@@ -1021,25 +1021,7 @@ interrupt_internal_error(os_context_t *context, boolean continuable)
         arch_skip_instruction(context);
 }
 
-void deposit_pending_interrupt (struct thread *thread, int* addr) {
-    thread->pa_instruction = *addr;
-    THREAD_JIT(0);
-    *addr = 0xD4200120;
-    THREAD_JIT(1);
-    os_flush_icache((char*)addr, 4);
-}
-
-void remove_pending_interrupt(struct thread *thread, os_context_t *context) {
-    int* pc = (int*)os_context_pc(context);
-    THREAD_JIT(0);
-    *pc = thread->pa_instruction;
-    THREAD_JIT(1);
-    os_flush_icache((char*)pc, 4);
-    thread->pa_instruction = 0;
-
-}
-
-boolean trip_static_pa (struct thread *thread, uword_t pc) {
+boolean static_pa_at_p (struct thread *thread, uword_t pc) {
     struct code* code = (struct code*)dynamic_space_code_from_pc((char *)pc);
     lispobj *constants = ((lispobj*)code);
     if(code) {
@@ -1056,7 +1038,6 @@ boolean trip_static_pa (struct thread *thread, uword_t pc) {
                 sword_t start = map->data[i];
                 sword_t end = map->data[i+1];
                 if (start <= offset && offset < end) {
-                    deposit_pending_interrupt(thread, (int*)(code_start + end));
                     return 1;
                 }
             }
@@ -1066,24 +1047,20 @@ boolean trip_static_pa (struct thread *thread, uword_t pc) {
 }
 
 boolean static_pa_p (struct thread *thread, os_context_t *context) {
-    uword_t pc = os_context_pc(context);
+    uword_t pc;
 
     if (foreign_function_call_active_p(thread)) {
-        pc = thread->control_frame_pointer[1];
-        if(!pc) {
-            lose("%p", thread);
-        }
+        lispobj *cfp = access_control_frame_pointer(thread);
+        if (!cfp)
+            return 0;
+        pc = cfp[1];
     }
-    else if (READ_ONLY_SPACE_START <= pc && pc < READ_ONLY_SPACE_END) {
+    else if (READ_ONLY_SPACE_START <= (pc = os_context_pc(context))
+             && pc < READ_ONLY_SPACE_END) {
         pc = (uword_t)*os_context_register_addr(context, reg_LR);
     }
 
-    return trip_static_pa(thread, pc);
-}
-
-void interrupt_static_pa(struct thread *thread) {
-    lispobj lr = thread->control_frame_pointer[1];
-    trip_static_pa(thread, lr);
+    return static_pa_at_p(thread, pc);
 }
 
 boolean
@@ -1120,11 +1097,13 @@ interrupt_handle_pending(os_context_t *context)
     struct thread *thread = get_sb_vm_thread();
     struct interrupt_data *data = &thread_interrupt_data(thread);
 
-    if (thread->pa_instruction) {
-        printf("%x\n", thread->pa_instruction);
-        remove_pending_interrupt(thread, context);
-    }
-    else {
+    /* if (thread->pa_instruction) { */
+    /*     printf("%x\n", thread->pa_instruction); */
+    /*     remove_pending_interrupt(thread, context); */
+    /*     arch_skip_instruction(context); */
+    /* } */
+    /* else */ {
+
         arch_skip_instruction(context);
         if (arch_pseudo_atomic_atomic(context)) {
             lose("Handling pending interrupt in pseudo atomic.");
@@ -1422,18 +1401,16 @@ can_handle_now(void *handler, struct interrupt_data *data,
     /* a slightly confusing test. arch_pseudo_atomic_atomic() doesn't
      * actually use its argument for anything on x86, so this branch
      * may succeed even when context is null (gencgc alloc()) */
-    else if (arch_pseudo_atomic_atomic(context)) {
+    else if (arch_pseudo_atomic_atomic(context) ||
+             static_pa_p(thread, context)) {
         FSHOW_SIGNAL((stderr,
                       "/can_handle_now(%p,%d): deferred(PA)\n",
                       handler,signal));
         store_signal_data_for_later(data,handler,signal,info,context);
         arch_set_pseudo_atomic_interrupted(context);
         answer = 0;
-    } 
-    else if (thread->pa_instruction || static_pa_p(thread, context)) {
-        store_signal_data_for_later(data,handler,signal,info,context);
-        answer = 0;
     }
+
 
     check_interrupt_context_or_lose(context);
 
@@ -1474,16 +1451,10 @@ sig_stop_for_gc_handler(int __attribute__((unused)) signal,
         FSHOW_SIGNAL((stderr, "sig_stop_for_gc deferred (*GC-INHIBIT*)\n"));
         write_TLS(STOP_FOR_GC_PENDING,T,thread);
         return;
-    } else if (arch_pseudo_atomic_atomic(context)) {
+    } else if (arch_pseudo_atomic_atomic(context) || static_pa_p(thread, context)) {
         FSHOW_SIGNAL((stderr,"sig_stop_for_gc deferred (PA)\n"));
         write_TLS(STOP_FOR_GC_PENDING,T,thread);
         arch_set_pseudo_atomic_interrupted(context);
-        maybe_save_gc_mask_and_block_deferrables
-            (os_context_sigmask_addr(context));
-        return;
-    } else if (static_pa_p(thread, context)){
-        FSHOW_SIGNAL((stderr,"sig_stop_for_gc deferred (PA)\n"));
-        write_TLS(STOP_FOR_GC_PENDING,T,thread);
         maybe_save_gc_mask_and_block_deferrables
             (os_context_sigmask_addr(context));
         return;
@@ -2249,7 +2220,6 @@ handle_trap(os_context_t *context, int trap)
 #ifndef LISP_FEATURE_WIN32
     case trap_PendingInterrupt:
         FSHOW((stderr, "/<trap pending interrupt>\n"));
-            printf("trap\n");
 
         interrupt_handle_pending(context);
         break;

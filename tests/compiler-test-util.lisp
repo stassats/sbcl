@@ -63,6 +63,7 @@
           for value = (if (= (widetag-of c) sb-vm:value-cell-widetag)
                           (value-cell-ref c)
                           c)
+          until (eq value 'sb-c::pseudo-atomic)
           when (and (not (eql value 0)) ;; alignment zeros
                     (typep value type))
           collect value)))

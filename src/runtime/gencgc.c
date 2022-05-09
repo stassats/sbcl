@@ -4864,14 +4864,7 @@ lisp_alloc(int largep, struct alloc_region *region, sword_t nbytes,
 #ifdef LISP_FEATURE_SB_SAFEPOINT
                 thread_register_gc_trigger();
 #else
-                if (!get_pseudo_atomic_atomic(thread)) {
-                    printf("set static pa\n");
-                    interrupt_static_pa(thread);
-                }
-                else {
-                    printf("set pa\n");
-                    set_pseudo_atomic_interrupted(thread);
-                }
+                set_pseudo_atomic_interrupted(thread);
 #if HAVE_ALLOCATION_TRAP_CONTEXT
                 {
                     os_context_t *context =
