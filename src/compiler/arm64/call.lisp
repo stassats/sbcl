@@ -574,6 +574,7 @@
   (:temporary (:scs (descriptor-reg) :from :eval) temp)
   (:temporary (:scs (any-reg) :from :eval) dst)
   (:temporary (:sc non-descriptor-reg :offset lr-offset) lr)
+  (:temporary (:scs (non-descriptor-reg) :offset nargs-offset) pa)
   (:results (result :scs (descriptor-reg)))
   (:policy :safe)
   (:node-var node)
@@ -586,7 +587,7 @@
 
     (let ((dx-p (node-stack-allocate-p node))
           (leave-pa (gen-label)))
-      (pseudo-atomic (lr :sync nil :elide-if dx-p)
+      (pseudo-atomic (pa :sync nil :elide-if dx-p)
         ;; Allocate a cons (2 words) for each item.
         (let ((size (cond (dx-p
                            (lsl count (1+ (- word-shift n-fixnum-tag-bits))))

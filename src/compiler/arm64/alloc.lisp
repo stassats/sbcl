@@ -17,6 +17,7 @@
   (:temporary (:scs (descriptor-reg) :to (:result 0) :target result)
               res)
   (:temporary (:scs (non-descriptor-reg) :offset lr-offset) lr)
+  (:temporary (:scs (non-descriptor-reg) :offset nargs-offset) pa)
   (:info star cons-cells)
   (:results (result :scs (descriptor-reg)))
   (:node-var node)
@@ -48,7 +49,7 @@
                         (setf prev-constant nil)
                         (load-stack-tn ,temp ,tn)
                         ,temp)))))
-       (pseudo-atomic (lr :sync nil :elide-if dx)
+       (pseudo-atomic (pa :sync nil :elide-if dx)
          (allocation 'list alloc list-pointer-lowtag res
                      :flag-tn lr
                      :stack-allocate-p dx)
@@ -82,11 +83,12 @@
   (:args (name :scs (descriptor-reg) :to :eval))
   (:temporary (:sc non-descriptor-reg) temp)
   (:temporary (:scs (non-descriptor-reg) :offset lr-offset) lr)
+  (:temporary (:scs (non-descriptor-reg) :offset nargs-offset) pa)
   (:results (result :scs (descriptor-reg) :from :argument))
   (:policy :fast-safe)
   (:translate make-fdefn)
   (:generator 37
-    (with-fixed-allocation (result lr fdefn-widetag fdefn-size)
+    (with-fixed-allocation (result pa lr fdefn-widetag fdefn-size)
       (load-inline-constant temp '(:fixup undefined-tramp :assembly-routine))
       (storew name result fdefn-name-slot other-pointer-lowtag)
       (storew null-tn result fdefn-fun-slot other-pointer-lowtag)
@@ -96,11 +98,12 @@
   (:info label length stack-allocate-p)
   (:temporary (:scs (non-descriptor-reg)) temp)
   (:temporary (:scs (non-descriptor-reg) :offset lr-offset) lr)
+  (:temporary (:scs (non-descriptor-reg) :offset nargs-offset) pa)
   (:results (result :scs (descriptor-reg)))
   (:generator 10
     (let* ((size (+ length closure-info-offset))
            (alloc-size (pad-data-block size)))
-      (pseudo-atomic (lr :elide-if stack-allocate-p)
+      (pseudo-atomic (pa :elide-if stack-allocate-p)
         (allocation nil alloc-size fun-pointer-lowtag result
                     :flag-tn lr
                     :stack-allocate-p stack-allocate-p)
@@ -114,10 +117,11 @@
 (define-vop (make-value-cell)
   (:args (value :to :save :scs (descriptor-reg any-reg)))
   (:temporary (:scs (non-descriptor-reg) :offset lr-offset) lr)
+  (:temporary (:scs (non-descriptor-reg) :offset nargs-offset) pa)
   (:info stack-allocate-p)
   (:results (result :scs (descriptor-reg)))
   (:generator 10
-    (with-fixed-allocation (result lr value-cell-widetag
+    (with-fixed-allocation (result pa lr value-cell-widetag
                             value-cell-size :stack-allocate-p stack-allocate-p
                                             :store-type-code nil)
       (storew-pair lr 0 value value-cell-value-slot tmp-tn))))
@@ -142,8 +146,9 @@
   (:ignore name)
   (:results (result :scs (descriptor-reg)))
   (:temporary (:scs (non-descriptor-reg) :offset lr-offset) lr)
+  (:temporary (:scs (non-descriptor-reg) :offset nargs-offset) pa)
   (:generator 4
-    (with-fixed-allocation (result lr type words
+    (with-fixed-allocation (result pa lr type words
                             :lowtag lowtag
                             :stack-allocate-p stack-allocate-p))))
 
@@ -156,6 +161,7 @@
   (:temporary (:scs (any-reg) :from :argument) bytes)
   (:temporary (:sc non-descriptor-reg) header)
   (:temporary (:scs (non-descriptor-reg) :offset lr-offset) lr)
+  (:temporary (:scs (non-descriptor-reg) :offset nargs-offset) pa)
   (:generator 6
     ;; Build the object header, assuming that the header was in WORDS
     ;; but should not be in the header
@@ -168,6 +174,6 @@
     (inst add bytes bytes (* 2 n-word-bytes))
     (inst and bytes bytes (bic-mask lowtag-mask))
     ;; Allocate the object and set its header
-    (pseudo-atomic (lr)
+    (pseudo-atomic (pa)
       (allocation nil bytes lowtag result :flag-tn lr)
       (storew header result 0 lowtag))))

@@ -72,7 +72,21 @@ boolean arch_pseudo_atomic_atomic(os_context_t *context)
 
 void arch_set_pseudo_atomic_interrupted(os_context_t *context)
 {
-    set_pseudo_atomic_interrupted(get_sb_vm_thread());
+    struct thread* thread = get_sb_vm_thread();
+    if (arch_pseudo_atomic_atomic(context))
+        set_pseudo_atomic_interrupted(thread);
+    else {
+        if (foreign_function_call_active_p(thread)) {
+            access_control_frame_pointer(thread)[2] = 1;
+            uword_t pc = os_context_pc(context);
+            if (READ_ONLY_SPACE_START <= pc && pc < READ_ONLY_SPACE_END) {
+                *os_context_register_addr(context, reg_NARGS) = 1;
+            }
+        } else {
+
+            *os_context_register_addr(context, reg_NARGS) = 1;
+        }
+    }
 }
 
 void arch_clear_pseudo_atomic_interrupted(os_context_t *context)

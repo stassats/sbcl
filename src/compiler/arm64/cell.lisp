@@ -577,12 +577,12 @@
          (value :scs (any-reg descriptor-reg)))
   (:arg-types * tagged-num *)
   (:temporary (:scs (non-descriptor-reg)) temp card)
-  (:temporary (:sc non-descriptor-reg) pa-flag)
+  (:temporary (:scs (non-descriptor-reg) :offset nargs-offset) pa)
   (:generator 10
     (load-inline-constant temp `(:fixup "gc_card_table_mask" :foreign-dataref))
     (inst ldr temp (@ temp))
     (inst ldr (32-bit-reg temp) (@ temp)) ; 4-byte int
-    (pseudo-atomic (pa-flag)
+    (pseudo-atomic (pa)
       ;; Compute card mark index
       (inst lsr card object gencgc-card-shift)
       (inst and card card temp)

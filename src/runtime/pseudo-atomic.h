@@ -45,6 +45,8 @@
 
 #ifdef LISP_FEATURE_SB_THREAD
 
+void set_static_pa_interrupted(struct thread *);
+
 #define get_pseudo_atomic_atomic(thread) \
     ((thread)->pseudo_atomic_bits & flag_PseudoAtomic)
 #define set_pseudo_atomic_atomic(thread) \
@@ -54,7 +56,7 @@
 #define get_pseudo_atomic_interrupted(thread) \
     ((thread)->pseudo_atomic_bits & flag_PseudoAtomicInterrupted)
 #define set_pseudo_atomic_interrupted(thread) \
-    ((thread)->pseudo_atomic_bits |= flag_PseudoAtomicInterrupted)
+  set_static_pa_interrupted((thread))
 #define clear_pseudo_atomic_interrupted(thread) \
     ((thread)->pseudo_atomic_bits &= ~flag_PseudoAtomicInterrupted)
 

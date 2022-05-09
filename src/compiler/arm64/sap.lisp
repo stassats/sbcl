@@ -30,10 +30,11 @@
 (define-vop (move-from-sap)
   (:args (sap :scs (sap-reg) :to :save))
   (:temporary (:scs (non-descriptor-reg) :offset lr-offset) lr)
+  (:temporary (:scs (non-descriptor-reg) :offset nargs-offset) pa)
   (:results (res :scs (descriptor-reg)))
   (:note "SAP to pointer coercion")
   (:generator 20
-    (with-fixed-allocation (res lr sap-widetag sap-size
+    (with-fixed-allocation (res pa lr sap-widetag sap-size
                             :store-type-code nil)
       (storew-pair lr 0 sap sap-pointer-slot tmp-tn))))
 

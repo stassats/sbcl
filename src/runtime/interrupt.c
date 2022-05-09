@@ -1062,6 +1062,14 @@ boolean static_pa_p (struct thread *thread, os_context_t *context) {
 
     return static_pa_at_p(thread, pc);
 }
+void set_static_pa_interrupted (struct thread* thread) {
+    if (get_pseudo_atomic_atomic(thread))
+        thread->pseudo_atomic_bits |= flag_PseudoAtomicInterrupted;
+    else {
+        access_control_frame_pointer(thread)[2] = 1;
+    }
+}
+
 
 boolean
 interrupt_handler_pending_p(void)

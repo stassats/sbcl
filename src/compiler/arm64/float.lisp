@@ -64,9 +64,10 @@
   (:results (y))
   (:note "float to pointer coercion")
   (:temporary (:scs (non-descriptor-reg) :offset lr-offset) lr)
+  (:temporary (:scs (non-descriptor-reg) :offset nargs-offset) pa)
   (:results (y :scs (descriptor-reg)))
   (:generator 13
-    (with-fixed-allocation (y lr
+    (with-fixed-allocation (y pa lr
                             double-float-widetag
                             double-float-value-slot)
       (storew x y double-float-value-slot other-pointer-lowtag))))
@@ -165,9 +166,10 @@
   (:args (x :scs (complex-single-reg) :to :save))
   (:results (y :scs (descriptor-reg)))
   (:temporary (:scs (non-descriptor-reg) :offset lr-offset) lr)
+  (:temporary (:scs (non-descriptor-reg) :offset nargs-offset) pa)
   (:note "complex single float to pointer coercion")
   (:generator 13
-    (with-fixed-allocation (y lr complex-single-float-widetag
+    (with-fixed-allocation (y pa lr complex-single-float-widetag
                             complex-single-float-size)
       (inst str x (@ y (- (* complex-single-float-data-slot
                              n-word-bytes)
@@ -179,9 +181,10 @@
   (:args (x :scs (complex-double-reg) :to :save))
   (:results (y :scs (descriptor-reg)))
   (:temporary (:scs (non-descriptor-reg) :offset lr-offset) lr)
+  (:temporary (:scs (non-descriptor-reg) :offset nargs-offset) pa)
   (:note "complex double float to pointer coercion")
   (:generator 13
-    (with-fixed-allocation (y lr complex-double-float-widetag
+    (with-fixed-allocation (y pa lr complex-double-float-widetag
                             complex-double-float-size)
       (inst str x (@ y (- (* complex-double-float-real-slot
                              n-word-bytes)

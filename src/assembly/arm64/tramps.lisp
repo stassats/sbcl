@@ -29,7 +29,8 @@
           (lisp-registers (loop for i from r0-offset to r9-offset
                                 collect (reg i 'unsigned-reg)))
           (float-registers (loop for i below 32
-                                 collect (reg i 'complex-double-reg))))
+                                 collect (reg i 'complex-double-reg)))
+          (frame-size (+ 40 80)))
       (macrolet  ((map-pairs (op base start offsets
                               &key pre-index post-index
                                    (delta 16))
@@ -79,7 +80,8 @@
           ;; storing NULL ensures at least 1 set bit somewhere in the low 4 bytes
           (inst str (32-bit-reg null-tn) (@ nl2))) ; (alien variable is 4 bytes, not 8)
         ;; Create a new frame
-        (inst add csp-tn csp-tn (+ 32 80))
+        (inst add csp-tn csp-tn frame-size)
+        (inst str nargs-tn (@ csp-tn (- 16 frame-size)))
 
         (map-pairs stp csp-tn -80 lisp-registers)
         (map-pairs stp nsp-tn 0 float-registers :pre-index -512 :delta 32)
@@ -90,9 +92,9 @@
         (map-pairs ldp nsp-tn 480 float-registers :post-index 512 :delta -32)
         (map-pairs ldp csp-tn -16 lisp-registers :delta -16)
 
-        (inst ldr lr-tn (@ csp-tn -104))
-
-        (inst sub csp-tn csp-tn (+ 32 80)) ;; deallocate the frame
+        (inst ldr lr-tn (@ csp-tn (- 8 frame-size)))
+        (inst ldr nargs-tn (@ csp-tn (- 16 frame-size)))
+        (inst sub csp-tn csp-tn frame-size) ;; deallocate the frame
         #+sb-thread
         (inst str zr-tn (@ thread-tn (* thread-control-stack-pointer-slot n-word-bytes)))
         #-sb-thread

@@ -23,6 +23,7 @@
   (:temporary (:scs (descriptor-reg) :to (:result 0) :target result) header)
   (:temporary (:sc non-descriptor-reg) ndescr)
   (:temporary (:scs (non-descriptor-reg) :offset lr-offset) lr)
+  (:temporary (:scs (non-descriptor-reg) :offset nargs-offset) pa)
   (:results (result :scs (descriptor-reg)))
   (:generator 5
     ;; Compute the allocation size.
@@ -30,7 +31,7 @@
     (inst add ndescr ndescr (+ (* array-dimensions-offset n-word-bytes)
                                lowtag-mask))
     (inst and ndescr ndescr (bic-mask lowtag-mask))
-    (pseudo-atomic (lr)
+    (pseudo-atomic (pa)
       (allocation nil ndescr other-pointer-lowtag header :flag-tn lr)
       ;; Now that we have the space allocated, compute the header
       ;; value.
@@ -613,9 +614,10 @@
   (:arg-types positive-fixnum positive-fixnum positive-fixnum)
   (:temporary (:sc unsigned-reg) temp)
   (:temporary (:scs (non-descriptor-reg) :offset lr-offset) lr)
+  (:temporary (:scs (non-descriptor-reg) :offset nargs-offset) pa)
   (:policy :fast-safe)
   (:generator 100
-    (pseudo-atomic (lr)
+    (pseudo-atomic (pa)
       (inst lsl temp words (- word-shift n-fixnum-tag-bits))
       (inst add temp temp (* (1+ vector-data-offset) n-word-bytes))
       (inst and temp temp (bic-mask lowtag-mask)) ; double-word align

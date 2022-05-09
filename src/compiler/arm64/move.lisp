@@ -446,12 +446,13 @@
   (:results (y :scs (any-reg descriptor-reg)))
   (:temporary (:scs (non-descriptor-reg) :from (:argument 0)) x)
   (:temporary (:sc non-descriptor-reg :offset lr-offset) lr)
+  (:temporary (:scs (non-descriptor-reg) :offset nargs-offset) pa)
   (:note "signed word to integer coercion")
   (:generator 20
     (move x arg)
     (inst adds y x x)
     (inst b :vc DONE)
-    (with-fixed-allocation (y lr bignum-widetag (1+ bignum-digits-offset)
+    (with-fixed-allocation (y pa lr bignum-widetag (1+ bignum-digits-offset)
                             :store-type-code nil)
       ;; TMP-TN has the untagged address coming from ALLOCATION
       ;; that way STP can be used on an aligned address.
@@ -488,6 +489,7 @@
   (:results (y :scs (any-reg descriptor-reg)))
   (:temporary (:scs (non-descriptor-reg) :from (:argument 0)) x)
   (:temporary (:sc non-descriptor-reg :offset lr-offset) lr)
+  (:temporary (:scs (non-descriptor-reg) :offset nargs-offset) pa)
   (:note "unsigned word to integer coercion")
   (:generator 20
     (move x arg)
@@ -498,7 +500,7 @@
     (inst b :eq DONE)
 
     (with-fixed-allocation
-        (y lr bignum-widetag (+ 2 bignum-digits-offset)
+        (y pa lr bignum-widetag (+ 2 bignum-digits-offset)
          :store-type-code nil)
       ;; WITH-FIXED-ALLOCATION, when using a supplied type-code,
       ;; leaves LR containing the computed header value.  In our

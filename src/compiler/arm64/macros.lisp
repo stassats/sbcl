@@ -210,7 +210,7 @@
           BACK-FROM-ALLOC
           (inst add result-tn tmp-tn lowtag)))))
 
-(defmacro with-fixed-allocation ((result-tn flag-tn type-code size
+(defmacro with-fixed-allocation ((result-tn pa alloc-temp type-code size
                                             &key (lowtag other-pointer-lowtag)
                                                  stack-allocate-p
                                                  (store-type-code t))
@@ -220,18 +220,19 @@
   Result-TN, and Temp-TN is a non-descriptor temp (which may be randomly used
   by the body.)  The body is placed inside the PSEUDO-ATOMIC, and presumably
   initializes the object."
-  (once-only ((result-tn result-tn) (flag-tn flag-tn)
+  (once-only ((result-tn result-tn) (alloc-temp alloc-temp)
+              (pa pa)
               (type-code type-code) (size size) (lowtag lowtag)
               (stack-allocate-p stack-allocate-p))
-    `(pseudo-atomic (,flag-tn :sync ,type-code
+    `(pseudo-atomic (,pa :sync ,type-code
                      :elide-if ,stack-allocate-p)
        (allocation nil (pad-data-block ,size) ,lowtag ,result-tn
-                   :flag-tn ,flag-tn
+                   :flag-tn ,alloc-temp
                    :stack-allocate-p ,stack-allocate-p)
        (when ,type-code
-         (load-immediate-word ,flag-tn (compute-object-header ,size ,type-code))
+         (load-immediate-word ,alloc-temp (compute-object-header ,size ,type-code))
          ,@(and store-type-code
-                `((storew ,flag-tn ,result-tn 0 ,lowtag))))
+                `((storew ,alloc-temp ,result-tn 0 ,lowtag))))
        ,@body)))
 
 ;;;; Error Code
@@ -304,15 +305,16 @@
   `(let (start end)
      (declare (ignorable start end))
      (unless ,elide-if
-       ,(if static
-            `(emit-label (setf start (gen-label "pa-start")))
-            `(without-scheduling ()
-               #-sb-thread
-               (store-symbol-value csp-tn *pseudo-atomic-atomic*)
-               #+sb-thread
-               (inst str (32-bit-reg null-tn)
-                     (@ thread-tn
-                        (* n-word-bytes thread-pseudo-atomic-bits-slot))))))
+       ,@(if static
+            `((inst mov ,flag-tn 0)
+              (emit-label (setf start (gen-label "pa-start"))))
+            `((without-scheduling ()
+                #-sb-thread
+                (store-symbol-value csp-tn *pseudo-atomic-atomic*)
+                #+sb-thread
+                (inst str (32-bit-reg null-tn)
+                      (@ thread-tn
+                         (* n-word-bytes thread-pseudo-atomic-bits-slot)))))))
      (assemble ()
        ,@forms)
      (unless ,elide-if
@@ -329,9 +331,6 @@
           ,@(if static
                 `((emit-label (setf end (gen-label "pa-end")))
                   (sb-c::note-pa-location start end)
-                  (inst ldr (32-bit-reg ,flag-tn)
-                        (@ thread-tn
-                           (+ (* n-word-bytes thread-pseudo-atomic-bits-slot) 4)))
                   (inst cbz ,flag-tn not-interrputed)
                   (inst brk pending-interrupt-trap)
                   (emit-label not-interrputed))
