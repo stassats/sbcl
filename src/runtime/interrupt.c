@@ -1067,12 +1067,23 @@ boolean trip_static_pa (struct thread *thread, uword_t pc) {
 
 boolean static_pa_p (struct thread *thread, os_context_t *context) {
     uword_t pc = os_context_pc(context);
+
+    if (foreign_function_call_active_p(thread)) {
+        pc = thread->control_frame_pointer[1];
+        if(!pc) {
+            lose("%p", thread);
+        }
+    }
+    else if (READ_ONLY_SPACE_START <= pc && pc < READ_ONLY_SPACE_END) {
+        pc = (uword_t)*os_context_register_addr(context, reg_LR);
+    }
+
     return trip_static_pa(thread, pc);
 }
 
 void interrupt_static_pa(struct thread *thread) {
-  lispobj lr = thread->control_stack_pointer[1];
-  trip_static_pa(thread, lr);
+    lispobj lr = thread->control_frame_pointer[1];
+    trip_static_pa(thread, lr);
 }
 
 boolean
@@ -1110,6 +1121,7 @@ interrupt_handle_pending(os_context_t *context)
     struct interrupt_data *data = &thread_interrupt_data(thread);
 
     if (thread->pa_instruction) {
+        printf("%x\n", thread->pa_instruction);
         remove_pending_interrupt(thread, context);
     }
     else {
@@ -1417,12 +1429,11 @@ can_handle_now(void *handler, struct interrupt_data *data,
         store_signal_data_for_later(data,handler,signal,info,context);
         arch_set_pseudo_atomic_interrupted(context);
         answer = 0;
-    }
-
-    if (thread->pa_instruction) {
+    } 
+    else if (thread->pa_instruction || static_pa_p(thread, context)) {
+        store_signal_data_for_later(data,handler,signal,info,context);
         answer = 0;
     }
-    //static_pa_p(thread, context);
 
     check_interrupt_context_or_lose(context);
 
@@ -1470,9 +1481,8 @@ sig_stop_for_gc_handler(int __attribute__((unused)) signal,
         maybe_save_gc_mask_and_block_deferrables
             (os_context_sigmask_addr(context));
         return;
-    } else if (static_pa_p(thread, context)){ 
+    } else if (static_pa_p(thread, context)){
         FSHOW_SIGNAL((stderr,"sig_stop_for_gc deferred (PA)\n"));
-        printf("static pa\n");
         write_TLS(STOP_FOR_GC_PENDING,T,thread);
         maybe_save_gc_mask_and_block_deferrables
             (os_context_sigmask_addr(context));
@@ -2239,6 +2249,8 @@ handle_trap(os_context_t *context, int trap)
 #ifndef LISP_FEATURE_WIN32
     case trap_PendingInterrupt:
         FSHOW((stderr, "/<trap pending interrupt>\n"));
+            printf("trap\n");
+
         interrupt_handle_pending(context);
         break;
 #endif

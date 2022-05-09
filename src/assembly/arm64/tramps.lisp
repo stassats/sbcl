@@ -54,8 +54,9 @@
         (map-pairs stp nsp-tn 0 nl-registers :pre-index -80)
         (inst mov nl0 tmp-tn) ;; size
         (progn ,@process-args)
+        (inst stp cfp-tn lr-tn (@ csp-tn))
         #+sb-thread
-        (inst stp cfp-tn csp-tn (@ thread-tn (* thread-control-frame-pointer-slot n-word-bytes)))
+        (inst stp csp-tn cfp-tn (@ thread-tn (* thread-control-frame-pointer-slot n-word-bytes)))
         #-sb-thread
         (progn
           ;; Each of these loads of a fixup loads the address of a linkage table entry,
@@ -79,7 +80,6 @@
           (inst str (32-bit-reg null-tn) (@ nl2))) ; (alien variable is 4 bytes, not 8)
         ;; Create a new frame
         (inst add csp-tn csp-tn (+ 32 80))
-        (inst stp cfp-tn lr-tn (@ csp-tn -112))
 
         (map-pairs stp csp-tn -80 lisp-registers)
         (map-pairs stp nsp-tn 0 float-registers :pre-index -512 :delta 32)

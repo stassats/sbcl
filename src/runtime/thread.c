@@ -1064,6 +1064,7 @@ alloc_thread_struct(void* spaces, lispobj start_routine) {
     thread_extra_data(th)->synchronous_io_handle_and_flag = 0;
 #endif
     th->stepping = 0;
+    th->pa_instruction = 0;
     return th;
 }
 #ifdef LISP_FEATURE_SB_THREAD
