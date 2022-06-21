@@ -1251,14 +1251,14 @@
   (:printer data-processing-3 ((op31 #b010) (o0 0) (ra 31))
             '(:name :tab rd  ", " rn ", " rm))
   (:emitter
-   (emit-data-processing-3 segment (reg-size rd) #b010 (reg-offset rm)
+   (emit-data-processing-3 segment +64-bit-size+ #b010 (reg-offset rm)
                            0 31 (reg-offset rn) (reg-offset rd))))
 
 (define-instruction umulh (segment rd rn rm)
   (:printer data-processing-3 ((op31 #b110) (o0 0) (ra 31))
             '(:name :tab rd  ", " rn ", " rm))
   (:emitter
-   (emit-data-processing-3 segment (reg-size rd) #b110 (reg-offset rm)
+   (emit-data-processing-3 segment +64-bit-size+ #b110 (reg-offset rm)
                            0 31 (reg-offset rn) (reg-offset rd))))
 ;;;
 
