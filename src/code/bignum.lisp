@@ -1670,7 +1670,7 @@
 ;;; eliminated. This improves the performance on some CL-BENCH tests
 ;;; by up to 50%, which is probably signigicant enough to justify the
 ;;; reduction in readability that was introduced. --JES, 2004-08-07
-(defun bignum-truncate (x y)
+(defun half-bignum-truncate (x y)
   (declare (type bignum x y))
   (declare (muffle-conditions compiler-note)) ; returns lispobj, so what.
   (let (truncate-x truncate-y)
@@ -1713,18 +1713,18 @@
                                                    res)
                                                   res)
                            (logand (%bignum-ref x 0) (1- y))))))
-                 (do ((i (1- len-x) (1- i))
+                 (do ((i (1- (* len-x 2)) (1- i))
                       (q (%allocate-bignum len-x))
                       (r 0))
                      ((minusp i)
                       (let ((rem (%allocate-bignum 1)))
-                        (setf (%bignum-ref rem 0) r)
+                        (setf (%half-bignum-ref rem 0) r)
                         (values q rem)))
                    (declare (type bignum-element-type r))
                    (multiple-value-bind (q-digit r-digit)
-                       (%bigfloor r (%bignum-ref x i) y)
-                     (declare (type bignum-element-type q-digit r-digit))
-                     (setf (%bignum-ref q i) q-digit)
+                       (%half-bigfloor r (%half-bignum-ref x i) y)
+                     (declare (type half-bignum-element-type q-digit r-digit))
+                     (setf (%half-bignum-ref q i) q-digit)
                      (setf r r-digit))))))
         ;;; This returns a guess for the next division step. Y1 is the
         ;;; highest y digit, and y2 is the second to highest y
@@ -1747,37 +1747,37 @@
         ;;; and try again.  This returns a guess that is either
         ;;; correct or one too large.
          (bignum-truncate-guess (y1 y2 x-i x-i-1 x-i-2)
-           (declare (type bignum-element-type y1 y2 x-i x-i-1 x-i-2))
+           (declare (type half-bignum-element-type y1 y2 x-i x-i-1 x-i-2))
            (let ((guess (if (= x-i y1)
-                            all-ones-digit
-                            (%bigfloor x-i x-i-1 y1))))
-             (declare (type bignum-element-type guess))
+                            (ldb (byte 32 0) all-ones-digit)
+                            (%half-bigfloor x-i x-i-1 y1))))
+             (declare (type half-bignum-element-type guess))
              (loop
-                 (multiple-value-bind (high-guess*y1 low-guess*y1)
-                     (%multiply guess y1)
-                   (declare (type bignum-element-type low-guess*y1
-                                  high-guess*y1))
-                   (multiple-value-bind (high-guess*y2 low-guess*y2)
-                       (%multiply guess y2)
-                     (declare (type bignum-element-type high-guess*y2
-                                    low-guess*y2))
-                     (multiple-value-bind (middle-digit borrow)
-                         (%subtract-with-borrow x-i-1 low-guess*y1 1)
-                       (declare (type bignum-element-type middle-digit)
-                                (fixnum borrow))
-                       ;; Supplying borrow of 1 means there was no
-                       ;; borrow, and we know x-i-2 minus 0 requires
-                       ;; no borrow.
-                       (let ((high-digit (%subtract-with-borrow x-i
-                                                                high-guess*y1
-                                                                borrow)))
-                         (declare (type bignum-element-type high-digit))
-                         (if (and (= high-digit 0)
-                                  (or (> high-guess*y2 middle-digit)
-                                      (and (= middle-digit high-guess*y2)
-                                           (> low-guess*y2 x-i-2))))
-                             (setf guess (%subtract-with-borrow guess 1 1))
-                             (return guess)))))))))
+              (multiple-value-bind (high-guess*y1 low-guess*y1)
+                  (%half-multiply guess y1)
+                (declare (type half-bignum-element-type low-guess*y1
+                               high-guess*y1))
+                (multiple-value-bind (high-guess*y2 low-guess*y2)
+                    (%half-multiply guess y2)
+                  (declare (type half-bignum-element-type high-guess*y2
+                                 low-guess*y2))
+                  (multiple-value-bind (middle-digit borrow)
+                      (%half-subtract-with-borrow x-i-1 low-guess*y1 1)
+                    (declare (type half-bignum-element-type middle-digit)
+                             (fixnum borrow))
+                    ;; Supplying borrow of 1 means there was no
+                    ;; borrow, and we know x-i-2 minus 0 requires
+                    ;; no borrow.
+                    (let ((high-digit (%half-subtract-with-borrow x-i
+                                                                  high-guess*y1
+                                                                  borrow)))
+                      (declare (type half-bignum-element-type high-digit))
+                      (if (and (= high-digit 0)
+                               (or (> high-guess*y2 middle-digit)
+                                   (and (= middle-digit high-guess*y2)
+                                        (> low-guess*y2 x-i-2))))
+                          (setf guess (%half-subtract-with-borrow guess 1 1))
+                          (return guess)))))))))
         ;;; Divide TRUNCATE-X by TRUNCATE-Y, returning the quotient
         ;;; and destructively modifying TRUNCATE-X so that it holds
         ;;; the remainder.
@@ -1792,27 +1792,30 @@
            (let* ((len-q (- len-x len-y))
                   ;; Add one for extra sign digit in case high bit is on.
                   (q (%allocate-bignum (1+ len-q)))
-                  (k (1- len-q))
-                  (y1 (%bignum-ref truncate-y (1- len-y)))
-                  (y2 (%bignum-ref truncate-y (- len-y 2)))
-                  (i (1- len-x))
+                  (half-len-x (* len-x 2))
+                  (half-len-y (* len-y 2))
+                  (half-len-q (* len-q 2))
+                  (k (1- half-len-q))
+                  (y1 (%half-bignum-ref truncate-y (- half-len-y 1)))
+                  (y2 (%half-bignum-ref truncate-y (- half-len-y 2)))
+                  (i (1- half-len-x))
                   (i-1 (1- i))
                   (i-2 (1- i-1))
-                  (low-x-digit (- i len-y)))
+                  (low-x-digit (- i half-len-y)))
              (declare (type bignum-length len-q)
-                      (type bignum-index k i i-1 i-2 low-x-digit)
-                      (type bignum-element-type y1 y2))
+                      (type half-bignum-index k i i-1 i-2 low-x-digit)
+                      (type half-bignum-element-type y1 y2))
              ;; DO NOT ASSUME THAT %ALLOCATE-BIGNUM PREZEROS
              (setf (%bignum-ref q len-q) 0)
              (loop
-                 (setf (%bignum-ref q k)
+                 (setf (%half-bignum-ref q k)
                        (try-bignum-truncate-guess
                         ;; This modifies TRUNCATE-X. Must access
                         ;; elements each pass.
                         (bignum-truncate-guess y1 y2
-                                               (%bignum-ref truncate-x i)
-                                               (%bignum-ref truncate-x i-1)
-                                               (%bignum-ref truncate-x i-2))
+                                               (%half-bignum-ref truncate-x i)
+                                               (%half-bignum-ref truncate-x i-1)
+                                               (%half-bignum-ref truncate-x i-2))
                         len-y low-x-digit))
                  (cond ((zerop k) (return))
                        (t (decf k)
@@ -1831,39 +1834,39 @@
         ;;; the order of 3/b, where b is the base (2 to the digit-size power)
         ;;; -- pretty rarely.
          (try-bignum-truncate-guess (guess len-y low-x-digit)
-           (declare (type bignum-index low-x-digit)
-                    (type bignum-length len-y)
-                    (type bignum-element-type guess))
+           (declare (type half-bignum-index low-x-digit)
+                    (type half-bignum-length len-y)
+                    (type half-bignum-element-type guess))
            (let ((carry-digit 0)
                  (borrow 1)
                  (i low-x-digit))
-             (declare (type bignum-element-type carry-digit)
-                      (type bignum-index i)
+             (declare (type half-bignum-element-type carry-digit)
+                      (type half-bignum-index i)
                       (fixnum borrow))
              ;; Multiply guess and divisor, subtracting from dividend
              ;; simultaneously.
              (dotimes (j len-y)
                (multiple-value-bind (high-digit low-digit)
-                   (%multiply-and-add guess
-                                      (%bignum-ref truncate-y j)
+                   (%half-multiply-and-add guess
+                                      (%half-bignum-ref truncate-y j)
                                       carry-digit)
-                 (declare (type bignum-element-type high-digit low-digit))
+                 (declare (type half-bignum-element-type high-digit low-digit))
                  (setf carry-digit high-digit)
                  (multiple-value-bind (x temp-borrow)
-                     (%subtract-with-borrow (%bignum-ref truncate-x i)
-                                            low-digit
-                                            borrow)
-                   (declare (type bignum-element-type x)
+                     (%half-subtract-with-borrow (%half-bignum-ref truncate-x i)
+                                                 low-digit
+                                                 borrow)
+                   (declare (type half-bignum-element-type x)
                             (fixnum temp-borrow))
-                   (setf (%bignum-ref truncate-x i) x)
+                   (setf (%half-bignum-ref truncate-x i) x)
                    (setf borrow temp-borrow)))
                (incf i))
-             (setf (%bignum-ref truncate-x i)
-                   (%subtract-with-borrow (%bignum-ref truncate-x i)
-                                          carry-digit borrow))
+             (setf (%half-bignum-ref truncate-x i)
+                   (%half-subtract-with-borrow (%half-bignum-ref truncate-x i)
+                                               carry-digit borrow))
              ;; See whether guess is off by one, adding one
              ;; Y back in if necessary.
-             (cond ((%digit-0-or-plusp (%bignum-ref truncate-x i))
+             (cond ((%half-digit-0-or-plusp (%half-bignum-ref truncate-x i))
                     guess)
                    (t
                     ;; If subtraction has negative result, add one
@@ -1873,17 +1876,17 @@
                           (carry 0))
                       (dotimes (j len-y)
                         (multiple-value-bind (v k)
-                            (%add-with-carry (%bignum-ref truncate-y j)
-                                             (%bignum-ref truncate-x i)
-                                             carry)
-                          (declare (type bignum-element-type v))
-                          (setf (%bignum-ref truncate-x i) v)
+                            (%half-add-with-carry (%half-bignum-ref truncate-y j)
+                                                  (%half-bignum-ref truncate-x i)
+                                                  carry)
+                          (declare (type half-bignum-element-type v))
+                          (setf (%half-bignum-ref truncate-x i) v)
                           (setf carry k))
                         (incf i))
-                      (setf (%bignum-ref truncate-x i)
-                            (%add-with-carry (%bignum-ref truncate-x i)
-                                             0 carry)))
-                    (%subtract-with-borrow guess 1 1)))))
+                      (setf (%half-bignum-ref truncate-x i)
+                            (%half-add-with-carry (%half-bignum-ref truncate-x i)
+                                                  0 carry)))
+                    (%half-subtract-with-borrow guess 1 1)))))
         ;;; This returns the amount to shift y to place a one in the
         ;;; second highest bit. Y must be positive. If the last digit
         ;;; of y is zero, then y has a one in the previous digit's
@@ -1936,8 +1939,8 @@
              (len-x (%bignum-length x))
              (len-y (%bignum-length y)))
         (multiple-value-bind (q r)
-            (cond ((< len-y 2)
-                   (bignum-truncate-single-digit x len-x y))
+            (cond ;; ((< len-y 2)
+                  ;;  (bignum-truncate-single-digit x len-x y))
                   ((plusp (bignum-compare y x))
                    (let ((res (%allocate-bignum len-x)))
                      (dotimes (i len-x)
@@ -1984,6 +1987,7 @@
                     (if (typep rem 'fixnum)
                         rem
                         (%normalize-bignum rem (%bignum-length rem))))))))))
+
 
 ;;;; hashing
 

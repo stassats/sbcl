@@ -1179,6 +1179,17 @@
 (define-full-setter bignum-set * bignum-digits-offset other-pointer-lowtag
   (unsigned-reg) unsigned-num sb-bignum:%bignum-set)
 
+(define-partial-reffer sb-c::%half-bignum-ref bignum
+  :word nil bignum-digits-offset other-pointer-lowtag (unsigned-reg signed-reg)
+  positive-fixnum
+  sb-bignum:%half-bignum-ref)
+
+(define-partial-setter sb-c::%half-bignum-set bignum
+  :word bignum-digits-offset other-pointer-lowtag (unsigned-reg signed-reg)
+  positive-fixnum
+  (setf sb-bignum:%half-bignum-ref))
+
+
 (define-vop (digit-0-or-plus)
   (:translate sb-bignum:%digit-0-or-plusp)
   (:policy :fast-safe)
@@ -1187,8 +1198,17 @@
   (:conditional)
   (:info target not-p)
   (:generator 2
-     (inst cmp digit 0)
-     (inst b (if not-p :lt :ge) target)))
+    (inst cmp digit 0)
+    (inst b (if not-p :lt :ge) target)))
+
+(define-vop ()
+  (:translate sb-bignum:%half-digit-0-or-plusp)
+  (:policy :fast-safe)
+  (:args (digit :scs (unsigned-reg)))
+  (:arg-types unsigned-num)
+  (:conditional :ge)
+  (:generator 2
+    (inst cmp (32-bit-reg digit) 0)))
 
 (define-vop (add-w/carry)
   (:translate sb-bignum:%add-with-carry)
@@ -1207,6 +1227,14 @@
     (unless (eq (tn-kind carry) :unused)
       (inst cset carry :cs))))
 
+(define-vop (half-add-w/carry add-w/carry)
+  (:translate sb-bignum:%half-add-with-carry)
+  (:generator 3
+    (inst cmp c 1)
+    (inst adcs (32-bit-reg result) a b)
+    (unless (eq (tn-kind carry) :unused)
+      (inst cset carry :cs))))
+
 (define-vop (sub-w/borrow)
   (:translate sb-bignum:%subtract-with-borrow)
   (:policy :fast-safe)
@@ -1222,7 +1250,15 @@
     (inst cmp c 1) ;; Set carry if (fixnum 0 or 1) c=0, else clear.
     (inst sbcs result a b)
     (unless (eq (tn-kind borrow) :unused)
-     (inst cset borrow :cs))))
+      (inst cset borrow :cs))))
+
+(define-vop (half-sub-w/borrow sub-w/borrow)
+  (:translate sb-bignum:%half-subtract-with-borrow)
+  (:generator 4
+    (inst cmp c 1)
+    (inst sbcs (32-bit-reg result) a b)
+    (unless (eq (tn-kind borrow) :unused)
+      (inst cset borrow :cs))))
 
 (define-vop (bignum-mult-and-add-3-arg)
   (:translate sb-bignum:%multiply-and-add)
@@ -1238,6 +1274,25 @@
     (inst mul lo x y)
     (inst adds lo lo carry-in)
     (inst umulh hi x y)
+    (inst adc hi hi zr-tn)))
+
+(define-vop (half-bignum-mult-and-add bignum-mult-and-add-3-arg)
+  (:translate sb-bignum:%half-multiply-and-add)
+  (:policy :fast-safe)
+  (:args (x :scs (unsigned-reg))
+         (y :scs (unsigned-reg))
+         (carry-in :scs (unsigned-reg)))
+  (:arg-types unsigned-num unsigned-num unsigned-num)
+  (:results (hi :scs (unsigned-reg) :from (:argument 2))
+            (lo :scs (unsigned-reg) :from :load))
+  (:result-types unsigned-num unsigned-num)
+  (:generator 2
+    (inst umaddl lo x y zr-tn)
+    (inst lsr hi lo 32)
+    (setf lo (32-bit-reg lo)
+      hi (32-bit-reg hi)
+      carry-in (32-bit-reg carry-in))
+    (inst adds lo lo carry-in)
     (inst adc hi hi zr-tn)))
 
 (define-vop (bignum-mult-and-add-4-arg)
@@ -1271,6 +1326,20 @@
   (:generator 1
     (inst umulh hi x y)
     (inst mul lo x y)))
+
+(define-vop ()
+  (:translate sb-bignum:%half-multiply)
+  (:policy :fast-safe)
+  (:args (x :scs (unsigned-reg))
+         (y :scs (unsigned-reg)))
+  (:arg-types unsigned-num unsigned-num)
+  (:results (hi :scs (unsigned-reg))
+            (lo :scs (unsigned-reg)))
+  (:result-types unsigned-num unsigned-num)
+  (:generator 1
+    (inst umaddl lo x y zr-tn)
+    (inst lsr hi lo 32)
+    (inst and lo lo (ldb (byte 32 0) -1))))
 
 (define-vop (mulhi)
   (:translate %multiply-high)
@@ -1310,7 +1379,7 @@
 (define-vop (bignum-lognot lognot-mod64/unsigned=>unsigned)
   (:translate sb-bignum:%lognot))
 
-(define-vop (bignum-floor)
+(define-vop ()
   (:translate sb-bignum:%bigfloor)
   (:policy :fast-safe)
   (:args (div-high :scs (unsigned-reg) :target rem)
@@ -1332,6 +1401,23 @@
         (inst adcs quo quo quo)
         (unless (= i 64)
           (inst adc rem rem rem))))))
+
+(define-vop ()
+  (:translate sb-bignum:%half-bigfloor)
+  (:policy :fast-safe)
+  (:args (div-high :scs (unsigned-reg) :to :save)
+         (div-low :scs (unsigned-reg) :target x)
+         (divisor :scs (unsigned-reg) :to (:result 1)))
+  (:temporary (:sc unsigned-reg :from (:argument 1)) x)
+  (:arg-types unsigned-num unsigned-num unsigned-num)
+  (:results (quo :scs (unsigned-reg))
+            (rem :scs (unsigned-reg)))
+  (:result-types unsigned-num unsigned-num)
+  (:generator 30
+    (move x div-low)
+    (inst bfm x div-high 32 31)
+    (inst udiv quo x divisor)
+    (inst msub rem quo divisor x)))
 
 (define-vop (signify-digit)
   (:translate sb-bignum:%fixnum-digit-with-correct-sign)
