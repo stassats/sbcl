@@ -1283,7 +1283,7 @@
          (y :scs (unsigned-reg))
          (carry-in :scs (unsigned-reg)))
   (:arg-types unsigned-num unsigned-num unsigned-num)
-  (:results (hi :scs (unsigned-reg) :from (:argument 2))
+  (:results (hi :scs (unsigned-reg) :from :load)
             (lo :scs (unsigned-reg) :from :load))
   (:result-types unsigned-num unsigned-num)
   (:generator 2

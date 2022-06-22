@@ -1670,7 +1670,7 @@
 ;;; eliminated. This improves the performance on some CL-BENCH tests
 ;;; by up to 50%, which is probably signigicant enough to justify the
 ;;; reduction in readability that was introduced. --JES, 2004-08-07
-(defun half-bignum-truncate (x y)
+(defun bignum-truncate (x y)
   (declare (type bignum x y))
   (declare (muffle-conditions compiler-note)) ; returns lispobj, so what.
   (let (truncate-x truncate-y)
@@ -1793,8 +1793,14 @@
                   ;; Add one for extra sign digit in case high bit is on.
                   (q (%allocate-bignum (1+ len-q)))
                   (half-len-x (* len-x 2))
+                  (half-len-x (if (zerop (%half-bignum-ref truncate-x (1- half-len-x)))
+                                  (- half-len-x 1)
+                                  half-len-x))
                   (half-len-y (* len-y 2))
-                  (half-len-q (* len-q 2))
+                  (half-len-y (if (zerop (%half-bignum-ref truncate-y (1- half-len-y)))
+                                  (1- half-len-y)
+                                  half-len-y))
+                  (half-len-q (- half-len-x half-len-y))
                   (k (1- half-len-q))
                   (y1 (%half-bignum-ref truncate-y (- half-len-y 1)))
                   (y2 (%half-bignum-ref truncate-y (- half-len-y 2)))
@@ -1808,19 +1814,19 @@
              ;; DO NOT ASSUME THAT %ALLOCATE-BIGNUM PREZEROS
              (setf (%bignum-ref q len-q) 0)
              (loop
-                 (setf (%half-bignum-ref q k)
-                       (try-bignum-truncate-guess
-                        ;; This modifies TRUNCATE-X. Must access
-                        ;; elements each pass.
-                        (bignum-truncate-guess y1 y2
-                                               (%half-bignum-ref truncate-x i)
-                                               (%half-bignum-ref truncate-x i-1)
-                                               (%half-bignum-ref truncate-x i-2))
-                        len-y low-x-digit))
-                 (cond ((zerop k) (return))
-                       (t (decf k)
-                          (decf low-x-digit)
-                          (shiftf i i-1 i-2 (1- i-2)))))
+              (setf (%half-bignum-ref q k)
+                    (try-bignum-truncate-guess
+                     ;; This modifies TRUNCATE-X. Must access
+                     ;; elements each pass.
+                     (bignum-truncate-guess y1 y2
+                                            (%half-bignum-ref truncate-x i)
+                                            (%half-bignum-ref truncate-x i-1)
+                                            (%half-bignum-ref truncate-x i-2))
+                     half-len-y low-x-digit))
+              (cond ((zerop k) (return))
+                    (t (decf k)
+                       (decf low-x-digit)
+                       (shiftf i i-1 i-2 (1- i-2)))))
              q))
         ;;; This takes a digit guess, multiplies it by TRUNCATE-Y for a
         ;;; result one greater in length than LEN-Y, and subtracts this result
@@ -1848,10 +1854,11 @@
              (dotimes (j len-y)
                (multiple-value-bind (high-digit low-digit)
                    (%half-multiply-and-add guess
-                                      (%half-bignum-ref truncate-y j)
-                                      carry-digit)
+                                           (%half-bignum-ref truncate-y j)
+                                           carry-digit)
                  (declare (type half-bignum-element-type high-digit low-digit))
                  (setf carry-digit high-digit)
+
                  (multiple-value-bind (x temp-borrow)
                      (%half-subtract-with-borrow (%half-bignum-ref truncate-x i)
                                                  low-digit
@@ -1864,6 +1871,7 @@
              (setf (%half-bignum-ref truncate-x i)
                    (%half-subtract-with-borrow (%half-bignum-ref truncate-x i)
                                                carry-digit borrow))
+
              ;; See whether guess is off by one, adding one
              ;; Y back in if necessary.
              (cond ((%half-digit-0-or-plusp (%half-bignum-ref truncate-x i))
@@ -1906,9 +1914,9 @@
          (shift-y-for-truncate (y)
            (let* ((len (%bignum-length y))
                   (last (%bignum-ref y (1- len))))
-             (declare (type bignum-length len)
-                      (type bignum-element-type last))
-             (- digit-size (integer-length last) 1)))
+             (- (/ digit-size 2)
+                (mod (integer-length last) 32)
+                1)))
          ;;; Stores two bignums into the truncation bignum buffers,
          ;;; shifting them on the way in. This assumes x and y are
          ;;; positive and at least two in length, and it assumes
