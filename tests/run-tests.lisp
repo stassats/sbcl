@@ -366,10 +366,13 @@
                   (let ((*print-pretty* nil))
                     (error "Mismatch on element index ~D of globaldb snapshot: diffs=~S"
                            index diff)))))))
+(defun start-gc ()
+  (defvar *gc* (sb-thread:make-thread (lambda () (loop (sleep 0.0001) (gc :full t))))))
 
 (defun pure-runner (files test-fun log)
   (unless files
     (return-from pure-runner))
+  (start-gc)
   (unless (boundp '*input-manifest*)
     (with-open-file (manifest "input-manifest.lisp-expr" :if-does-not-exist nil)
       (setf *input-manifest*
@@ -382,8 +385,8 @@
       (format t "// Running ~a in ~a evaluator mode~%"
               file *test-evaluator-mode*)
       (let* ((actually-pure
-              (not (or (search ".impure" (namestring file))
-                       (search ".impure-cload" (namestring file)))))
+               (not (or (search ".impure" (namestring file))
+                        (search ".impure-cload" (namestring file)))))
              (packages-to-use '("ASSERTOID" "TEST-UTIL"))
              (initial-packages (list-all-packages))
              (global-symbol-values (when actually-pure
@@ -392,11 +395,11 @@
              (globaldb-summary (when actually-pure
                                  (tersely-summarize-globaldb)))
              (test-package
-              (if actually-pure
-                  (make-package
-                   (format nil "TEST~36,5,'_R" (random (expt 36 5)))
-                   :use (append packages-to-use standard-use-list))
-                  (find-package "CL-USER"))))
+               (if actually-pure
+                   (make-package
+                    (format nil "TEST~36,5,'_R" (random (expt 36 5)))
+                    :use (append packages-to-use standard-use-list))
+                   (find-package "CL-USER"))))
         (setq *allowed-inputs*
               (if (eq *input-manifest* :ignore)
                   :any
@@ -457,15 +460,15 @@
               (sb-c::*policy-min* sb-c::*policy-min*)
               (sb-c::*policy-max* sb-c::*policy-max*))
           (restart-case
-            (handler-bind ((error (make-error-handler file)))
-              (let* ((sb-ext:*evaluator-mode* *test-evaluator-mode*)
-                     (*features*
-                       (if (eq sb-ext:*evaluator-mode* :interpret)
-                           (cons :interpreter *features*)
-                           *features*)))
-                (let ((start (get-internal-real-time)))
-                  (funcall test-fun file)
-                  (log-file-elapsed-time file start log))))
+              (handler-bind ((error (make-error-handler file)))
+                (let* ((sb-ext:*evaluator-mode* *test-evaluator-mode*)
+                       (*features*
+                         (if (eq sb-ext:*evaluator-mode* :interpret)
+                             (cons :interpreter *features*)
+                             *features*)))
+                  (let ((start (get-internal-real-time)))
+                    (funcall test-fun file)
+                    (log-file-elapsed-time file start log))))
             (skip-file ())))
         (sb-impl::disable-stepping)
         (sb-int:unencapsulate 'open 'open-guard)
@@ -512,6 +515,7 @@
 
 (defun impure-runner (files test-fun log)
   (when files
+    (start-gc)
     (format t "// Running impure tests (~a)~%" test-fun)
     (dolist (file files)
       (force-output)

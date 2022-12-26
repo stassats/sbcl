@@ -133,7 +133,8 @@ TEST_DIRECTORY=$junkdir SBCL_HOME=../obj/sbcl-home exec ../src/runtime/sbcl \
                          (when (or (search ".pure" filename) (search ".impure" filename))
                            (push filename missing-usage))))
                      (cond ((eq code 104)
-                            (format t "~A: success (~d msec)~%" filename et))
+                                ;                 (format t "~A: success (~d msec)~%" filename et)
+                                                 )
                            (t
                             (format t "~A~@[[~d]~]: status ~D (~d msec)~%"
                                       filename iteration code et)
@@ -169,7 +170,7 @@ TEST_DIRECTORY=$junkdir SBCL_HOME=../obj/sbcl-home exec ../src/runtime/sbcl \
             (setq file (car file))
             #+test-aprof
             (unless (search "allocator.pure" file)
-              (sb-aprof::aprof-start)
+              ;(sb-aprof::aprof-start)
               (proclaim '(optimize sb-c:instrument-consing)))
             ;; Send this to the log file, not the terminal
             (setq *debug-io* (make-two-way-stream (make-concatenated-stream)
@@ -184,7 +185,7 @@ TEST_DIRECTORY=$junkdir SBCL_HOME=../obj/sbcl-home exec ../src/runtime/sbcl \
                    ;; if exec fails, just exit with a wrong (not 104) status
                    (alien-funcall (extern-alien "_exit" (function (values) int)) 0))
                   (t
-                   #+test-sprof (sb-sprof:start-profiling :sample-interval .001)
+                   ;#+test-sprof (sb-sprof:start-profiling :sample-interval .001)
                    (setq sb-c::*static-vop-usage-counts* (make-hash-table :synchronized t))
                    (let ((*features* (cons :parallel-test-runner *features*)))
                      (pure-runner (list (concatenate 'string file ".lisp"))
@@ -207,7 +208,7 @@ TEST_DIRECTORY=$junkdir SBCL_HOME=../obj/sbcl-home exec ../src/runtime/sbcl \
                    (gc :gen 7)
                    (when (and (not (unexpected-failures)) *delete-logs*) (delete-file mylog))
                    (exit :code (if (unexpected-failures) 1 104))))))
-          (format t "~A: pid ~d~@[ (trial ~d)~]~%" (car file) pid (cdr file))
+          ; (format t "~A: pid ~d~@[ (trial ~d)~]~%" (car file) pid (cdr file))
           (incf subprocess-count)
           (push (list pid file (get-internal-real-time)) subprocess-list)))
       (loop (if (plusp subprocess-count) (wait) (return)))

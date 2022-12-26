@@ -305,7 +305,7 @@ static int verify_range(lispobj* start, lispobj* end, struct verify_state* state
         /* Technically we should wait until after performing the widetag validity
          * tests before calling the sizer.  Otherwise the lossage message would
          * not be as good as it could be. I guess that failure doesn't happen much */
-        long nwords = object_size(where);
+        sword_t nwords = object_size(where);
         state->object_addr = where;
         state->object_header = is_cons_half(*where) ? 0 : *where;
         if (state->flags & VERIFYING_GENERATIONAL) {
@@ -452,8 +452,8 @@ int verify_heap(__attribute__((unused)) lispobj* cur_thread_approx_stackptr,
     if (verbose && state.nerrors==0) fprintf(stderr, " passed\n");
  out:
     if (state.nerrors && !(flags & VERIFY_DONT_LOSE)) {
-        // dump_spaces(&state, "verify failed");
-        lose("Verify failed: %d errors", state.nerrors);
+        hexdump_spaces(&state, "verify failed");
+        /* lose("Verify failed: %d errors", state.nerrors); */
     }
     return state.nerrors;
 }
@@ -585,15 +585,19 @@ void hexdump_spaces(struct verify_state* state, char *reason)
         fprintf(f, ")\n");
         lispobj *where = base;
         while (where<limit){
-            int nwords = object_size(where);
-            /* If your'e having trouble with a subset of objects, and you can get
-             * a reliable reproducer, this predicate can decide which objects to
-             * output in full. Generally you don't need that much output */
+            sword_t nwords = object_size(where);
             if (widetag_of(where) == FILLER_WIDETAG) {
                 lispobj* end = where + (1+HeaderValue(*where));
                 fprintf(f, " %06x: fill to %p\n", (int)(uword_t)where & 0xffffff, end);
-            } else if (dump_completely_p(where, state)) {
-                int i;
+
+            } 
+            /* If you're having trouble with a subset of objects, and you can get
+             * a reliable reproducer, this predicate can decide which objects to
+             * output in full. Generally you don't need that much output */
+            else if (dump_completely_p(where, state)) {
+                sword_t i;
+                fprintf(f, "%ld %ld %ld\n", nwords, vector_len(where), where[1]);
+                    
                 for(i=0;i<nwords;++i) {
                     uword_t word = where[i];
                     if (i==0)
@@ -616,8 +620,8 @@ void hexdump_spaces(struct verify_state* state, char *reason)
                 else if (card_dirtyp(addr_to_card_index(where)))
                     prefix = '|';
                 fprintf(f, "%c%06x: %"OBJ_FMTX, prefix, (int)(uword_t)where & 0xffffff, *where);
-                int i;
-                int boxed_nwords = nwords;
+                sword_t i;
+                sword_t boxed_nwords = nwords;
                 // This is just a heuristic guess of pointee generation.
                 // For code it's (mostly) right, for other things it's slightly less right
                 // because we're really not respecting the tagged or raw nature of each word.
@@ -633,7 +637,7 @@ void hexdump_spaces(struct verify_state* state, char *reason)
                 if (min_gen != 8)
                     fprintf(f, " (>g%d)\n", min_gen);
                 else
-                  fprintf(f, "\n");
+                    fprintf(f, "\n");
             }
             where += nwords;
         }
