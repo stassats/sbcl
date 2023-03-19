@@ -120,7 +120,9 @@
   (declare (type ctran start next) (type (or lvar null) result)
            (list body aux-vars aux-vals))
   (if (null aux-vars)
-      (let ((*lexenv* (make-lexenv :vars post-binding-lexenv)))
+      (let ((*lexenv* (if post-binding-lexenv
+                          (make-lexenv :vars post-binding-lexenv)
+                          *lexenv*)))
         (ir1-convert-progn-body start next result body))
       (let ((ctran (make-ctran))
             (fun-lvar (make-lvar))
@@ -216,7 +218,7 @@
                               :bind bind
                               :%source-name source-name
                               :%debug-name debug-name
-                              :lexenv (if local-policy
+                               :lexenv (if local-policy
                                           (make-lexenv :policy local-policy)
                                           *lexenv*)))
          (result-ctran (make-ctran))

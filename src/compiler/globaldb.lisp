@@ -578,10 +578,9 @@
                                     (delete name *recognized-declarations*))))))
 
 (setf (sb-int:info :declaration :known 'sb-c::tlab)
-      (lambda (res spec vars fvars)
+      (lambda (spec vars fvars)
         (declare (ignore vars fvars))
-        (sb-c::make-lexenv :default res
-                           :user-data `((:declare ,@spec)))))
+        (sb-c::augment-lexenv :user-data `((:declare ,@spec)))))
 
 ;;;; ":ALIEN-TYPE" subsection - Data pertaining to globally known alien-types.
 (define-info-type (:alien-type :kind)
