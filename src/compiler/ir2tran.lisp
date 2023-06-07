@@ -2220,6 +2220,28 @@ not stack-allocated LVAR ~S." source-lvar)))))
         (ir2-convert-template node block)
         (ir2-convert-full-call node block))))
 
+(defoptimizer (logand ir2-convert) ((x y) node block)
+  (block nil
+    (when (and (constant-lvar-p y)
+               (= (lvar-value y) most-positive-word)
+               (or (csubtypep (lvar-type x) (specifier-type 'word))
+                   (csubtypep (lvar-type x) (specifier-type 'sb-vm:signed-word))))
+      (let* ((lvar (node-lvar node))
+             (results (lvar-result-tns
+                       lvar
+                       (list (specifier-type 'word)))))
+             (vop sb-vm::word-move node block
+                  (lvar-tn node block x) (first results))
+             (move-lvar-result node block
+                               (lvar-result-tns
+                                lvar
+                                (list (specifier-type 'word)))
+                               lvar)
+             (return)))
+    (if (template-p (basic-combination-info node))
+        (ir2-convert-template node block)
+        (ir2-convert-full-call node block))))
+
 ;;; An identity to avoid complaints about constant modification
 (defoptimizer (ltv-wrapper ir2-convert) ((x) node block)
   (let* ((lvar (node-lvar node))
