@@ -2919,7 +2919,8 @@
 (defun overflow-transform-unknown-x (name x y node &optional swap)
   (delay-ir1-transform node :ir1-phases)
   (let ((type (single-value-type (node-derived-type node)))
-        (x-type (lvar-type x))
+        (x-type (and x
+                     (lvar-type x)))
         (y-type (lvar-type y)))
     (when (or (csubtypep type (specifier-type 'word))
               (csubtypep type (specifier-type 'sb-vm:signed-word))
@@ -2939,7 +2940,9 @@
                      (fixnump cast-high))
           (give-up-ir1-transform))
         (multiple-value-bind (y-low y-high) (if swap
-                                                (integer-type-numeric-bounds x-type)
+                                                (if x-type
+                                                    (integer-type-numeric-bounds x-type)
+                                                    (values 0 0))
                                                 (integer-type-numeric-bounds y-type))
           (unless (and (fixnump y-low)
                        (fixnump y-high))
@@ -2950,7 +2953,7 @@
                       (overflow+
                        (and (> y-low distance-high)
                             (< y-high distance-low)))
-                      (overflow-
+                      ((overflow- overflow-negate)
                        (if swap
                            (and (< y-high (+ (1+ most-positive-fixnum) cast-low))
                                 (> y-low (+ (1- most-negative-fixnum) cast-high)))
@@ -2972,18 +2975,28 @@
                         (if (typep type '(cons (eql satisfies)))
                             (funcall (second type) value)
                             (sb-xc:typep value type)))))))
-            (loop for vop in vops
-                  for (x-type y-type cast-type) = (fun-type-required (vop-info-type vop))
-                  when (and (csubtypep result-type (single-value-type (fun-type-returns (vop-info-type vop))))
-                            (if swap
+            (if x
+                (loop for vop in vops
+                      for (x-type y-type cast-type) = (fun-type-required (vop-info-type vop))
+                      when (and (csubtypep result-type (single-value-type (fun-type-returns (vop-info-type vop))))
+                                (if swap
+                                    (eq y-type *universal-type*)
+                                    (eq x-type *universal-type*))
+                                (and (subp x x-type)
+                                     (subp y y-type)))
+                      return `(%primitive ,(vop-info-name vop)
+                                          x y
+                                          ',(type-specifier cast))
+                      finally (give-up-ir1-transform))
+                (loop for vop in vops
+                      for (y-type cast-type) = (fun-type-required (vop-info-type vop))
+                      when (and (csubtypep result-type (single-value-type (fun-type-returns (vop-info-type vop))))
                                 (eq y-type *universal-type*)
-                                (eq x-type *universal-type*))
-                            (and (subp x x-type)
-                                 (subp y y-type)))
-                  return `(%primitive ,(vop-info-name vop)
-                                      x y
-                                      ',(type-specifier cast))
-                  finally (give-up-ir1-transform))))))))
+                                (subp y y-type))
+                      return `(%primitive ,(vop-info-name vop)
+                                          x
+                                          ',(type-specifier cast))
+                      finally (give-up-ir1-transform)))))))))
 
 (deftransform + ((x y) (t (or word sb-vm:signed-word))
                  * :node node :important nil)
@@ -3033,6 +3046,10 @@
 (deftransform %negate ((x) ((or word sb-vm:signed-word))
                        * :node node :important nil)
   (overflow-transform-1 'overflow-negate x node))
+
+(deftransform %negate ((x) *
+                       * :node node :important nil)
+  (overflow-transform-unknown-x 'overflow-negate nil x node t))
 
 ;;; These must come before the ones below, so that they are tried
 ;;; first.
