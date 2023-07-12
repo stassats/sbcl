@@ -806,7 +806,7 @@ be a lambda expression."
         (compiler-error "Malformed ~A bindings: ~S." context bindings))
       (multiple-value-call #'values
         (extract-letish-vars bindings context) forms declarations))))
-
+#+nil
 (def-ir1-translator let ((bindings &body body) start next result)
   "LET ({(var [value]) | var}*) declaration* form*
 
@@ -839,6 +839,51 @@ have been evaluated."
                  (reference-leaf start ctran fun-lvar fun)))
              (ir1-convert-combination-args fun-lvar ctran next result values
                                            :arg-source-forms bindings))))))
+
+(def-ir1-translator let ((bindings &body body) start next result)
+  "LET ({(var [value]) | var}*) declaration* form*
+
+During evaluation of the FORMS, bind the VARS to the result of evaluating the
+VALUE forms. The variables are bound in parallel after all of the VALUES forms
+have been evaluated."
+  (cond ((null bindings)
+         (ir1-translate-locally body start next result))
+        ;; This is just to avoid leaking non-standard special forms
+        ;; into macroexpanded code
+        #-c-stack-is-control-stack
+        ((and (equal bindings '((*alien-stack-pointer* *alien-stack-pointer*))))
+         (ir1-convert start next result
+                      (let ((nsp (gensym "NSP")))
+                        `(let ((,nsp (%primitive current-nsp)))
+                           (restoring-nsp ,nsp ,@body)))))
+        (t
+         (multiple-value-bind (vars values forms decls)
+             (parse-letish bindings body 'let)
+           (multiple-value-bind (lexenv result-type post-binding-lexenv)
+               (process-decls decls vars nil :binding-form-p t)
+             (declare (ignore result-type))
+             (let* ((ref-ctran (make-ctran))
+                    (fun-lvar (make-lvar))
+                    (fun-ref (reference-leaf start ref-ctran fun-lvar (find-constant nil)))
+                    (bind-ctran (make-ctran)))
+               (when (some #'lambda-var-dynamic-extent vars)
+                 (ctran-starts-block bind-ctran)
+                 (ctran-starts-block next))
+               (let* ((call (ir1-convert-combination-args fun-lvar ref-ctran bind-ctran nil values
+                                                          :arg-source-forms bindings))
+                      (fun (let ((*lexenv* lexenv))
+                             (ir1-convert-let-body
+                              forms
+                              vars
+                              result
+                              bind-ctran
+                              next
+                              call
+                              :post-binding-lexenv post-binding-lexenv
+                              :debug-name (debug-name 'let bindings)))))
+                 (setf (basic-combination-kind call) :local)
+                 (change-ref-leaf fun-ref fun)
+                 (propagate-to-args call fun))))))))
 
 (def-ir1-translator let* ((bindings &body body)
                           start next result)

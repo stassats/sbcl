@@ -692,7 +692,8 @@
                   (use-continuation ref ref-ctran ref-lvar)
                   (link-node-to-previous-ctran cast ref-ctran)
                   (use-continuation cast next result)))
-          (t (use-continuation ref next result)))))
+          (t (use-continuation ref next result)))
+    ref))
 
 ;;; Convert a reference to a symbolic constant or variable. If the
 ;;; symbol is entered in the LEXENV-VARS we use that definition,

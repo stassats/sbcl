@@ -20,7 +20,7 @@
 ;;;; stuff.
 (declaim (start-block ir1-convert-lambda ir1-convert-lambda-body
                       ir1-convert-aux-bindings varify-lambda-arg
-                      ir1-convert-lambdalike))
+                      ir1-convert-lambdalike ir1-convert-let-body))
 
 ;;; Return a VAR structure for NAME, filling in info if it is globally
 ;;; special. If it is losing, we punt with a COMPILER-ERROR.
@@ -279,6 +279,77 @@
     (link-blocks (component-head *current-component*) (node-block bind))
     (push lambda (component-new-functionals *current-component*))
 
+    lambda))
+
+(defun ir1-convert-let-body (body
+                             vars
+                             result-lvar
+                             start
+                             next
+                             call
+                             &key
+                               aux-vars
+                               aux-vals
+                               (source-name '.anonymous.)
+                               debug-name
+                               (note-lexical-bindings t)
+                               post-binding-lexenv
+                               local-policy
+                               value-source-forms)
+  (declare (list body vars aux-vars aux-vals))
+
+  ;; We're about to try to put new blocks into *CURRENT-COMPONENT*.
+  (aver-live-component *current-component*)
+
+  (let* ((bind (make-bind))
+         (lambda (make-clambda :vars vars
+                               :bind bind
+                               :%source-name source-name
+                               :%debug-name debug-name
+                               :lexenv (if local-policy
+                                           (make-lexenv :policy local-policy)
+                                           *lexenv*)
+                               :kind :let))
+         (home-lambda (node-home-lambda call)))
+    (mark-dynamic-extent-args call lambda)
+    (setf (lambda-home lambda) home-lambda)
+    (push lambda (lambda-lets home-lambda))
+    (setf (lambda-environment lambda) (lambda-environment home-lambda))
+    (setf (lambda-call-lexenv lambda) (node-lexenv call))
+
+    (collect ((svars)
+              (new-venv nil cons))
+
+      (dolist (var vars)
+        ;; As far as I can see, LAMBDA-VAR-HOME should never have
+        ;; been set before. Let's make sure. -- WHN 2001-09-29
+        (aver (not (lambda-var-home var)))
+        (setf (lambda-var-home var) lambda)
+        (let ((specvar (lambda-var-specvar var)))
+          (cond (specvar
+                 (svars var)
+                 (new-venv (cons (leaf-source-name specvar) specvar)))
+                (t
+                 (when note-lexical-bindings
+                   (note-lexical-binding (leaf-source-name var)))
+                 (new-venv (cons (leaf-source-name var) var))))))
+      (let ((*lexenv* (make-lexenv :vars (new-venv)
+                                   :lambda lambda
+                                   :cleanup nil)))
+        (setf (bind-lambda bind) lambda)
+        (setf (node-lexenv bind) *lexenv*)
+
+        (let ((postbind-ctran (make-ctran)))
+          (link-node-to-previous-ctran bind start)
+          (use-ctran bind postbind-ctran)
+          (ir1-convert-special-bindings postbind-ctran next
+                                        result-lvar body
+                                        aux-vars aux-vals (svars)
+                                        post-binding-lexenv
+                                        :value-source-forms value-source-forms))))
+    (setf (lambda-entries home-lambda)
+          (nconc (lambda-entries lambda)
+                 (shiftf (lambda-entries home-lambda) nil)))
     lambda))
 
 ;;; Entry point CLAMBDAs have a special kind
