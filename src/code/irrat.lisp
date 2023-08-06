@@ -44,6 +44,23 @@
                                            collect 'double-float)))
            ,@args))))))
 
+(defmacro def-math-rtnf (name num-args &optional wrapper)
+  (let ((function (symbolicate "%" (string-upcase name)))
+        (args (loop for i below num-args
+                    collect (intern (format nil "ARG~D" i)))))
+    `(progn
+       (declaim (inline ,function))
+       (defun ,function ,args
+         (declare (sb-c:flushable sb-c:%alien-funcall))
+         (truly-the ;; avoid checking the result
+          ,(type-specifier (fun-type-returns (info :function :type function)))
+          (alien-funcall
+           (extern-alien ,(format nil "~:[~;sb_~]~a" wrapper name)
+                         (function single-float
+                                   ,@(loop repeat num-args
+                                           collect 'single-float)))
+           ,@args))))))
+
 
 #+x86 ;; for constant folding
 (macrolet ((def (name ll)
@@ -92,6 +109,9 @@
 #-x86 (def-math-rtn "exp" 1)
 #-x86 (def-math-rtn "log" 1)
 #-x86 (def-math-rtn "log10" 1)
+
+(def-math-rtnf "log10f" 1)
+
 (def-math-rtn "pow" 2)
 #-(or x86 x86-64 arm-vfp arm64 riscv) (def-math-rtn "sqrt" 1)
 #-x86 (def-math-rtn "log1p" 1)

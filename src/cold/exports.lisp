@@ -1878,7 +1878,7 @@ is a good idea, but see SB-SYS re. blurring of boundaries.")
            "FIXNUM-MOD-P"
            "%HYPOT"
            "%INSTANCE-CAS"
-           "%LDB" "%LOG" "%LOGB" "%LOG10"
+           "%LDB" "%LOG" "%LOGB" "%LOG10" "%LOG10F"
            "%LAST0"
            "%LAST1"
            "%LASTN/FIXNUM"

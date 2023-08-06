@@ -555,6 +555,12 @@
   (def acosh %acosh float)
   (def atanh %atanh float))
 
+(deftransform log ((number base) (double-float (constant-arg (real 10 10))) double-float)
+  `(%log10 number))
+
+(deftransform log ((number base) (single-float (constant-arg (real 10 10))) single-float)
+  `(%log10f number))
+
 ;;; The argument range is limited on the x86 FP trig. functions. A
 ;;; post-test can detect a failure (and load a suitable result), but
 ;;; this test is avoided if possible.

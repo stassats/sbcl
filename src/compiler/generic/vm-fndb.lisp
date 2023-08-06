@@ -769,6 +769,10 @@
           (double-float) double-float
   (movable foldable flushable))
 
+(defknown (%log10f)
+          (single-float) single-float
+  (movable foldable flushable))
+
 (defknown (%sin %cos %tanh %sin-quick %cos-quick)
   (double-float) (double-float $-1.0d0 $1.0d0)
   (movable foldable flushable))
