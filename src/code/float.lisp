@@ -824,13 +824,15 @@
        (if (or (eql bits 0)
                (minusp exp))
            nil
-           (let ((int (if (minusp float) (- bits) bits)))
+           (let* ((int (if (minusp float) (- bits) bits))
+                  (int-len (integer-length int)))
              (and (= (truly-the bignum-length (bignum-integer-length bignum))
-                     (+ (integer-length int) exp))
+                     (+ int-len exp))
                   (sb-bignum::bignum-lower-bits-zero-p bignum exp)
                   (= int
                      (truly-the fixnum
-                                (sb-bignum::last-bignum-part=>fixnum exp bignum))))))))))
+                                (sb-bignum::last-bignum-part=>fixnum (1+ int-len) ;; plus the sign
+                                                                     exp bignum))))))))))
 
 #+64-bit
 (defun float-bignum-< (float bignum)
@@ -842,14 +844,15 @@
                (minusp exp))
            (bignum-plus-p bignum)
            (let* ((int (if (minusp float) (- bits) bits))
+                  (int-len (integer-length int))
                   (length-diff (- (truly-the bignum-length (bignum-integer-length bignum))
-                                  (+ (integer-length int) exp))))
+                                  (+ int-len exp))))
              (cond
                ((plusp length-diff) (bignum-plus-p bignum))
                ((minusp length-diff) (minusp float))
                (t
                 (let ((diff (- (truly-the fixnum
-                                          (sb-bignum::last-bignum-part=>fixnum exp bignum))
+                                          (sb-bignum::last-bignum-part=>fixnum (1+ int-len) exp bignum))
                                int)))
                   (cond ((plusp diff) t)
                         ((minusp diff) nil)
@@ -866,14 +869,15 @@
                (minusp exp))
            (not (bignum-plus-p bignum))
            (let* ((int (if (minusp float) (- bits) bits))
+                  (int-len (integer-length int))
                   (length-diff (- (truly-the bignum-length (bignum-integer-length bignum))
-                                  (+ (integer-length int) exp))))
+                                  (+ int-len exp))))
              (cond
                ((plusp length-diff) (not (bignum-plus-p bignum)))
                ((minusp length-diff) (not (minusp float)))
                (t
                 (let ((diff (- (truly-the fixnum
-                                          (sb-bignum::last-bignum-part=>fixnum exp bignum))
+                                          (sb-bignum::last-bignum-part=>fixnum (1+ int-len) exp bignum))
                                int)))
                   (cond ((plusp diff) nil)
                         ((minusp diff) t)))))))))))

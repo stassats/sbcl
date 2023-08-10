@@ -1409,7 +1409,7 @@
                    (shift (- length ,(const 'digits)))
                    ;; Get one more bit for rounding
                    (shifted (truly-the fixnum
-                                       (last-bignum-part=>fixnum (1- shift) abs-bignum)))
+                                       (last-bignum-part=>fixnum (1+ ,(const 'digits)) (1- shift) abs-bignum)))
                    ;; Cut off the hidden bit
                    (signif (ldb ,(const 'significand-byte) (ash shifted -1)))
                    (exp (truly-the (unsigned-byte ,(byte-size sb-vm:double-float-exponent-byte))
@@ -1659,30 +1659,22 @@
 
 ;;; Basically shift the bignum right by byte-pos, but assumes it's
 ;;; right at the end of the bignum.
-(defun last-bignum-part=>fixnum (byte-pos bignum)
+(defun last-bignum-part=>fixnum (byte-size byte-pos bignum)
   (declare (type bit-index byte-pos)
-           (bignum bignum)
-           (optimize speed))
-  (let ((n-digits (%bignum-length bignum)))
-    (multiple-value-bind (word-index bit-index) (floor byte-pos digit-size)
-      (cond ((<= bit-index (- digit-size sb-vm:n-fixnum-bits)) ; contained in one word
-             (sb-c::mask-signed-field sb-vm:n-fixnum-bits
-                                      (ash (%bignum-ref bignum word-index) (- bit-index))))
+           (type (integer 0 #.sb-vm:n-positive-fixnum-bits) byte-size)
+           (bignum bignum))
+  (multiple-value-bind (word-index bit-index) (floor byte-pos digit-size)
+    (let ((one (%bignum-ref bignum word-index)))
+      (cond ((<= (+ bit-index byte-size) digit-size) ; contained in one word
+             (truly-the fixnum (ash (sb-c::mask-signed-field digit-size one) (- bit-index))))
             (t
              ;; At least one bit is obtained from each of two words,
              ;; and not more than two words.
-             (let* ((low-part-size
-                      (truly-the (integer 1 #.(1- sb-vm:n-positive-fixnum-bits))
-                                 (- digit-size bit-index))))
-               (sb-c::mask-signed-field sb-vm:n-fixnum-bits
-                                        (logior
-                                         (let ((word-index (1+ word-index)))
-                                           (ash (if (< word-index n-digits) ; next word exists
-                                                    (%bignum-ref bignum word-index)
-                                                    (%sign-digit bignum n-digits))
-                                                low-part-size))
-                                         (ash (%bignum-ref bignum word-index)
-                                              (- bit-index))))))))))
+             (sb-c::mask-signed-field sb-vm:n-fixnum-bits
+                                      (logior
+                                       (ash (%bignum-ref bignum (1+ word-index))
+                                            (truly-the (integer 0 (#.digit-size)) (- digit-size bit-index)))
+                                       (ash one (- bit-index)))))))))
 
 ;;;; TRUNCATE
 
