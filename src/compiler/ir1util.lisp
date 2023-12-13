@@ -522,7 +522,7 @@
                              (constant-p (ref-leaf use))
                              #-sb-xc-host
                              (let ((value (constant-value (ref-leaf use))))
-                               (or (typep value '(or character sb-xc:fixnum #+64-bit single-float boolean))
+                               (or (sb-xc:typep value '(or character sb-xc:fixnum #+64-bit single-float boolean))
                                    (and (eql (generation-of value) sb-vm:+pseudo-static-generation+)
                                         (or (not (sb-c::producing-fasl-file))
                                             (and (symbolp value)
@@ -569,7 +569,12 @@
                                                                            %make-instance
                                                                            %make-instance/mixed
                                                                            %make-funcallable-instance
-                                                                           copy-structure))
+                                                                           copy-structure
+                                                                           copy-list
+                                                                           copy-tree
+                                                                           copy-seq
+                                                                           subseq
+                                                                           vector-subseq*))
                                 (and (lvar-fun-is (combination-fun allocator) '(sb-vm::splat))
                                      (let ((allocator (principal-lvar-ref-use
                                                        (principal-lvar (first (combination-args allocator))))))
@@ -602,13 +607,13 @@
                          (let ((previous-sets (lambda-var-constraints object-lambda-var)))
                            (cond ((consp previous-sets)
                                   (if (loop for (set var lvar) in previous-sets
-                                            thereis 
-                                            (and (or 
+                                            thereis
+                                            (and (or
                                                   ;; Writing the same value.
                                                   (eq var value-var)
                                                   ;; This value is born before a new value that was written previously.
                                                   (block nil
-                                                    (map-all-uses 
+                                                    (map-all-uses
                                                      (lambda (use)
                                                        (unless (and (allocator-p use)
                                                                     (born-before-p use))
