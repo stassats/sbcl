@@ -1316,7 +1316,8 @@
       (if error
           (values nil t)
           (values `(let ((,name ,object))
-                     (%typep-wrapper ,transform ,name ',type)))))))
+                     (declare (ignorable ,name))
+                     ,transform))))))
 
 ;;; These things will be removed by the tree shaker, so no #+ needed.
 (defvar *interesting-types* nil)
@@ -1708,4 +1709,9 @@
                    (when (< 0 power-of-two mod)
                      `(fixnum-mod-p x ,power-of-two))))))
             (t
-             (give-up-ir1-transform))))))
+             (give-up-ir1-transform)))))
+
+  (defoptimizer (fixnum-mod-p constraint-propagate-if)
+      ((x mod) node)
+    (when (constant-lvar-p mod)
+      (values x (specifier-type `(integer 0 ,(lvar-value mod)))))))
