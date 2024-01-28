@@ -116,8 +116,10 @@
 
 (defun control-order-successors (block successors)
   (if (and (= (length successors) 2)
-           (< (control-relevance-to block (first successors))
-              (control-relevance-to block (second successors))))
+           (or (and (block-likely (second successors))
+                    (not (block-likely (first successors))))
+               (< (control-relevance-to block (first successors))
+                  (control-relevance-to block (second successors)))))
       (list (second successors) (first successors))
       successors))
 

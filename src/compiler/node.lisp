@@ -383,7 +383,8 @@
 ;;;     - be in the process of being deleted, or
 ;;;     - have no successors.
 (!def-boolean-attribute block
-  reoptimize flush-p type-check delete-p)
+  reoptimize flush-p type-check delete-p
+  likely)
 
 (macrolet ((defattr (block-slot)
              `(defmacro ,block-slot (block)
@@ -393,7 +394,8 @@
   (defattr block-reoptimize)
   (defattr block-flush-p)
   (defattr block-type-check)
-  (defattr block-delete-p))
+  (defattr block-delete-p)
+  (defattr block-likely))
 
 ;;; The LOOP structure holds information about a loop.
 (defstruct (cloop (:conc-name loop-)

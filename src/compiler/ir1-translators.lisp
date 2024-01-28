@@ -37,6 +37,14 @@ otherwise evaluate ELSE and return its values. ELSE defaults to NIL."
          (node (make-if :test pred-lvar
                         :consequent then-block
                         :alternative else-block)))
+    (when (consp test)
+      (case (car test)
+        (likely
+         (setf (block-likely then-block) t)
+         (setf test (cadr test)))
+        (unlikely
+         (setf (block-likely else-block) t)
+         (setf test (cadr test)))))
     ;; IR1-CONVERT-MAYBE-PREDICATE requires DEST to be CIF, so the
     ;; order of the following two forms is important
     (setf (lvar-dest pred-lvar) node)

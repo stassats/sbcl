@@ -714,7 +714,7 @@ Case is ignored." t))
   "If char is a digit in the specified radix, returns the fixnum for which
 that digit stands, else returns NIL."
   (let ((code (char-code char)))
-    (if (<= code 1632) ;; (loop for code from 127 when (digit-char-p (code-char code)) return code)
+    (if (sb-c::likely (<= code 1632)) ;; (loop for code from 127 when (digit-char-p (code-char code)) return code)
         (let ((weight (- code 48)))
           (cond ((minusp weight) nil)
                 ((<= radix 10.)
@@ -735,6 +735,7 @@ that digit stands, else returns NIL."
   "All arguments must be integers. Returns a character object that represents
 a digit of the given weight in the specified radix. Returns NIL if no such
 character exists."
-  (and (typep weight 'fixnum)
-       (>= weight 0) (< weight radix) (< weight 36)
-       (code-char (if (< weight 10) (+ 48 weight) (+ 55 weight)))))
+  (when
+      (sb-c::likely (and (fixnump weight)
+                         (>= weight 0) (< weight radix) (< weight 36)))
+    (code-char (if (< weight 10) (+ 48 weight) (+ 55 weight)))))
