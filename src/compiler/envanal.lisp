@@ -48,7 +48,7 @@
 
   (find-lvar-dynamic-extents component)
   (find-cleanup-points component)
-  (tail-annotate component)
+  ;(tail-annotate component)
   (determine-lambda-var-and-nlx-extent component)
 
   (dolist (fun (component-lambdas component))

@@ -186,25 +186,27 @@
               return :unboxed)
         (find-if #'xep-p funs)
         (some (lambda (fun) (policy fun (>= insert-debug-catch 2))) funs)
-        (block punt
-          (dolist (fun funs t)
-            (dolist (ref (leaf-refs fun))
-              (let* ((lvar (node-lvar ref))
-                     (dest (and lvar (lvar-dest lvar))))
-                (flet ((all-returns-tail-calls-p (call)
-                         (let* ((lambda (combination-lambda call))
-                                (return (lambda-return lambda)))
-                           (when return
-                             (do-uses (node (return-result return) t)
-                               (unless (and (basic-combination-p node)
-                                            (eq (basic-combination-info node) :full))
-                                 (return)))))))
-                  (when (and (basic-combination-p dest)
-                             (not (node-tail-p dest))
-                             (eq (basic-combination-fun dest) lvar)
-                             (eq (basic-combination-kind dest) :local)
-                             (not (all-returns-tail-calls-p dest)))
-                    (return-from punt nil))))))))))
+        t
+        ;; (block punt
+        ;;   (dolist (fun funs t)
+        ;;     (dolist (ref (leaf-refs fun))
+        ;;       (let* ((lvar (node-lvar ref))
+        ;;              (dest (and lvar (lvar-dest lvar))))
+        ;;         (flet ((all-returns-tail-calls-p (call)
+        ;;                  (let* ((lambda (combination-lambda call))
+        ;;                         (return (lambda-return lambda)))
+        ;;                    (when return
+        ;;                      (do-uses (node (return-result return) t)
+        ;;                        (unless (and (basic-combination-p node)
+        ;;                                     (eq (basic-combination-info node) :full))
+        ;;                          (return)))))))
+        ;;           (when (and (basic-combination-p dest)
+        ;;                      (not (node-tail-p dest))
+        ;;                      (eq (basic-combination-fun dest) lvar)
+        ;;                      (eq (basic-combination-kind dest) :local)
+        ;;                      (not (all-returns-tail-calls-p dest)))
+        ;;             (return-from punt nil)))))))
+        )))
 
 ;;; If policy indicates, give an efficiency note about our inability to
 ;;; use the known return convention. We try to find a function in the

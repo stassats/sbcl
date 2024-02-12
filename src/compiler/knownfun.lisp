@@ -175,11 +175,11 @@
   (when (member 'flushable attributes)
     (pushnew 'unsafely-flushable attributes))
   ;; Needs to be supported by the call VOPs
-  #-(or arm64 x86-64)
+  ;#-(or arm64 x86-64)
   (setf attributes (remove 'no-verify-arg-count attributes))
-  #-(or arm64 x86-64)
+  ;#-(or arm64 x86-64)
   (setf attributes (remove 'unboxed-return attributes))
-  #-(or arm64 x86-64) ;; Needs to be supported by the call VOPs, sb-vm::fixed-call-arg-location
+  ;#-(or arm64 x86-64) ;; Needs to be supported by the call VOPs, sb-vm::fixed-call-arg-location
   (setf attributes (remove 'fixed-args attributes))
   (when (or (memq 'fixed-args attributes)
             (memq 'unboxed-return attributes))
