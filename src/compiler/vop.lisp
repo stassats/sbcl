@@ -107,9 +107,6 @@
 ;;; ENVIRONMENT-INFO
 ;;;    Holds the IR2-ENVIRONMENT structure.
 ;;;
-;;; TAIL-SET-INFO
-;;;    Holds the RETURN-INFO structure.
-;;;
 ;;; NLX-INFO-INFO
 ;;;    Holds the IR2-NLX-INFO structure.
 ;;;
@@ -460,7 +457,7 @@
 
 ;;; A RETURN-INFO is used by GTN to represent the return strategy and
 ;;; locations for all the functions in a given TAIL-SET. It is stored
-;;; in the TAIL-SET-INFO.
+;;; in the LAMBDA-RETURN-INFO.
 (defstruct (return-info (:copier nil))
   ;; The return convention used:
   ;; -- If :UNKNOWN, we use the standard return convention.

@@ -1018,7 +1018,7 @@
            (ir2-convert-tail-local-call node block fun))
           (t
            (let ((start (block-trampoline (lambda-block fun)))
-                 (returns (tail-set-info (lambda-tail-set fun)))
+                 (returns (lambda-return-info fun))
                  (lvar (node-lvar node)))
              (ecase (if returns
                         (return-info-kind returns)
@@ -1615,7 +1615,7 @@
          (env (environment-info (lambda-environment fun)))
          (old-fp (ir2-environment-old-fp env))
          (return-pc (ir2-environment-return-pc env))
-         (returns (tail-set-info (lambda-tail-set fun))))
+         (returns (lambda-return-info fun)))
     (cond
       ((or (eq (return-info-kind returns) :unboxed)
            (and (eq (return-info-kind returns) :fixed)
@@ -1715,8 +1715,6 @@
   (aver (basic-combination-args node))
   (let* ((start-lvar (lvar-info (first (basic-combination-args node))))
          (start (first (ir2-lvar-locs start-lvar)))
-         (tails (and (node-tail-p node)
-                     (lambda-tail-set (node-home-lambda node))))
          (lvar (node-lvar node))
          (2lvar (and lvar (lvar-info lvar)))
          (fun-lvar (basic-combination-fun node)))
@@ -1725,7 +1723,7 @@
       (aver (and (not named)
                  (eq (ir2-lvar-kind start-lvar) :unknown)))
       (cond
-       (tails
+       ((node-tail-p node)
         (let ((env (environment-info (node-environment node))))
           (vop tail-call-variable node block start fun
                (ir2-environment-old-fp env)

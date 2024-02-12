@@ -357,7 +357,7 @@ and no value was provided for it." name))))))))))
        :required (mapcar #'leaf-type (lambda-vars functional))
        :returns (if (eq (functional-kind functional) :deleted)
                     *empty-type*
-                    (tail-set-type (lambda-tail-set functional))))
+                    (lambda-return-type functional)))
       (let ((rest nil))
         (collect ((req)
                   (opt)
@@ -383,11 +383,7 @@ and no value was provided for it." name))))))))))
            :keywords (sb-kernel::intern-key-infos (keys))
            :keyp (optional-dispatch-keyp functional)
            :allowp (optional-dispatch-allowp functional)
-           :returns (let ((tail-set (lambda-tail-set
-                                     (optional-dispatch-main-entry functional))))
-                      (if tail-set
-                          (tail-set-type tail-set)
-                          *wild-type*)))))))
+           :returns (lambda-return-type (optional-dispatch-main-entry functional)))))))
 
 ;;;; approximate function types
 ;;;;

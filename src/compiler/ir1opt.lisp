@@ -657,20 +657,7 @@
 ;;;; local call return type propagation
 
 ;;; This function is called on RETURN nodes that have their REOPTIMIZE
-;;; flag set. It iterates over the uses of the RESULT, looking for
-;;; interesting stuff to update the TAIL-SET. If a use isn't a local
-;;; call, then we union its type together with the types of other such
-;;; uses. We assign to the RETURN-RESULT-TYPE the intersection of this
-;;; type with the RESULT's asserted type. We can make this
-;;; intersection now (potentially before type checking) because this
-;;; assertion on the result will eventually be checked (if
-;;; appropriate.)
-;;;
-;;; We call MAYBE-CONVERT-TAIL-LOCAL-CALL on each local non-MV
-;;; combination, which may change the successor of the call to be the
-;;; called function, and if so, checks if the call can become an
-;;; assignment. If we convert to an assignment, we abort, since the
-;;; RETURN has been deleted.
+;;; flag set. It iterates over the uses of the RESULT.
 (defun find-result-type (node)
   (declare (type creturn node))
   (let ((result (return-result node)))
@@ -679,44 +666,16 @@
         (let ((use-home (node-home-lambda use)))
           (cond ((or (eq (functional-kind use-home) :deleted)
                      (block-delete-p (node-block use))))
-                ((not (and (basic-combination-p use)
-                           (eq (basic-combination-kind use) :local)))
-                 (use-union (node-derived-type use)))
-                ((or (eq (functional-kind (combination-lambda use)) :deleted)
-                     (block-delete-p (lambda-block (combination-lambda use)))))
                 (t
-                 (aver (eq (lambda-tail-set use-home)
-                           (lambda-tail-set (combination-lambda use))))
-                 (when (combination-p use)
-                   (when (nth-value 1 (maybe-convert-tail-local-call use))
-                     (return-from find-result-type t)))))))
-      (let ((int
-             ;; (values-type-intersection
-             ;; (continuation-asserted-type result) ; FIXME -- APD, 2002-01-26
-             (use-union)
-              ;; )
-              ))
-        (setf (return-result-type node) int))))
+                 (use-union (node-derived-type use))))))
+      (setf (return-result-type node) (use-union))))
   nil)
 
-;;; Do stuff to realize that something has changed about the value
-;;; delivered to a return node. Since we consider the return values of
-;;; all functions in the tail set to be equivalent, this amounts to
-;;; bringing the entire tail set up to date. We iterate over the
-;;; returns for all the functions in the tail set, reanalyzing them
-;;; all (not treating NODE specially.)
-;;;
-;;; When we are done, we check whether the new type is different from
-;;; the old TAIL-SET-TYPE. If so, we set the type and also reoptimize
-;;; all the lvars for references to functions in the tail set. This
-;;; will cause IR1-OPTIMIZE-COMBINATION to derive the new type as the
-;;; results of the calls.
 (defun ir1-optimize-return (node)
   (declare (type creturn node))
   (let ((lambda (return-lambda node))
         single-value-p)
     (when (and
-           (singleton-p (tail-set-funs (lambda-tail-set lambda)))
            (dolist (ref (leaf-refs lambda)
                         (leaf-refs lambda))
              (let* ((lvar (node-lvar ref))
@@ -740,8 +699,7 @@
                        (setf (node-derived-type combination) type)
                        (principal-lvar-single-valuify (node-lvar combination))
                        (reoptimize-lvar (node-lvar combination))))
-                   (setf (return-result-type node) type
-                         (tail-set-type (lambda-tail-set lambda)) type)
+                   (setf (return-result-type node) type)
                    (do-uses (use lvar)
                      (reoptimize-node use))
                    (let ((defined-fun (and (functional-inline-expanded lambda)
@@ -774,25 +732,13 @@
                    (link-node-to-previous-ctran node ctran)
                    (erase-types *wild-type*)
                    (return-from ir1-optimize-return)))))))
-    (tagbody
-     :restart
-       (let* ((tails (lambda-tail-set lambda))
-              (funs (tail-set-funs tails)))
-         (collect ((res *empty-type* values-type-union))
-           (dolist (fun funs)
-             (let ((return (lambda-return fun)))
-               (when return
-                 (when (node-reoptimize return)
-                   (setf (node-reoptimize return) nil)
-                   (when (find-result-type return)
-                     (go :restart)))
-                 (res (return-result-type return)))))
-
-           (when (type/= (res) (tail-set-type tails))
-             (setf (tail-set-type tails) (res))
-             (dolist (fun (tail-set-funs tails))
-               (dolist (ref (leaf-refs fun))
-                 (reoptimize-lvar (node-lvar ref))))))))))
+    (let ((initial (return-result-type node)))
+      (when (node-reoptimize node)
+        (setf (node-reoptimize node) nil)
+        (find-result-type node)
+        (when (type/= initial (return-result-type node))
+          (dolist (ref (leaf-refs lambda))
+            (reoptimize-lvar (node-lvar ref))))))))
 
 ;;;; IF optimization
 
@@ -963,8 +909,7 @@
               (push lambda (lambda-lets (lambda-home original-lambda)))
               (push ref (lambda-refs lambda))
               (setf (combination-args call) (last all-args))
-              (setf (lambda-vars original-lambda) (last all-vars)
-                    (lambda-tail-set lambda) (make-tail-set :funs (list lambda)))
+              (setf (lambda-vars original-lambda) (last all-vars))
               (setf (bind-lambda bind) lambda)
               (loop for var in vars
                     do (setf (lambda-var-home var) lambda))
@@ -1062,9 +1007,7 @@
 ;;; -- If the exit node and its ENTRY have the same home lambda then
 ;;;    we know the exit is local, and can delete the exit. We change
 ;;;    uses of the Exit-Value to be uses of the original lvar,
-;;;    then unlink the node. If the exit is to a TR context, then we
-;;;    must do MERGE-TAIL-SETS on any local calls which delivered
-;;;    their value to this exit.
+;;;    then unlink the node.
 ;;; -- If there is no value (as in a GO), then we skip the value
 ;;;    semantics.
 ;;;
@@ -1454,7 +1397,7 @@
          (or (maybe-let-convert fun)
              (maybe-convert-to-assignment fun))
          (unless (member (functional-kind fun) '(:let :assignment :deleted))
-           (derive-node-type call (tail-set-type (lambda-tail-set fun))))))
+           (derive-node-type call (lambda-return-type fun)))))
       (:full
        (multiple-value-bind (leaf info)
            (multiple-value-bind (type name leaf asserted) (lvar-fun-type fun-lvar)
@@ -2191,11 +2134,6 @@
                  (add-lvar-use cast lvar)))))
       (delete-ref ref)
       (unlink-node ref)
-      (when (return-p dest)
-        (do-uses (use lvar)
-          (when (and (basic-combination-p use)
-                     (eq (basic-combination-kind use) :local))
-            (merge-tail-sets use))))
       (reoptimize-lvar lvar)
       t)))
 
@@ -2828,37 +2766,28 @@
            ;; (if x (the vector y) #())
            (let ((atype (cast-asserted-type cast))
                  (ctran (node-next cast))
-                 (dest (and lvar
-                            (lvar-dest lvar)))
                  next-block)
-             (collect ((merges))
-               (do-uses (use value)
-                 (let ((type (node-derived-type use)))
-                   (when (and (neq type *empty-type*)
-                              (values-subtypep (node-derived-type use) atype)
-                              (immediately-used-p value use))
-                     (unless next-block
-                       (when ctran (ensure-block-start ctran))
-                       (setq next-block (first (block-succ (node-block cast))))
-                       (ensure-block-start (node-prev cast))
-                       (reoptimize-lvar lvar)
-                       (setf (lvar-%derived-type value) nil))
-                     (%delete-lvar-use use)
-                     (add-lvar-use use lvar)
-                     (unlink-blocks (node-block use) (node-block cast))
-                     (link-blocks (node-block use) next-block)
-                     ;; At least one use is good, downgrade any possible
-                     ;; type conflicts to style warnings.
-                     (setf (cast-silent-conflict cast)
-                           (if (cast-mismatch-from-inlined-p cast use)
-                               t
-                               :style-warning))
-                     (when (and (return-p dest)
-                                (basic-combination-p use)
-                                (eq (basic-combination-kind use) :local))
-                       (merges use)))))
-               (dolist (use (merges))
-                 (merge-tail-sets use))))))))
+             (do-uses (use value)
+               (let ((type (node-derived-type use)))
+                 (when (and (neq type *empty-type*)
+                            (values-subtypep (node-derived-type use) atype)
+                            (immediately-used-p value use))
+                   (unless next-block
+                     (when ctran (ensure-block-start ctran))
+                     (setq next-block (first (block-succ (node-block cast))))
+                     (ensure-block-start (node-prev cast))
+                     (reoptimize-lvar lvar)
+                     (setf (lvar-%derived-type value) nil))
+                   (%delete-lvar-use use)
+                   (add-lvar-use use lvar)
+                   (unlink-blocks (node-block use) (node-block cast))
+                   (link-blocks (node-block use) next-block)
+                   ;; At least one use is good, downgrade any possible
+                   ;; type conflicts to style warnings.
+                   (setf (cast-silent-conflict cast)
+                         (if (cast-mismatch-from-inlined-p cast use)
+                             t
+                             :style-warning))))))))))
 
 (defun ir1-optimize-cast (cast)
   (declare (type cast cast))

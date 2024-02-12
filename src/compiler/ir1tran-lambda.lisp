@@ -254,9 +254,7 @@
         (setf (node-lexenv bind) *lexenv*)
 
         (let ((block (ctran-starts-block result-ctran)))
-          (let ((return (make-return :result result-lvar :lambda lambda))
-                (tail-set (make-tail-set :funs (list lambda))))
-            (setf (lambda-tail-set lambda) tail-set)
+          (let ((return (make-return :result result-lvar :lambda lambda)))
             (setf (lambda-return lambda) return)
             (setf (lvar-dest result-lvar) return)
             (link-node-to-previous-ctran return result-ctran)

@@ -579,13 +579,32 @@
         (let ((result (return-result ret)))
           (do-uses (use result)
             (when (and (immediately-used-p result use)
-                       (or (not (eq (node-derived-type use) *empty-type*))
-                           (not (basic-combination-p use))
-                           ;; This prevents external entry points from
-                           ;; showing up in the backtrace: we always
-                           ;; want tail calls inside XEPs to the
-                           ;; functions they are the entry point for.
-                           (eq (basic-combination-kind use) :local)))
+                       (and (or (not (eq (node-derived-type use) *empty-type*))
+                                (not (basic-combination-p use))
+                                ;; This prevents external entry points from
+                                ;; showing up in the backtrace: we always
+                                ;; want tail calls inside XEPs to the
+                                ;; functions they are the entry point for.
+                                (eq (basic-combination-kind use) :local))))
+              (when (and (basic-combination-p use)
+                         (eq (basic-combination-kind use) :local))
+                (let ((callee (combination-lambda use)))
+                  (cond ((and (lambda-tail-set callee)
+                              (lambda-tail-set fun))
+                         (setf (lambda-tail-set callee)
+                               (setf (lambda-tail-set fun)
+                                     (xset-union (lambda-tail-set callee)
+                                                 (lambda-tail-set fun)))))
+                        ((lambda-tail-set callee)
+                         (add-to-xset fun (lambda-tail-set callee))
+                         (setf (lambda-tail-set fun) (lambda-tail-set callee)))
+                        ((lambda-tail-set fun)
+                         (add-to-xset callee (lambda-tail-set fun))
+                         (setf (lambda-tail-set callee) (lambda-tail-set fun)))
+                        (t
+                         (setf (lambda-tail-set callee)
+                               (setf (lambda-tail-set fun)
+                                     (sb-kernel::!new-xset (list callee fun) 2)))))))
               (setf (node-tail-p use) t)))))))
   ;; Tail call non returning functions if no debugging is wanted.
   (dolist (block (block-pred (component-tail component)))

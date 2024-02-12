@@ -174,9 +174,10 @@
 ;;;    a non-standard convention.
 ;;; -- We're compiling with RETURN-FROM-FRAME instrumentation, which
 ;;;    only works (on x86, x86-64, arm) for the standard convention.
-(defun use-standard-returns (tails)
-  (declare (type tail-set tails))
-  (let ((funs (tail-set-funs tails)))
+(defun use-standard-returns (fun)
+  (let ((funs (if (lambda-tail-set fun)
+                  (xset-members (lambda-tail-set fun))
+                  (list fun))))
     (or (loop for fun in funs
               for fun-info = (info :function :info (functional-%source-name fun))
               when
@@ -210,12 +211,13 @@
 ;;; use the known return convention. We try to find a function in the
 ;;; tail set with non-constant return values to use as context. If
 ;;; there is no such function, then be more vague.
-(defun return-value-efficiency-note (tails)
-  (declare (type tail-set tails))
-  (let ((funs (tail-set-funs tails)))
+(defun return-value-efficiency-note (fun)
+  (let ((funs (if (lambda-tail-set fun)
+                  (xset-members (lambda-tail-set fun))
+                  (list fun))))
     (when (policy (lambda-bind (first funs))
-                  (> (max speed space)
-                     inhibit-warnings))
+              (> (max speed space)
+                 inhibit-warnings))
       (dolist (fun funs
                    (let ((*compiler-error-context* (lambda-bind (first funs))))
                      (compiler-notify
@@ -238,19 +240,27 @@
                   (return)))))))))
   (values))
 
+(defun lambda-tail-set-type (lambda)
+  (if (lambda-tail-set lambda)
+      (collect ((res *empty-type* values-type-union))
+        (map-xset (lambda (fun)
+                    (res (lambda-return-type fun)))
+                  (lambda-tail-set lambda))
+        (res))
+      (lambda-return-type lambda)))
+
 ;;; Return a RETURN-INFO structure describing how we should return
 ;;; from functions in the specified tail set. We use the unknown
 ;;; values convention if the number of values is unknown, or if it is
 ;;; a good idea for some other reason. Otherwise we allocate passing
 ;;; locations for a fixed number of values.
-(defun return-info-for-set (tails)
-  (declare (type tail-set tails))
-  (multiple-value-bind (types count) (values-types (tail-set-type tails))
+(defun return-info-for-set (lambda)
+  (multiple-value-bind (types count) (values-types (lambda-tail-set-type lambda))
     (let ((ptypes (mapcar #'primitive-type types))
-          (use-standard (use-standard-returns tails)))
+          (use-standard (use-standard-returns lambda)))
       (when (and (eq count :unknown) (not use-standard)
-                 (not (eq (tail-set-type tails) *empty-type*)))
-        (return-value-efficiency-note tails))
+                 (not (eq (lambda-return-type lambda) *empty-type*)))
+        (return-value-efficiency-note lambda))
       (cond ((eq use-standard :unboxed)
              (make-return-info :kind :unboxed
                                :count count
@@ -275,11 +285,14 @@
 ;;; If TAIL-SET doesn't have any INFO, then make a RETURN-INFO for it.
 (defun assign-return-locations (fun)
   (declare (type clambda fun))
-  (let* ((tails (lambda-tail-set fun))
-         (returns (or (tail-set-info tails)
-                      (setf (tail-set-info tails)
-                            (return-info-for-set tails))))
+  (let* ((returns (or (lambda-return-info fun)
+                      (setf (lambda-return-info fun)
+                            (return-info-for-set fun))))
          (return (lambda-return fun)))
+    (when (lambda-tail-set fun)
+      (map-xset (lambda (fun)
+                  (setf (lambda-return-info fun) returns))
+                (lambda-tail-set fun)))
     (when (and return
                (xep-p fun))
       (aver (memq (return-info-kind returns) '(:unknown :unboxed)))))

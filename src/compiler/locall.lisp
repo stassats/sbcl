@@ -84,47 +84,15 @@
                (push arg (dynamic-extent-values dynamic-extent)))))
   (values))
 
-;;; This function handles merging the tail sets if CALL is potentially
-;;; tail-recursive, and is a call to a function with a different
-;;; TAIL-SET than CALL's FUN. This must be called whenever we alter
-;;; IR1 so as to place a local call in what might be a tail-recursive
-;;; context. Note that any call which returns its value to a RETURN is
-;;; considered potentially tail-recursive, since any implicit MV-PROG1
-;;; might be optimized away.
-;;;
-;;; We destructively modify the set for the calling function to
-;;; represent both, and then change all the functions in callee's set
-;;; to reference the first. If we do merge, we reoptimize the
-;;; RETURN-RESULT lvar to cause IR1-OPTIMIZE-RETURN to recompute the
-;;; tail set type.
-(defun merge-tail-sets (call &optional (new-fun (combination-lambda call)))
-  (declare (type basic-combination call) (type clambda new-fun))
-  (let ((return (node-dest call)))
-    (when (and (return-p return)
-               (not (memq (functional-kind new-fun) '(:deleted :zombie))))
-      (let ((call-set (lambda-tail-set (node-home-lambda call)))
-            (fun-set (lambda-tail-set new-fun)))
-        (unless (eq call-set fun-set)
-          (let ((funs (tail-set-funs fun-set)))
-            (dolist (fun funs)
-              (setf (lambda-tail-set fun) call-set))
-            (setf (tail-set-funs call-set)
-                  (nconc (tail-set-funs call-set) funs)))
-          (reoptimize-lvar (return-result return))
-          t)))))
-
 ;;; Convert a combination into a local call. We PROPAGATE-TO-ARGS, set
 ;;; the combination kind to :LOCAL, add FUN to the CALLS of the
-;;; function that the call is in, call MERGE-TAIL-SETS, then replace
+;;; function that the call is in then replace
 ;;; the function in the REF node with the new function.
 ;;;
 ;;; We change the REF last, since changing the reference can trigger
 ;;; LET conversion of the new function, but will only do so if the
 ;;; call is local. Note that the replacement may trigger LET
-;;; conversion or other changes in IR1. We must call MERGE-TAIL-SETS
-;;; with NEW-FUN before the substitution, since after the substitution
-;;; (and LET conversion), the call may no longer be recognizable as
-;;; tail-recursive.
+;;; conversion or other changes in IR1.
 (defun convert-call (ref call fun)
   (declare (type ref ref) (type combination call) (type clambda fun))
   (propagate-to-args call fun)
@@ -135,7 +103,6 @@
   (node-ends-block call)
   (sset-adjoin fun (lambda-calls-or-closes (node-home-lambda call)))
   (mark-dynamic-extent-args call fun)
-  (merge-tail-sets call fun)
   (change-ref-leaf ref fun)
   (values))
 
@@ -574,8 +541,6 @@
 ;;;
 ;;; We also use variable types for the called function to construct an
 ;;; assertion for the values lvar.
-;;;
-;;; See CONVERT-CALL for additional notes on MERGE-TAIL-SETS, etc.
 (defun convert-mv-call (ref call fun)
   (declare (type ref ref) (type mv-combination call) (type functional fun))
   (when (and (looks-like-an-mv-bind fun)
@@ -591,7 +556,6 @@
         (aver (= (optional-dispatch-min-args fun) 0))
         (setf (basic-combination-kind call) :local)
         (sset-adjoin ep (lambda-calls-or-closes (node-home-lambda call)))
-        (merge-tail-sets call ep)
         (change-ref-leaf ref ep)
         ;; For constraints
         (node-ends-block call)
@@ -988,9 +952,6 @@
           (delete clambda (component-lambdas component)))
     (setf (component-reanalyze component) t))
   (setf (lambda-call-lexenv clambda) (node-lexenv call))
-  (let ((tails (lambda-tail-set clambda)))
-    (setf (tail-set-funs tails)
-          (delete clambda (tail-set-funs tails))))
   (let* ((home (node-home-lambda call))
          (home-env (lambda-environment home))
          (env (lambda-environment clambda)))
@@ -1082,60 +1043,11 @@
 
   (values))
 
-;;; We are converting FUN to be a LET when the call is in a non-tail
-;;; position. Any previously tail calls in FUN are no longer tail
-;;; calls, and must be restored to normal calls which transfer to
-;;; NEXT-BLOCK (FUN's return point.) We can't do this by DO-USES on
-;;; the RETURN-RESULT, because the return might have been deleted (if
-;;; all calls were TR.)
-(defun unconvert-tail-calls (fun call next-block)
-  (let (maybe-terminate)
-    (do-sset-elements (called (lambda-calls-or-closes fun))
-      (when (lambda-p called)
-        (dolist (ref (leaf-refs called))
-          (let ((this-call (node-dest ref)))
-            (when (and this-call
-                       (node-tail-p this-call)
-                       (not (node-to-be-deleted-p this-call))
-                       (eq (node-home-lambda this-call) fun))
-              (setf (node-tail-p this-call) nil)
-              (ecase (functional-kind called)
-                ((nil :cleanup :optional)
-                 (let ((block (node-block this-call))
-                       (lvar (node-lvar call)))
-                   (unlink-blocks block (first (block-succ block)))
-                   (link-blocks block next-block)
-                   (if (eq (node-derived-type this-call) *empty-type*)
-                       ;; Delay terminating the block, because there may be more calls
-                       ;; to be processed here and this may prematurely delete NEXT-BLOCK
-                       ;; before we attach more preceding blocks to it.
-                       ;; Although probably if one call to a function
-                       ;; is derived to be NIL all other calls would
-                       ;; be NIL too, but that may not be available at the same time.
-                       ;; (Or something is smart in the future to
-                       ;; derive different results from different
-                       ;; calls.)
-                       (push this-call maybe-terminate)
-                       (add-lvar-use this-call lvar))))
-                (:deleted)
-                ;; The called function might be an assignment in the
-                ;; case where we are currently converting that function.
-                ;; In steady-state, assignments never appear as a called
-                ;; function.
-                (:assignment
-                 (aver (eq called fun)))))))))
-    maybe-terminate))
-
 ;;; Deal with returning from a LET or assignment that we are
 ;;; converting. FUN is the function we are calling, CALL is a call to
 ;;; FUN, and NEXT-BLOCK is the return point for a non-tail call, or
 ;;; NULL if call is a tail call.
 ;;;
-;;; If the call is not a tail call, then we must do
-;;; UNCONVERT-TAIL-CALLS, since a tail call is a call which returns
-;;; its value out of the enclosing non-let function. When call is
-;;; non-TR, we must convert it back to an ordinary local call, since
-;;; the value must be delivered to the receiver of CALL's value.
 ;;;
 ;;; We do different things depending on whether the caller and callee
 ;;; have returns left:
@@ -1152,9 +1064,7 @@
 (defun move-return-stuff (fun call next-block)
   (declare (type clambda fun) (type basic-combination call)
            (type (or cblock null) next-block))
-  (let* ((maybe-terminate-calls (when next-block
-                                  (unconvert-tail-calls fun call next-block)))
-         (return (lambda-return fun))
+  (let* ((return (lambda-return fun))
          (call-fun (node-home-lambda call))
          (call-return (lambda-return call-fun)))
     (when (and call-return
@@ -1174,10 +1084,7 @@
            (aver (node-tail-p call))
            (setf (lambda-return call-fun) return)
            (setf (return-lambda return) call-fun)
-           (setf (lambda-return fun) nil)))
-    ;; Delayed because otherwise next-block could become deleted
-    (dolist (call maybe-terminate-calls)
-      (maybe-terminate-block call nil)))
+           (setf (lambda-return fun) nil))))
   (delete-lvar-use call)      ; LET call does not have value semantics
   (values))
 
@@ -1364,34 +1271,6 @@
              (when (entry-exits (cleanup-mess-up cleanup))
                (return nil)))
             (t (return nil)))))))
-
-;;; If a potentially TR local call really is TR, then convert it to
-;;; jump directly to the called function. We also call
-;;; MAYBE-CONVERT-TO-ASSIGNMENT. The first value is true if we
-;;; tail-convert. The second is the value of M-C-T-A.
-(defun maybe-convert-tail-local-call (call)
-  (declare (type combination call))
-  (let ((return (lvar-dest (node-lvar call)))
-        (fun (combination-lambda call)))
-    (aver (return-p return))
-    (when (and (not (node-tail-p call)) ; otherwise already converted
-               ;; this is a tail call
-               (immediately-used-p (return-result return) call)
-               (only-harmless-cleanups (node-block call)
-                                       (node-block return))
-               ;; If the call is in an XEP, we might decide to make it
-               ;; non-tail so that we can use known return inside the
-               ;; component.
-               (not (eq (functional-kind (node-home-lambda call))
-                        :external))
-               (not (block-delete-p (lambda-block fun))))
-      (node-ends-block call)
-      (let ((block (node-block call)))
-        (setf (node-tail-p call) t)
-        (unlink-blocks block (first (block-succ block)))
-        (link-blocks block (lambda-block fun))
-        (delete-lvar-use call)
-        (values t (maybe-convert-to-assignment fun))))))
 
 ;;; This is called when we believe it might make sense to convert
 ;;; FUN to an assignment. All this function really does is

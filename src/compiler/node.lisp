@@ -702,33 +702,6 @@
   (closure :test closure)
   (nlx-info :test nlx-info))
 
-;;; An TAIL-SET structure is used to accumulate information about
-;;; tail-recursive local calls. The "tail set" is effectively the
-;;; transitive closure of the "is called tail-recursively by"
-;;; relation.
-;;;
-;;; All functions in the same tail set share the same TAIL-SET
-;;; structure. Initially each function has its own TAIL-SET, but when
-;;; IR1-OPTIMIZE-RETURN notices a tail local call, it joins the tail
-;;; sets of the called function and the calling function.
-;;;
-;;; The tail set is somewhat approximate, because it is too early to
-;;; be sure which calls will be tail-recursive. Any call that *might*
-;;; end up tail-recursive causes TAIL-SET merging.
-(defstruct (tail-set)
-  ;; a list of all the LAMBDAs in this tail set
-  (funs nil :type list)
-  ;; our current best guess of the type returned by these functions.
-  ;; This is the union across all the functions of the return node's
-  ;; RESULT-TYPE, excluding local calls.
-  (type *wild-type* :type ctype)
-  ;; some info used by the back end
-  (info nil))
-(defprinter (tail-set :identity t)
-  funs
-  type
-  (info :test info))
-
 ;;; An NLX-INFO structure is used to collect various information about
 ;;; non-local exits. This is effectively an annotation on the
 ;;; continuation, although it is accessed by searching in the
@@ -1183,9 +1156,10 @@
   ;; depends on in such a way that DFO shouldn't put them in separate
   ;; components.
   (calls-or-closes (make-sset) :type (or null sset))
-  ;; the TAIL-SET that this LAMBDA is in. This is null during creation
-  ;; and in let lambdas.
-  (tail-set nil :type (or tail-set null))
+  ;; the tail set that this LAMBDA is in.
+  ;; Filled by tail-annotate.
+  (tail-set nil :type (or xset null))
+  (return-info nil :type (or return-info null))
   ;; the structure which represents the phsical environment that this
   ;; function's variables are allocated in. This is filled in by
   ;; environment analysis. In a LET, this is EQ to our home's
@@ -1764,4 +1738,4 @@
 ;;;; Freeze some structure types to speed type testing.
 
 (declaim (freeze-type node lexenv ctran lvar cblock component cleanup
-                      environment tail-set nlx-info leaf))
+                      environment nlx-info leaf))

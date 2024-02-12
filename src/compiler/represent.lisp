@@ -321,17 +321,15 @@
       ((null ref))
     (let* ((lambda (block-home-lambda
                     (ir2-block-block
-                     (vop-block (tn-ref-vop ref)))))
-           (tails (lambda-tail-set lambda)))
+                     (vop-block (tn-ref-vop ref))))))
       (flet ((frob (fun)
                (setf (ir2-environment-number-stack-p
                       (environment-info
                        (lambda-environment fun)))
                      t)))
-        (frob lambda)
-        (when tails
-          (dolist (fun (tail-set-funs tails))
-            (frob fun))))))
+        (if (lambda-tail-set fun)
+            (map-xset #'frob (lambda-tail-set fun))
+            (frob fun)))))
 
   (values))
 
