@@ -767,7 +767,7 @@
         (locall-analyze-component *current-component*))))
   (values))
 
-;;; Delete NODE and VALUE. It may result in some calls becoming tail.
+;;; Delete NODE and VALUE.
 (defun delete-filter (node lvar value)
   (aver (eq (lvar-dest value) node))
   (aver (eq (node-lvar node) lvar))
@@ -781,10 +781,7 @@
                 (substitute-lvar-uses lvar value
                                       (eq (lvar-uses lvar) node))
                 (%delete-lvar-use node)
-                (prog1
-                    (unlink-node node)
-                  (dolist (merge (merges))
-                    (merge-tail-sets merge)))))
+                (unlink-node node)))
         (t (flush-dest value)
            (unlink-node node))))
 
@@ -1706,10 +1703,6 @@
            (mark-for-deletion return-block)
            (unlink-blocks return-block (component-tail component)))
          (setf (component-reanalyze component) t)
-         (let ((tails (lambda-tail-set clambda)))
-           (setf (tail-set-funs tails)
-                 (delete clambda (tail-set-funs tails)))
-           (setf (lambda-tail-set clambda) nil))
          (setf (component-lambdas component)
                (delq1 clambda (component-lambdas component))))))
 
@@ -1957,14 +1950,18 @@
 ;;; Do stuff to indicate that the return node NODE is being deleted.
 (defun delete-return (node)
   (declare (type creturn node))
-  (let* ((fun (return-lambda node))
-         (tail-set (lambda-tail-set fun)))
+  (let* ((fun (return-lambda node)))
     (aver (lambda-return fun))
     (setf (lambda-return fun) nil)
-    (when (and tail-set (not (find-if #'lambda-return
-                                      (tail-set-funs tail-set))))
-      (setf (tail-set-type tail-set) *empty-type*)))
+    (dolist (ref (leaf-refs fun))
+      (reoptimize-lvar (node-lvar ref))))
   (values))
+
+(defun lambda-return-type (lambda)
+  (let ((return (lambda-return lambda)))
+    (if return
+        (return-result-type return)
+        *empty-type*)))
 
 ;;; If any of the VARS in FUN was never referenced and was not
 ;;; declared IGNORE, then complain.

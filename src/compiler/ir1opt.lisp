@@ -775,25 +775,13 @@
                    (link-node-to-previous-ctran node ctran)
                    (erase-types *wild-type*)
                    (return-from ir1-optimize-return)))))))
-    (tagbody
-     :restart
-       (let* ((tails (lambda-tail-set lambda))
-              (funs (tail-set-funs tails)))
-         (collect ((res *empty-type* values-type-union))
-           (dolist (fun funs)
-             (let ((return (lambda-return fun)))
-               (when return
-                 (when (node-reoptimize return)
-                   (setf (node-reoptimize return) nil)
-                   (when (find-result-type return)
-                     (go :restart)))
-                 (res (return-result-type return)))))
-
-           (when (type/= (res) (tail-set-type tails))
-             (setf (tail-set-type tails) (res))
-             (dolist (fun (tail-set-funs tails))
-               (dolist (ref (leaf-refs fun))
-                 (reoptimize-lvar (node-lvar ref))))))))))
+    (let ((initial (return-result-type node)))
+      (when (node-reoptimize node)
+        (setf (node-reoptimize node) nil)
+        (find-result-type node)
+        (when (type/= initial (return-result-type node))
+          (dolist (ref (leaf-refs lambda))
+            (reoptimize-lvar (node-lvar ref))))))))
 
 ;;;; IF optimization
 
@@ -1455,7 +1443,7 @@
          (or (maybe-let-convert fun)
              (maybe-convert-to-assignment fun))
          (unless (member (functional-kind fun) '(:let :assignment :deleted))
-           (derive-node-type call (tail-set-type (lambda-tail-set fun))))))
+           (derive-node-type call (lambda-return-type fun)))))
       (:full
        (multiple-value-bind (leaf info)
            (multiple-value-bind (type name leaf asserted) (lvar-fun-type fun-lvar)

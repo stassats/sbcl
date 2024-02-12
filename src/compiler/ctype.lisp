@@ -357,7 +357,7 @@ and no value was provided for it." name))))))))))
        :required (mapcar #'leaf-type (lambda-vars functional))
        :returns (if (eq (functional-kind functional) :deleted)
                     *empty-type*
-                    (tail-set-type (lambda-tail-set functional))))
+                    (lambda-return-type functional)))
       (let ((rest nil))
         (collect ((req)
                   (opt)

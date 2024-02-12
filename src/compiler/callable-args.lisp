@@ -214,7 +214,7 @@
                                 (lambda-tail-set entry-fun))
                            (make-fun-type :wild-args t
                                           :returns
-                                          (tail-set-type (lambda-tail-set entry-fun))))
+                                          (lambda-return-type entry-fun)))
                           ((and asserted-type
                                 (not (or (constant-lvar-p lvar)
                                          (constant-p leaf))))
