@@ -435,10 +435,13 @@
   (declare (type component component) (type clambda fun)
            (type tn tn))
   (let ((leaf (tn-leaf tn)))
-    (dolist (tail-set-fun (tail-set-funs (lambda-tail-set fun)))
-      (let ((env (lambda-environment tail-set-fun)))
-        (when (memq leaf (environment-closure env))
-          (setup-environment-tn-conflicts component tn env nil))))))
+    (flet ((setup (fun)
+             (let ((env (lambda-environment fun)))
+               (when (memq leaf (environment-closure env))
+                 (setup-environment-tn-conflicts component tn env nil)))))
+      (if (lambda-tail-xset fun)
+          (map-xset #'setup (lambda-tail-xset fun))
+          (setup fun)))))
 
 ;;; Iterate over all the environment TNs, adding always-live conflicts
 ;;; as appropriate.

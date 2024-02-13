@@ -1197,7 +1197,8 @@
   ;; in effect.
   (call-lexenv nil :type (or lexenv null))
   (allow-instrumenting *allow-instrumenting* :type boolean)
-  (return-info nil :type (or return-info null)))
+  (return-info nil :type (or return-info null))
+  (tail-xset nil :type (or xset null)))
 (defprinter (clambda :conc-name lambda- :identity t
              :pretty-ir-printer (pretty-print-functional structure stream))
   %source-name
