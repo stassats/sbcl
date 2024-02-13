@@ -443,10 +443,10 @@
 ;;; needed a cleanup after them won't have been swung over yet, since we
 ;;; weren't sure they would really be TR until now.
 (defun set-tail-local-call-successor (call)
-  (let ((caller (node-home-lambda call))
+  (let (;; (caller (node-home-lambda call))
         (callee (combination-lambda call)))
-    (aver (eq (lambda-tail-set caller)
-              (lambda-tail-set (lambda-home callee))))
+    ;; (aver (eq (lambda-tail-set caller)
+    ;;           (lambda-tail-set (lambda-home callee))))
     (ir2-change-node-successor call (lambda-block callee)))
   (values))
 

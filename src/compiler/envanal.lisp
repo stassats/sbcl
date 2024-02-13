@@ -48,7 +48,7 @@
 
   (find-lvar-dynamic-extents component)
   (find-cleanup-points component)
-  ;(tail-annotate component)
+  (tail-annotate component)
   (determine-lambda-var-and-nlx-extent component)
 
   (dolist (fun (component-lambdas component))
@@ -579,13 +579,16 @@
         (let ((result (return-result ret)))
           (do-uses (use result)
             (when (and (immediately-used-p result use)
-                       (or (not (eq (node-derived-type use) *empty-type*))
-                           (not (basic-combination-p use))
-                           ;; This prevents external entry points from
-                           ;; showing up in the backtrace: we always
-                           ;; want tail calls inside XEPs to the
-                           ;; functions they are the entry point for.
-                           (eq (basic-combination-kind use) :local)))
+                       (and (not (and (basic-combination-p use)
+                                      (eq (basic-combination-kind use) :local)))
+                        (or (not (eq (node-derived-type use) *empty-type*))
+                            (not (basic-combination-p use))
+                            ;; This prevents external entry points from
+                            ;; showing up in the backtrace: we always
+                            ;; want tail calls inside XEPs to the
+                            ;; functions they are the entry point for.
+                            ;; (eq (basic-combination-kind use) :local)
+                            )))
               (setf (node-tail-p use) t)))))))
   ;; Tail call non returning functions if no debugging is wanted.
   (dolist (block (block-pred (component-tail component)))
