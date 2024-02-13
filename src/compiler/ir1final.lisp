@@ -474,4 +474,7 @@
 
   (ir1-merge-casts component)
   (ir1-optimize-functional-arguments component)
+  #-sb-xc-host
+  (convert-local-tail-calls component)
+  (join-blocks-if-possible component)
   (values))

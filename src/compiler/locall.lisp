@@ -1272,6 +1272,45 @@
                (return nil)))
             (t (return nil)))))))
 
+(defun convert-local-tail-calls (component)
+  (dolist (fun (component-lambdas component))
+    (dolist (ref (leaf-refs fun))
+      (let ((dest (node-dest ref)))
+        (when (and (basic-combination-p dest)
+                   (eq (basic-combination-kind dest) :local))
+          (maybe-convert-tail-local-call dest)))))
+  ;; Delete exits left over after converting to :assignment
+  (do-blocks (block component)
+    (let ((last (block-last block)))
+      (typecase last
+        (exit
+         (maybe-delete-exit last))))))
+
+(defun maybe-convert-tail-local-call (call)
+  (declare (type combination call))
+  (let ((return (node-dest call))
+        (fun (combination-lambda call)))
+    (when (and (return-p return)
+               (not (node-tail-p call)) ; otherwise already converted
+               ;; this is a tail call
+               (immediately-used-p (return-result return) call)
+               (only-harmless-cleanups (node-block call)
+                                       (node-block return))
+               ;; If the call is in an XEP, we might decide to make it
+               ;; non-tail so that we can use known return inside the
+               ;; component.
+               (not (eq (functional-kind (node-home-lambda call))
+                        :external))
+               (not (block-delete-p (lambda-block fun))))
+      (node-ends-block call)
+      (let ((block (node-block call)))
+        (setf (node-tail-p call) t)
+        (unlink-blocks block (first (block-succ block)))
+        (link-blocks block (lambda-block fun))
+        (delete-lvar-use call)
+        (join-tail-sets (node-home-lambda call) fun)
+        (maybe-convert-to-assignment fun)))))
+
 ;;; This is called when we believe it might make sense to convert
 ;;; FUN to an assignment. All this function really does is
 ;;; determine when a function with more than one call can still be
@@ -1365,16 +1404,9 @@
                  (ok-initial-convert-p fun))
         (when outside-calls
           (setf (functional-kind fun) :assignment)
-          ;; The only time OUTSIDE-CALLS contains a mix of both
-          ;; tail and non-tail calls is when calls to FUN are
-          ;; derived to not return, in which case it doesn't
-          ;; matter whether a given call is tail, so there is no
-          ;; harm in the arbitrary choice here.
+
           (let ((first-outside-call (first outside-calls)))
-            (let ((original-tail-p (node-tail-p first-outside-call)))
-              (let-convert fun first-outside-call)
-              (unless original-tail-p
-                (reoptimize-call first-outside-call)))
+            (let-convert fun first-outside-call)
             (dolist (outside-call outside-calls)
               ;; Splice in the other calls, without the rest of
               ;; the let converting return semantics machinery,
@@ -1389,9 +1421,5 @@
               ;; combinations, as this confuses stuff like
               ;; MAYBE-TERMINATE-BLOCK.
               (convert-call-if-possible (lvar-use (combination-fun outside-call))
-                                        outside-call)
-              (unless (or (eq outside-call first-outside-call)
-                          (node-tail-p outside-call))
-                (reoptimize-call first-outside-call))
-              (setf (node-tail-p outside-call) nil)))
+                                        outside-call)))
           t)))))
