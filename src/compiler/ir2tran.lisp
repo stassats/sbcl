@@ -1018,7 +1018,7 @@
            (ir2-convert-tail-local-call node block fun))
           (t
            (let ((start (block-trampoline (lambda-block fun)))
-                 (returns (tail-set-info (lambda-tail-set fun)))
+                 (returns (lambda-return-info fun))
                  (lvar (node-lvar node)))
              (ecase (if returns
                         (return-info-kind returns)
@@ -1615,7 +1615,7 @@
          (env (environment-info (lambda-environment fun)))
          (old-fp (ir2-environment-old-fp env))
          (return-pc (ir2-environment-return-pc env))
-         (returns (tail-set-info (lambda-tail-set fun))))
+         (returns (lambda-return-info fun)))
     (cond
       ((or (eq (return-info-kind returns) :unboxed)
            (and (eq (return-info-kind returns) :fixed)

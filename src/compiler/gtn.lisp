@@ -245,14 +245,15 @@
 ;;; values convention if the number of values is unknown, or if it is
 ;;; a good idea for some other reason. Otherwise we allocate passing
 ;;; locations for a fixed number of values.
-(defun return-info-for-set (tails)
-  (declare (type tail-set tails))
-  (multiple-value-bind (types count) (values-types (tail-set-type tails))
+(defun return-info-for-set (lambda)
+  (multiple-value-bind (types count) (values-types (lambda-return-type lambda))
     (let ((ptypes (mapcar #'primitive-type types))
-          (use-standard (use-standard-returns tails)))
+          (use-standard t ;; (use-standard-returns tails)
+                        ))
       (when (and (eq count :unknown) (not use-standard)
-                 (not (eq (tail-set-type tails) *empty-type*)))
-        (return-value-efficiency-note tails))
+                 (not (eq (lambda-return-type lambda) *empty-type*)))
+        ;; (return-value-efficiency-note tails)
+        )
       (cond ((eq use-standard :unboxed)
              (make-return-info :kind :unboxed
                                :count count
@@ -277,10 +278,9 @@
 ;;; If TAIL-SET doesn't have any INFO, then make a RETURN-INFO for it.
 (defun assign-return-locations (fun)
   (declare (type clambda fun))
-  (let* ((tails (lambda-tail-set fun))
-         (returns (or (tail-set-info tails)
-                      (setf (tail-set-info tails)
-                            (return-info-for-set tails))))
+  (let* ((returns (or (lambda-return-info fun)
+                      (setf (lambda-return-info fun)
+                            (return-info-for-set fun))))
          (return (lambda-return fun)))
     (when (and return
                (xep-p fun))

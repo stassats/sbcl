@@ -1196,7 +1196,8 @@
   ;; we will still have caller's lexenv to figure out which cleanup is
   ;; in effect.
   (call-lexenv nil :type (or lexenv null))
-  (allow-instrumenting *allow-instrumenting* :type boolean))
+  (allow-instrumenting *allow-instrumenting* :type boolean)
+  (return-info nil :type (or return-info null)))
 (defprinter (clambda :conc-name lambda- :identity t
              :pretty-ir-printer (pretty-print-functional structure stream))
   %source-name

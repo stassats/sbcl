@@ -693,7 +693,7 @@
 (defun compute-debug-returns (fun)
   (coerce-to-smallest-eltype
    (mapcar #'tn-sc+offset
-           (return-info-locations (tail-set-info (lambda-tail-set fun))))))
+           (return-info-locations (lambda-return-info fun)))))
 
 ;;;; debug functions
 
@@ -777,7 +777,7 @@
         (setf (compiled-debug-fun-tlf-number dfun) (find-tlf-number fun)))
     (if (xep-p fun)
         (setf (compiled-debug-fun-returns dfun) :standard)
-        (let ((info (tail-set-info (lambda-tail-set fun))))
+        (let ((info (lambda-return-info fun)))
           (when info
             (cond ((eq (return-info-kind info) :unknown)
                    (setf (compiled-debug-fun-returns dfun)

@@ -193,13 +193,11 @@
 ;;; deleted when there are no non-tail uses.
 (defun flush-full-call-tail-transfer (call)
   (declare (type basic-combination call))
-  (let ((tails (and (node-tail-p call)
-                    (lambda-tail-set (node-home-lambda call))))
-        (unboxed-return (let ((info (basic-combination-fun-info call)))
+  (let ((unboxed-return (let ((info (basic-combination-fun-info call)))
                           (and info
                                (ir1-attributep (fun-info-attributes info) unboxed-return)))))
-    (cond ((not tails))
-          ((eq (return-info-kind (tail-set-info tails))
+    (cond ((not (node-tail-p call)))
+          ((eq (return-info-kind (lambda-return-info (node-home-lambda call)))
                (if unboxed-return
                    :unboxed
                    :unknown))
@@ -326,7 +324,7 @@
   (declare (type creturn node))
   (let* ((lvar (return-result node))
          (fun (return-lambda node))
-         (returns (tail-set-info (lambda-tail-set fun)))
+         (returns (lambda-return-info fun))
          (types (return-info-primitive-types returns)))
     (if (eq (return-info-count returns) :unknown)
         (collect ((res *empty-type* values-type-union))
