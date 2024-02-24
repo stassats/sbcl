@@ -318,7 +318,20 @@
               conset-1)))
     (defconsetop conset-union bit-ior)
     (defconsetop conset-intersection bit-and)
-    (defconsetop conset-difference bit-andc2)))
+    (defconsetop conset-difference bit-andc2))
+
+  (declaim (inline conset-map-set-bit-vector))
+  (defun conset-map-set-bit-vector (function vector start end)
+    (declare (simple-bit-vector vector)
+             (function function)
+             (index start end)
+             (optimize speed (safety 0)))
+    #+(and little-endian (not sb-xc-host))
+    (sb-vm::map-set-bit-vector function vector start end)
+    #+(or big-endian sb-xc-host)
+    (loop for index from start below end
+          do (when (plusp (sbit vector index))
+               (funcall function index)))))
 
 ;;; Constraints are hash-consed. Unfortunately, types aren't, so we have
 ;;; to over-approximate and then linear search through the potential hits.
@@ -459,15 +472,21 @@
 (defmacro do-conset-elements ((constraint conset &optional result) &body body)
   (let ((index (gensym "INDEX"))
         (conset-vector (gensym "CONSET-VECTOR"))
-        (universe (gensym "UNIVERSE")))
-    `(let ((,conset-vector (conset-vector ,conset))
-           (,universe *constraint-universe*))
+        (universe (gensym "UNIVERSE"))
+        (universe-vector (gensym "UNIVERSE-VECTOR")))
+    `(let* ((,conset-vector (conset-vector ,conset))
+            (,universe *constraint-universe*)
+            (,universe-vector #-sb-xc-host (truly-the simple-vector (%array-data ,universe))
+                              #+sb-xc-host ,universe))
        (declare (optimize speed))
-       (loop for ,index from (conset-min ,conset) below (conset-max ,conset)
-             do (when (plusp (sbit ,conset-vector ,index))
-                  (let ((,constraint (aref ,universe ,index)))
-                    ,@body))
-             finally (return ,result)))))
+       (conset-map-set-bit-vector
+        (lambda (,index)
+          (let ((,constraint (aref ,universe-vector ,index)))
+            ,@body))
+        ,conset-vector
+        (conset-min ,conset)
+        (conset-max ,conset))
+       ,result)))
 
 (defmacro do-conset-constraints-intersection ((symbol (conset constraints) &optional result)
                                               &body body)
