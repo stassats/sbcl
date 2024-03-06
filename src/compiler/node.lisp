@@ -616,13 +616,6 @@
   (name "<unknown>" :type t)
   ;; some kind of info used by the back end.
   (info nil)
-  ;; a map from combination nodes to things describing how an
-  ;; optimization of the node failed. The description is an alist
-  ;; (TRANSFORM . ARGS), where TRANSFORM is the structure describing
-  ;; the transform that failed, and ARGS is either a list of format
-  ;; arguments for the note, or the FUN-TYPE that would have
-  ;; enabled the transformation but failed to match.
-  (failed-optimizations (make-hash-table :test 'eq) :type hash-table)
   ;; This is similar to NEW-FUNCTIONALS, but is used when a function
   ;; has already been analyzed, but new references have been added by
   ;; inline expansion. Unlike NEW-FUNCTIONALS, this is not disjoint

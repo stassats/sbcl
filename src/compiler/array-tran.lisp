@@ -104,8 +104,10 @@
                  (apply #'type-union element-supertypes)))))
     (member-type
      ;; Convert member-type to an union-type.
-     (array-type-upgraded-element-type
-      (apply #'type-union (mapcar #'ctype-of (member-type-members type)))))
+     (if (eq type (specifier-type 'null))
+         (values *wild-type* nil)
+         (array-type-upgraded-element-type
+          (apply #'type-union (mapcar #'ctype-of (member-type-members type))))))
     (t
      ;; KLUDGE: there is no good answer here, but at least
      ;; *wild-type* won't cause HAIRY-DATA-VECTOR-{REF,SET} to be
@@ -2079,7 +2081,8 @@
 ;;; available, switch back to the normal one to give other transforms
 ;;; a stab at it.
 
-(deftransform hairy-data-vector-ref/check-bounds ((array index))
+(deftransforms (hairy-data-vector-ref/check-bounds
+                vector-hairy-data-vector-ref/check-bounds) ((array index))
   (let* ((type (lvar-type array))
          (element-type (array-type-upgraded-element-type type)))
     (when (or (and (eq element-type *wild-type*)
@@ -2091,7 +2094,8 @@
       (give-up-ir1-transform "Upgraded element type of array is not known at compile time."))
     `(hairy-data-vector-ref array (check-bound array (array-dimension array 0) index))))
 
-(deftransform hairy-data-vector-set/check-bounds ((array index new-value))
+(deftransforms (hairy-data-vector-set/check-bounds
+                vector-hairy-data-vector-set/check-bounds) ((array index new-value))
   (let* ((type (lvar-type array))
          (element-type (array-type-upgraded-element-type type))
          (simple (null (conservative-array-type-complexp type))))

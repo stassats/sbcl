@@ -205,7 +205,8 @@
 ;;; arrays, but after benchmarking (on x86), Nikodemus didn't find any cases
 ;;; where it actually helped with non-simple arrays -- to the contrary, it
 ;;; only made for bigger and up to 100% slower code.
-(deftransform hairy-data-vector-ref ((array index) (simple-array t) *)
+(deftransforms (hairy-data-vector-ref vector-hairy-data-vector-ref)
+    ((array index) (simple-array t))
   "avoid runtime dispatch on array element type"
   (let* ((type (lvar-type array))
          (element-ctype (array-type-upgraded-element-type type))
@@ -298,9 +299,8 @@
 ;;; arrays, but after benchmarking (on x86), Nikodemus didn't find any cases
 ;;; where it actually helped with non-simple arrays -- to the contrary, it
 ;;; only made for bigger and up 1o 100% slower code.
-(deftransform hairy-data-vector-set ((array index new-value)
-                                     (simple-array t t)
-                                     *)
+(deftransforms (hairy-data-vector-set vector-hairy-data-vector-set)
+    ((array index new-value) (simple-array t t))
   "avoid runtime dispatch on array element type"
   (let* ((type (lvar-type array))
          (element-ctype (array-type-upgraded-element-type type))

@@ -17,39 +17,32 @@
 ;;; wouldn't be any entries in the table. If the node has been deleted
 ;;; or is no longer a known call, then do nothing; some other
 ;;; optimization must have gotten to it.
-(defun note-failed-optimization (node failures)
-  (declare (type combination node) (list failures))
-  (unless (or (node-deleted node)
-              (not (eq :known (combination-kind node))))
-    (let ((*compiler-error-context* node))
-      (dolist (failure failures)
-        (let ((what (cdr failure))
-              (note (transform-note (car failure))))
-          (cond
-           ((consp what)
-            (compiler-notify "~@<unable to ~2I~_~A ~I~_because: ~2I~_~?~:>"
-                             note (first what) (rest what)))
-           ((valid-fun-use node what
-                           :argument-test #'types-equal-or-intersect
-                           :result-test #'values-types-equal-or-intersect)
-            (collect ((messages))
-              (flet ((give-grief (string &rest stuff)
-                       (messages string)
-                       (messages stuff)))
-                (valid-fun-use node what
-                               :unwinnage-fun #'give-grief
-                               :lossage-fun #'give-grief))
-              (compiler-notify "~@<unable to ~
+(defun note-failed-optimization (node what transform)
+  (let ((*compiler-error-context* node)
+        (note (transform-note transform)))
+    (cond
+      ((consp what)
+       (compiler-notify "~@<unable to ~2I~_~A ~I~_because: ~2I~_~?~:>"
+                        note (first what) (rest what)))
+      (t
+       (collect ((messages))
+         (flet ((give-grief (string &rest stuff)
+                  (messages string)
+                  (messages stuff)))
+           (valid-fun-use node what
+                          :unwinnage-fun #'give-grief
+                          :lossage-fun #'give-grief))
+         (compiler-notify "~@<unable to ~
                                 ~2I~_~A ~
                                 ~I~_due to type uncertainty: ~
                                 ~2I~_~{~?~^~@:_~}~:>"
-                             note (messages))))
-           ;; As best I can guess, it's OK to fall off the end here
-           ;; because if it's not a VALID-FUNCTION-USE, the user
-           ;; doesn't want to hear about it. The things I caught when
-           ;; I put ERROR "internal error: unexpected FAILURE=~S" here
-           ;; didn't look like things we need to report. -- WHN 2001-02-07
-           ))))))
+                          note (messages))))
+      ;; As best I can guess, it's OK to fall off the end here
+      ;; because if it's not a VALID-FUNCTION-USE, the user
+      ;; doesn't want to hear about it. The things I caught when
+      ;; I put ERROR "internal error: unexpected FAILURE=~S" here
+      ;; didn't look like things we need to report. -- WHN 2001-02-07
+      )))
 
 ;;; For each named function with an XEP, note the definition of that
 ;;; name, and add derived type information to the INFO environment. We
@@ -233,9 +226,40 @@
                   (use-lvar combination ref-lvar)
                   (link-blocks block (node-block next)))))))))))
 
-;;; Convert function designators to functions in calls to known functions
-;;; Also convert to TWO-ARG- variants
-(defun ir1-optimize-functional-arguments (component)
+(defun report-transform-failures (combination)
+  (let ((flame (policy combination (- speed inhibit-warnings))))
+    (when (>= flame 0)
+      (dolist (transform (fun-info-transforms (combination-fun-info combination)))
+        (when (case (transform-important transform)
+                ((t) (>= flame 0))
+                (:slightly (> flame 0)))
+          (let* ((policy-test (transform-policy transform))
+                 (type (transform-type transform))
+                 (fun (transform-function transform)))
+            (cond ((and policy-test
+                        (not (funcall policy-test combination))))
+                  ((or (not (fun-type-p type))
+                       (valid-transform-fun combination type #'csubtypep #'values-subtypep))
+                   (multiple-value-bind (severity args)
+                       (catch 'give-up-ir1-transform
+                         ;; Don't delay anything.
+                         (let ((*delayed-ir1-transforms* (list (list combination))))
+                           (declare (dynamic-extent *delayed-ir1-transforms*))
+                           (handler-case
+                               (funcall fun combination)
+                             (warning ())))
+                         (values :none nil))
+                     (case severity
+                       (:failure
+                        (when args
+                          (note-failed-optimization combination args transform))))))
+                  ((valid-transform-fun combination type
+                                        #'types-equal-or-intersect
+                                        #'values-types-equal-or-intersect)
+                   (note-failed-optimization combination type transform)
+                   t))))))))
+
+(defun ir1-finalize-known-calls (component)
   (do-blocks (block component)
     (do-nodes (node nil block)
       (when (and (combination-p node)
@@ -244,6 +268,9 @@
                  (neq (lvar-fun-name (combination-fun node) t) 'reduce))
         (when-vop-existsp (:named  sb-vm::move-conditional-result)
           (unwrap-predicates node))
+        (report-transform-failures node)
+        ;; Convert function designators to functions in calls to known functions
+        ;; Also convert to TWO-ARG- variants
         (map-callable-arguments
          (lambda (lvar args results &key no-function-conversion &allow-other-keys)
            (declare (ignore results))
@@ -423,13 +450,10 @@
       ((nil toplevel)
        (setf (leaf-type fun) (definition-type fun)))))
 
-  (maphash #'note-failed-optimization
-           (component-failed-optimizations component))
-
   (maphash (lambda (k v)
              (note-assumed-types component k v))
            (free-funs *ir1-namespace*))
 
   (ir1-merge-casts component)
-  (ir1-optimize-functional-arguments component)
+  (ir1-finalize-known-calls component)
   (values))

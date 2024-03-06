@@ -1475,37 +1475,17 @@
 
 ;;;; known function optimization
 
-;;; Add a failed optimization note to FAILED-OPTIMZATIONS for NODE,
-;;; FUN and ARGS. If there is already a note for NODE and TRANSFORM,
-;;; replace it, otherwise add a new one.
-(defun record-optimization-failure (node transform args)
-  (declare (type combination node) (type transform transform)
-           (type (or fun-type list) args))
-  (let* ((table (component-failed-optimizations *component-being-compiled*))
-         (found (assoc transform (gethash node table))))
-    (if found
-        (setf (cdr found) args)
-        (push (cons transform args) (gethash node table))))
-  (values))
-
 ;;; Attempt to transform NODE using TRANSFORM-FUNCTION, subject to the
-;;; call type constraint TRANSFORM-TYPE. If we are inhibited from
-;;; doing the transform for some reason and FLAME is true, then we
-;;; make a note of the message in FAILED-OPTIMIZATIONS for IR1
-;;; finalize to pick up. We return true if the transform failed, and
-;;; thus further transformation should be attempted. We return false
-;;; if either the transform succeeded or was aborted.
+;;; call type constraint TRANSFORM-TYPE.
+;;; We return true if the transform failed, and thus further
+;;; transformation should be attempted. We return false if either the
+;;; transform succeeded or was aborted.
 (defun ir1-transform (node transform show)
   (declare (type combination node) (type transform transform))
   (declare (notinline warn)) ; See COMPILER-WARN for rationale
   (let* ((type (transform-type transform))
          (fun (transform-function transform))
          (constrained (fun-type-p type))
-         (table (component-failed-optimizations *component-being-compiled*))
-         (flame (case (transform-important transform)
-                  ((t) (policy node (>= speed inhibit-warnings)))
-                  (:slightly (policy node (> speed inhibit-warnings)))))
-         (*compiler-error-context* node)
          (policy-test (transform-policy transform)))
     (cond ((and policy-test
                 (not (funcall policy-test node))))
@@ -1513,37 +1493,23 @@
                (valid-transform-fun node type #'csubtypep #'values-subtypep))
            (multiple-value-bind (severity args)
                (catch 'give-up-ir1-transform
-                 (let ((new-form (funcall fun node))
-                       (fun-name (combination-fun-source-name node)))
+                 (let* ((*compiler-error-context* node)
+                        (new-form (funcall fun node))
+                        (fun-name (combination-fun-source-name node)))
                    (when (show-transform-p show fun-name)
                      (show-transform "ir" fun-name new-form node))
                    (transform-call node new-form fun-name))
                  (values :none nil))
              (ecase severity
                (:none
-                (remhash node table)
                 nil)
                (:aborted
                 (setf (combination-kind node) :error)
                 (when args
                   (apply #'warn args))
-                (remhash node table)
                 nil)
-               (:failure
-                (if args
-                    (when flame
-                      (record-optimization-failure node transform args))
-                    (setf (gethash node table)
-                          (remove transform (gethash node table) :key #'car)))
-                t)
-               (:delayed
+               ((:failure :delayed)
                 t))))
-          ((and flame
-                (valid-transform-fun node type
-                                     #'types-equal-or-intersect
-                                     #'values-types-equal-or-intersect))
-           (record-optimization-failure node transform type)
-           t)
           (t
            t))))
 
