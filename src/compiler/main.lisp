@@ -676,10 +676,9 @@ necessary, since type inference may take arbitrarily long to converge.")
     (functional-kind-case fun
       (toplevel (return))
       (external
-       (unless (every (lambda (ref)
-                        (eq (node-component ref) component))
-                      (leaf-refs fun))
-         (return))))))
+       (do-leaf-refs (ref fun)
+         (unless (eq (node-component ref) component)
+           (return)))))))
 
 (defvar *compile-component-hook* nil)
 
@@ -773,8 +772,7 @@ necessary, since type inference may take arbitrarily long to converge.")
              (maphash (lambda (k v)
                         (declare (ignore k))
                         (when (leaf-p v)
-                          (setf (leaf-refs v)
-                                (delete-if #'here-p (leaf-refs v)))
+                          (delete-leaf-ref-if #'here-p v)
                           (when (basic-var-p v)
                             (setf (basic-var-sets v)
                                   (delete-if #'here-p (basic-var-sets v))))))
