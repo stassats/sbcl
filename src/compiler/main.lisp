@@ -678,7 +678,7 @@ necessary, since type inference may take arbitrarily long to converge.")
       (external
        (do-leaf-refs (ref fun)
          (unless (eq (node-component ref) component)
-           (return)))))))
+           (return-from delete-if-no-entries)))))))
 
 (defvar *compile-component-hook* nil)
 

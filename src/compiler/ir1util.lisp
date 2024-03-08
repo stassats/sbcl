@@ -2007,9 +2007,9 @@
     ;; We only deal with LET variables, marking the corresponding
     ;; initial value arg as needing to be reoptimized.
     (when (and (functional-kind-eq fun let)
-               (leaf-refs var))
+               (some-leaf-refs var))
       (do ((args (basic-combination-args
-                  (lvar-dest (node-lvar (first (leaf-refs fun)))))
+                  (lvar-dest (node-lvar (first-leaf-ref fun))))
                  (cdr args))
            (vars (lambda-vars fun) (cdr vars)))
           ((eq (car vars) var)
@@ -2419,7 +2419,7 @@ is :ANY, the function name is not checked."
 ;;; Change all REFS for OLD-LEAF to NEW-LEAF.
 (defun substitute-leaf (new-leaf old-leaf)
   (declare (type leaf new-leaf old-leaf))
-  (dolist (ref (leaf-refs old-leaf))
+  (do-leaf-refs (ref old-leaf)
     (change-ref-leaf ref new-leaf))
   (values))
 
@@ -2428,7 +2428,7 @@ is :ANY, the function name is not checked."
 (defun substitute-leaf-if (test new-leaf old-leaf)
   (declare (type leaf new-leaf old-leaf) (type function test))
   (declare (dynamic-extent test))
-  (dolist (ref (leaf-refs old-leaf))
+  (do-leaf-refs (ref old-leaf)
     (when (funcall test ref)
       (change-ref-leaf ref new-leaf)))
   (values))
@@ -2569,7 +2569,7 @@ is :ANY, the function name is not checked."
                 (return nil)))
              (:rest
               (return (and (null (cdr arg))
-                           (null (leaf-refs (car arg)))
+                           (null (some-leaf-refs (car arg)))
                            ;; Type checking will require reading the
                            ;; variable, but it's done in one of the
                            ;; dispatch functions making it invisible
@@ -2655,7 +2655,7 @@ is :ANY, the function name is not checked."
 (defun let-combination (fun)
   (declare (type clambda fun))
   (aver (functional-letlike-p fun))
-  (lvar-dest (node-lvar (first (leaf-refs fun)))))
+  (lvar-dest (node-lvar (first-leaf-ref fun))))
 
 ;;; Return the initial value lvar for a LET variable, or NIL if there
 ;;; is none.
@@ -2857,7 +2857,7 @@ is :ANY, the function name is not checked."
       (cond ((ref-p use)
              (let ((leaf (ref-leaf use)))
                (when (and (lambda-var-p leaf)
-                          (null (rest (leaf-refs leaf))))
+                          (leaf-single-ref-p leaf))
                  (reoptimize-lambda-var leaf))))
             ((or (listp use) (combination-p use))
              (do-uses (node lvar)
@@ -3036,7 +3036,7 @@ is :ANY, the function name is not checked."
 
 (defun propagate-lvar-annotations-to-refs (lvar var)
   (when (lvar-annotations lvar)
-    (dolist (ref (leaf-refs var))
+    (do-leaf-refs (ref var)
       (when (node-lvar ref)
         (propagate-lvar-annotations (node-lvar ref) lvar
                                     nil)))))
