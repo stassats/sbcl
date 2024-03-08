@@ -639,7 +639,7 @@
     (maybe-emit-make-load-forms value))
   (let* ((leaf (find-constant value))
          (res (make-ref leaf)))
-    (push res (leaf-refs leaf))
+    (add-leaf-ref leaf res)
     (link-node-to-previous-ctran res start)
     (use-continuation res next result))
   (values))
@@ -682,7 +682,7 @@
                (lambda-var-constant leaf))
       (push (make-lvar-lambda-var-annotation :lambda-var leaf)
             (lvar-annotations result)))
-    (push ref (leaf-refs leaf))
+    (add-leaf-ref leaf ref)
     (when (and (functional-p leaf)
                (functional-ignore leaf))
       (#-sb-xc-host compiler-style-warn
