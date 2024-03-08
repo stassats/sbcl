@@ -576,13 +576,12 @@
   ;; If all the references are from the same substituted variable
   ;; use its name.
   ;; Helps with &key processing variables.
-  (let ((refs (leaf-refs leaf)))
-    (loop for ref in refs
-          for name = (ref-%source-name ref)
-          for first-name = name then first-name
-          unless (eq name first-name)
-          return (leaf-debug-name leaf)
-          finally (return name))))
+  (when (some-leaf-refs leaf)
+    (let ((name (ref-%source-name (first-leaf-ref leaf))))
+      (do-leaf-refs (ref leaf name)
+        (let ((name2 (ref-%source-name ref)))
+          (unless (eq name name2)
+            (return (leaf-debug-name leaf))))))))
 
 ;;; Return a vector suitable for use as the DEBUG-FUN-VARS
 ;;; of FUN. LEVEL is the current DEBUG-INFO quality. VAR-LOCS is a
@@ -594,7 +593,7 @@
   (collect ((vars))
     (labels ((frob-leaf (leaf tn gensym-p)
                (let ((name (leaf-principal-name leaf)))
-                 (when (and name (leaf-refs leaf) (tn-offset tn)
+                 (when (and name (some-leaf-refs leaf) (tn-offset tn)
                             (or gensym-p (cl:symbol-package name)))
                    (vars (list* name leaf tn)))))
              (frob-lambda (x gensym-p)
@@ -645,7 +644,7 @@
   (let ((res (gethash var var-locs)))
     (cond (res)
           (t
-           (aver (or (null (leaf-refs var))
+           (aver (or (not (some-leaf-refs var))
                      (not (tn-offset (leaf-info var)))))
            debug-info-var-deleted))))
 
