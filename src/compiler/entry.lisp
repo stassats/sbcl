@@ -140,7 +140,7 @@ missing MAKE-LOAD-FORM methods?")
                             ;; the optional entries reaching it.
                             (not (functional-kind-eq main-entry deleted))
                             (environment-closure (lambda-environment main-entry)))))
-             (dolist (ref (leaf-refs lambda))
+             (do-leaf-refs (ref lambda)
                (let ((ref-component (node-component ref)))
                  (cond ((eq ref-component component))
                        ((or (not (component-toplevelish-p ref-component))
