@@ -43,7 +43,7 @@
     (when (and (functional-kind-eq fun external)
                (environment-closure (lambda-environment fun)))
       (let ((enclose-env (get-node-environment (xep-enclose fun))))
-        (dolist (ref (leaf-refs fun))
+        (do-leaf-refs (ref fun)
           (close-over fun (get-node-environment ref) enclose-env)))))
 
   (find-lvar-dynamic-extents component)
@@ -52,7 +52,7 @@
   (determine-lambda-var-and-nlx-extent component)
 
   (dolist (fun (component-lambdas component))
-    (when (null (leaf-refs fun))
+    (when (null (some-leaf-refs fun))
       (let ((kind (functional-kind fun)))
         (unless (or (eql kind (functional-kind-attributes toplevel))
                     (functional-has-external-references-p fun))
@@ -91,7 +91,7 @@
         (did-something nil))
     (note-unreferenced-fun-vars fun)
     (dolist (var (lambda-vars fun))
-      (dolist (ref (leaf-refs var))
+      (do-leaf-refs (ref var)
         (let ((ref-env (get-node-environment ref)))
           (unless (eq ref-env env)
             (when (lambda-var-sets var)
@@ -108,7 +108,7 @@
         ;; the problem this way instead of somehow solving it
         ;; somewhere upstream and just doing (AVER (LEAF-REFS VAR))
         ;; here.)
-        (unless (null (leaf-refs var))
+        (unless (null (some-leaf-refs var))
 
           (let ((set-env (get-node-environment set)))
             (unless (eq set-env env)
@@ -131,7 +131,7 @@
         ((memq thing (environment-closure ref-env)))
         (t
          (push thing (environment-closure ref-env))
-         (dolist (ref (leaf-refs (environment-lambda ref-env)))
+         (do-leaf-refs (ref (environment-lambda ref-env))
            (close-over thing (get-node-environment ref) home-env))))
   (values))
 
@@ -256,9 +256,8 @@
            (aver info)))
     (close-over info (node-environment exit) env)
     (when (functional-kind-eq exit-fun escape)
-      (mapc (lambda (x)
-              (setf (node-derived-type x) *wild-type*))
-            (leaf-refs exit-fun))
+      (do-leaf-refs (ref exit-fun)
+        (setf (node-derived-type ref) *wild-type*))
       (substitute-leaf (find-constant info) exit-fun))
     (when lvar
       (let ((node (block-last (nlx-info-target info))))
