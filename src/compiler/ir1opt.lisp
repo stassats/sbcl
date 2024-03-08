@@ -197,7 +197,7 @@
     (if (ref-p node)
         (let ((leaf (ref-leaf node)))
           (if (and (basic-var-p leaf)
-                   (cdr (leaf-refs leaf)))
+                   (rest-leaf-refs leaf))
               (coerce-to-values
                (if (eq :declared (leaf-where-from leaf))
                    (let ((leaf-type (leaf-type leaf))
@@ -625,7 +625,7 @@
            (when (eq (basic-combination-kind node) :local)
              (let ((fun (combination-lambda node)))
                (when (dolist (var (lambda-vars fun) t)
-                       (when (or (leaf-refs var)
+                       (when (or (some-leaf-refs var)
                                  (lambda-var-sets var))
                          (return nil)))
                  (mapc #'flush-dest (basic-combination-args node))
@@ -638,7 +638,7 @@
           (cset
            (let ((var (set-var node)))
              (when (and (lambda-var-p var)
-                        (null (leaf-refs var)))
+                        (null (some-leaf-refs var)))
                (flush-dest (set-value node))
                (setf (basic-var-sets var)
                      (delq1 node (basic-var-sets var)))
@@ -716,8 +716,8 @@
         single-value-p)
     (when (and
            (singleton-p (tail-set-funs (lambda-tail-set lambda)))
-           (dolist (ref (leaf-refs lambda)
-                        (leaf-refs lambda))
+           (do-leaf-refs (ref lambda
+                              (some-leaf-refs lambda))
              (let* ((lvar (node-lvar ref))
                     (combination (and lvar
                                       (lvar-dest lvar))))
@@ -733,7 +733,7 @@
       (let* ((lvar (return-result node))
              (combination (lvar-uses lvar)))
         (labels ((erase-types (type)
-                   (dolist (ref (leaf-refs lambda))
+                   (do-leaf-refs (ref lambda)
                      (let* ((lvar (node-lvar ref))
                             (combination (lvar-dest lvar)))
                        (setf (node-derived-type combination) type)
@@ -790,7 +790,7 @@
            (when (type/= (res) (tail-set-type tails))
              (setf (tail-set-type tails) (res))
              (dolist (fun (tail-set-funs tails))
-               (dolist (ref (leaf-refs fun))
+               (do-leaf-refs (ref fun)
                  (reoptimize-lvar (node-lvar ref))))))))))
 
 ;;;; IF optimization
@@ -893,18 +893,18 @@
                       ;; used outside of the test itself.
                       ;; Otherwise would need to check if
                       ;; if-consequent is dominating the remaining references
-                      (loop with null-type = (specifier-type 'null)
-                            for other-ref in (leaf-refs var)
-                            for lvar = (node-lvar other-ref)
-                            always (or (eq other-ref ref)
-                                       (not (types-equal-or-intersect (single-value-type (node-derived-type other-ref))
-                                                                      null-type))
-                                       (progn
-                                         (and lvar
-                                              ;; Make sure we get back here after node-derived-type
-                                              (pushnew node (lvar-dependent-nodes lvar)
-                                                       :test #'eq))
-                                         nil))))
+                      (do-leaf-refs (other-ref var t)
+                        (unless (let ((lvar (node-lvar other-ref)))
+                                  (or (eq other-ref ref)
+                                      (not (types-equal-or-intersect (single-value-type (node-derived-type other-ref))
+                                                                     (specifier-type 'null)))
+                                      (progn
+                                        (and lvar
+                                             ;; Make sure we get back here after node-derived-type
+                                             (pushnew node (lvar-dependent-nodes lvar)
+                                                      :test #'eq))
+                                        nil)))
+                          (return))))
              (let* ((lvar (lambda-var-ref-lvar ref))
                     (lambda (lambda-var-home var))
                     (good-lambda-shape (= (length (lambda-vars lambda)) 1)))
@@ -925,7 +925,7 @@
 
 ;;; Split the last variable into a separate lambda.
 (defun split-let (var original-lambda)
-  (let* ((ref (car (leaf-refs original-lambda)))
+  (let* ((ref (first-leaf-ref original-lambda))
          (call (and ref
                     (node-lvar ref)
                     (lvar-dest (node-lvar ref))))
@@ -960,7 +960,7 @@
                    (ref (make-ref lambda))
                    (args (butlast all-args)))
               (push lambda (lambda-lets (lambda-home original-lambda)))
-              (push ref (lambda-refs lambda))
+              (add-leaf-ref lambda ref)
               (setf (combination-args call) (last all-args))
               (setf (lambda-vars original-lambda) (last all-vars)
                     (lambda-tail-set lambda) (make-tail-set :funs (list lambda)))
@@ -1884,10 +1884,9 @@
 ;;; has multiple references -- otherwise LVAR-CONSERVATIVE-TYPE is screwed.
 (defun propagate-to-refs (leaf type)
   (declare (type leaf leaf) (type ctype type))
-  (let ((var-type (leaf-type leaf))
-        (refs (leaf-refs leaf)))
+  (let ((var-type (leaf-type leaf)))
     (unless (or (fun-type-p var-type)
-                (and (cdr refs)
+                (and (rest-leaf-refs leaf)
                      (eq :declared (leaf-where-from leaf))
                      (type-needs-conservation-p var-type)))
       (let ((int (type-approx-intersection2 var-type type)))
@@ -1895,7 +1894,7 @@
         (unless (type= int var-type)
           (setf (leaf-type leaf) int)
           (let ((s-int (make-single-value-type int)))
-            (dolist (ref refs)
+            (do-leaf-refs (ref leaf)
               (derive-node-type ref s-int)
               (maybe-terminate-block ref nil)
               ;; KLUDGE: LET var substitution
@@ -2115,7 +2114,7 @@
 (defun ir1-optimize-set (node)
   (declare (type cset node))
   (let ((var (set-var node)))
-    (when (and (lambda-var-p var) (leaf-refs var))
+    (when (and (lambda-var-p var) (some-leaf-refs var))
       (let ((home (lambda-var-home var)))
         (when (functional-kind-eq home let)
           (let* ((initial-value (let-var-initial-value var))
@@ -2154,7 +2153,7 @@
 ;;; is to delete the variable.
 (defun substitute-single-use-lvar (arg var)
   (declare (type lvar arg) (type lambda-var var))
-  (binding* ((ref (first (leaf-refs var)))
+  (binding* ((ref (first-leaf-ref var))
              (lvar (node-lvar ref) :exit-if-null)
              (dest (lvar-dest lvar))
              (dest-lvar (when (valued-node-p dest) (node-lvar dest))))
@@ -2261,7 +2260,7 @@
         (bind (lambda-bind fun)))
     (flush-dest (basic-combination-fun call))
     (when (eq (car (node-source-path bind)) 'original-source-start)
-      (setf (ctran-source-path (node-prev (car (leaf-refs fun))))
+      (setf (ctran-source-path (node-prev (first-leaf-ref fun)))
             (node-source-path bind)))
     (unlink-node call)
     (unlink-node bind)
@@ -2324,7 +2323,7 @@
                           leaf var)))
                      t))))))
        ((and arg
-             (null (rest (leaf-refs var)))
+             (leaf-single-ref-p var)
              (not (preserve-single-use-debug-var-p call var))
              (substitute-single-use-lvar arg var)))
        (t
@@ -2379,7 +2378,7 @@
             (when arg
               (setf (lvar-reoptimize arg) nil)))
 
-          (dolist (ref (leaf-refs fun))
+          (do-leaf-refs (ref fun)
             (let ((dest (node-dest ref)))
               (unless (or (eq ref this-ref) (not dest))
                 (setq union
@@ -2585,7 +2584,7 @@
                                     (cond ((not arg)
                                            (make-nil))
                                           ((and var
-                                                (leaf-refs var))
+                                                (some-leaf-refs var))
                                            arg)
                                           (t
                                            (flush-dest arg)
@@ -2602,7 +2601,7 @@
                   ((and unknown-values
                         (not (type-single-value-p (node-derived-type use)))))
                   ;; single-value returning forms
-                  ((leaf-refs (car vars))) ;; the first value is used, nothing to do
+                  ((some-leaf-refs (car vars))) ;; the first value is used, nothing to do
                   (t
                    ;; A single NIL will do
                    (let ((lvar (node-lvar use)))
@@ -2610,7 +2609,7 @@
                      (make-nil lvar))))))
     (unless unknown-values
       (setf (lambda-vars fun)
-            (remove-if-not #'leaf-refs (lambda-vars fun))))))
+            (remove-if-not #'some-leaf-refs (lambda-vars fun))))))
 
 ;;; If we see:
 ;;;    (multiple-value-bind
@@ -2638,7 +2637,7 @@
          (fun-lvar (mv-combination-fun call))
          (fun (ref-leaf (lvar-uses fun-lvar)))
          (vars (lambda-vars fun))
-         (n-used-vars (count-if #'leaf-refs vars))
+         (n-used-vars (count-if #'some-leaf-refs vars))
          (nvars (length vars))
          (multiple-uses (cdr uses))
          unknown-values)

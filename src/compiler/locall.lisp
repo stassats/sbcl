@@ -53,7 +53,7 @@
                         (if (functional-kind-eq fun optional)
                             (make-local-call-context fun name)
                             name))
-      (unless (leaf-refs var)
+      (unless (some-leaf-refs var)
         (flush-dest (car args))
         (setf (car args) nil))))
 
@@ -262,7 +262,7 @@
                              (minusp (decf i)))
                    return var)))
     (when (and var
-               (not (lambda-var-refs var))
+               (not (some-leaf-refs var))
                (eql (lambda-var-type var) *universal-type*))
       (let* ((info (lambda-var-arg-info var))
              (kind (arg-info-kind info)))
@@ -342,23 +342,22 @@
 ;;; do LET conversion here.
 (defun locall-analyze-fun-1 (fun)
   (declare (type functional fun))
-  (let ((refs (leaf-refs fun)))
-    (dolist (ref refs)
-      (let* ((lvar (node-lvar ref))
-             (dest (when lvar (lvar-dest lvar))))
-        (unless (node-to-be-deleted-p ref)
-          (cond ((and (basic-combination-p dest)
-                      (eq (basic-combination-fun dest) lvar)
-                      (eq (lvar-uses lvar) ref))
+  (do-leaf-refs (ref fun)
+    (let* ((lvar (node-lvar ref))
+           (dest (when lvar (lvar-dest lvar))))
+      (unless (node-to-be-deleted-p ref)
+        (cond ((and (basic-combination-p dest)
+                    (eq (basic-combination-fun dest) lvar)
+                    (eq (lvar-uses lvar) ref))
 
-                 (convert-call-if-possible ref dest)
-                 ;; It might have been deleted by CONVERT-CALL-IF-POSSIBLE
-                 (when (functional-kind-eq fun deleted)
-                   (return-from locall-analyze-fun-1))
-                 (unless (eq (basic-combination-kind dest) :local)
-                   (reference-entry-point ref)))
-                (t
-                 (reference-entry-point ref)))))))
+               (convert-call-if-possible ref dest)
+               ;; It might have been deleted by CONVERT-CALL-IF-POSSIBLE
+               (when (functional-kind-eq fun deleted)
+                 (return-from locall-analyze-fun-1))
+               (unless (eq (basic-combination-kind dest) :local)
+                 (reference-entry-point ref)))
+              (t
+               (reference-entry-point ref))))))
 
   (values))
 
@@ -391,7 +390,7 @@
       (let ((kind (functional-kind fun)))
         (cond ((or (functional-somewhat-letlike-p fun)
                    (logtest kind (functional-kind-attributes deleted zombie))))
-              ((and (null (leaf-refs fun))
+              ((and (null (some-leaf-refs fun))
                     (eql kind (functional-kind-attributes nil))
                     (not (functional-entry-fun fun)))
                (delete-functional fun))
@@ -521,10 +520,14 @@
                             ;; othrewise it won't get any benefits of maybe-inline.
                             (eq (functional-inlinep fun) 'maybe-inline)))
 
-                   (rest (leaf-refs original-fun))
+                   (rest-leaf-refs original-fun)
                    ;; Some REFs are already unused bot not yet deleted,
                    ;; avoid unnecessary inlining
-                   (> (count-if #'node-lvar (leaf-refs original-fun)) 1)
+                   (let ((count 0))
+                     (do-leaf-refs (ref original-fun)
+                       (when (node-lvar ref)
+                         (incf count)))
+                     (> count 1))
                    ;; Don't inline if the function is not going to be
                    ;; let-converted.
                    (let-convertable-p call fun))
@@ -577,13 +580,13 @@
 (defun convert-mv-call (ref call fun)
   (declare (type ref ref) (type mv-combination call) (type functional fun))
   (when (and (looks-like-an-mv-bind fun)
-             (singleton-p (leaf-refs fun))
+             (leaf-single-ref-p fun)
              (not (functional-entry-fun fun)))
     (let* ((*current-component* (node-component ref))
            (ep (optional-dispatch-entry-point-fun
                 fun (optional-dispatch-max-args fun)))
            (args (basic-combination-args call)))
-      (when (and (null (leaf-refs ep))
+      (when (and (null (some-leaf-refs ep))
                  (or (singleton-p args)
                      (call-all-args-fixed-p call)))
         (aver (= (optional-dispatch-min-args fun) 0))
@@ -710,7 +713,7 @@
                                     (lvar-fun-debug-name
                                      (basic-combination-fun call)))))))
     (convert-call ref call new-fun)
-    (dolist (ref (leaf-refs entry))
+    (do-leaf-refs (ref entry)
       (convert-call-if-possible ref (lvar-dest (node-lvar ref))))))
 
 ;;; Use CONVERT-HAIRY-FUN-ENTRY to convert a &MORE-arg call to a known
@@ -1096,7 +1099,7 @@
   (let (maybe-terminate)
     (do-sset-elements (called (lambda-calls-or-closes fun))
       (when (lambda-p called)
-        (dolist (ref (leaf-refs called))
+        (do-leaf-refs (ref called)
           (let ((this-call (node-dest ref)))
             (when (and this-call
                        (node-tail-p this-call)
@@ -1276,7 +1279,7 @@
                  leaf var)))
              ;; otherwise, we can still play LVAR-level tricks for single
              ;;  destination variables.
-             ((and (singleton-p (leaf-refs var))
+             ((and (leaf-single-ref-p var)
                    ;; Don't substitute single-ref variables on high-debug /
                    ;; low speed, to improve the debugging experience.
                    (not (preserve-single-use-debug-var-p call var)))
@@ -1320,12 +1323,12 @@
     ;; XEP, since we might be embarrassed later when we want to
     ;; convert a newly discovered local call. Also, see
     ;; OK-INITIAL-CONVERT-P.
-    (let ((refs (leaf-refs clambda)))
+    (let ((refs (leaf-refs-start clambda)))
       (when (and refs
-                 (null (rest refs))
+                 (not (ref-next-ref refs))
                  (functional-kind-eq clambda nil assignment)
                  (not (functional-entry-fun clambda)))
-        (binding* ((ref (first refs))
+        (binding* ((ref (first-ref refs))
                    (ref-lvar (node-lvar ref) :exit-if-null)
                    (dest (lvar-dest ref-lvar)))
           (when (and (basic-combination-p dest)
@@ -1441,7 +1444,7 @@
           (outside-calls-lvar nil)
           (outside-calls-env nil)
           (outside-calls-cleanup nil))
-      (when (and (dolist (ref (leaf-refs fun) t)
+      (when (and (do-leaf-refs (ref fun t)
                    (let ((dest (node-dest ref)))
                      (when (or (not dest)
                                (node-to-be-deleted-p ref)

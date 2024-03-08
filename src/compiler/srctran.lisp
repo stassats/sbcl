@@ -5661,7 +5661,9 @@
                      (consp (arg-info-default info))
                      (not (lambda-var-specvar var))
                      (not (lambda-var-sets var))
-                     (every #'ref-good-for-more-context-p (lambda-var-refs var)))))
+                     (do-leaf-refs (ref var t)
+                       (unless (ref-good-for-more-context-p ref)
+                         (return))))))
         (if ok
             (mark-more-context-used var)
             (when restp

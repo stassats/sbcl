@@ -819,8 +819,8 @@
   ;;  :DEFINED-METHOD, implicit, piecemeal declarations from CLOS.
   ;;  :ASSUMED, from uses of the object.
   (where-from :assumed :type (member :declared :declared-verify :assumed :defined-here :defined :defined-method))
-  ;; list of the REF nodes for this leaf
-  (refs () :type list)
+  ;; A double-linked list of the REF nodes for this leaf
+  (%refs () :type (or null ref))
   ;; For tracking whether to warn about unused variables:
   ;; NIL if there was never a REF or SET.
   ;; SET if there was a set but no REF.
@@ -1464,6 +1464,8 @@
                 (:copier nil))
   ;; The leaf referenced.
   (leaf nil :type leaf)
+  (%next-ref nil :type (or null ref))
+  (%prev-ref nil :type (or null ref))
   ;; KLUDGE: This is supposed to help with keyword debug messages somehow.
   (%source-name (missing-arg) :type symbol :read-only t)
   ;; An cons added by constraint-propagate to all REFs that have the
@@ -1472,6 +1474,71 @@
 (defprinter (ref :identity t)
   (%source-name :test (neq %source-name '.anonymous.))
   leaf)
+
+
+;;; Should survive deleting the current ref
+(defmacro do-leaf-refs ((var leaf &optional result) &body body)
+  (let ((next (gensym "NEXT")))
+    `(loop with ,next
+           for ,var = (leaf-%refs ,leaf) then ,next
+           while ,var
+           do (setf ,next (ref-%next-ref ,var))
+              (progn ,@body)
+           finally (return ,result))))
+
+(declaim (inline some-leaf-refs first-leaf-ref leaf-refs-start
+                 first-ref ref-next-ref rest-leaf-refs add-leaf-ref
+                 delete-leaf-ref delete-leaf-ref-if leaf-single-ref-p))
+(defun some-leaf-refs (leaf)
+  (and (leaf-%refs leaf) t))
+
+(defun first-leaf-ref (leaf)
+  (leaf-%refs leaf))
+
+(defun leaf-refs-start (leaf)
+  (leaf-%refs leaf))
+
+(defun first-ref (ref)
+  ref)
+
+(defun ref-next-ref (ref)
+  (ref-%next-ref ref))
+
+(defun rest-leaf-refs (leaf)
+  (let ((ref (leaf-%refs leaf)))
+   (and ref
+        (ref-next-ref ref))))
+
+(defun add-leaf-ref (leaf ref)
+  (let ((current (leaf-%refs leaf)))
+    (when current
+      (setf (ref-%next-ref ref) current
+            (ref-%prev-ref current) ref))
+    (setf (leaf-%refs leaf) ref)))
+
+(defun delete-leaf-ref (leaf ref)
+  (let ((prev (ref-%prev-ref ref))
+        (next (ref-%next-ref ref)))
+    (when next
+      (setf (ref-%prev-ref next) prev)
+      (setf (ref-%next-ref ref) nil))
+    (if prev
+        (setf (ref-%prev-ref ref) nil
+              (ref-%next-ref prev) next)
+        (progn
+          (aver (eq (leaf-%refs leaf) ref))
+          (setf (leaf-%refs leaf) next)))))
+
+(defun delete-leaf-ref-if (fun leaf)
+  (do-leaf-refs (ref leaf)
+    (when (funcall fun ref)
+      (delete-leaf-ref leaf ref))))
+
+(defun leaf-single-ref-p (leaf)
+  (let ((ref (leaf-%refs leaf)))
+    (or (not ref)
+        (not (ref-%next-ref ref)))))
+
 
 ;;; Naturally, the IF node always appears at the end of a block.
 (defstruct (cif (:include node)

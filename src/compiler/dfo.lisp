@@ -26,20 +26,20 @@
           (or (functional-kind-eq fun toplevel)
               (lambda-has-external-references-p fun)
               (let ((component (block-component ep)))
-                (some (lambda (ref)
-                        ;; The REF could have been deleted, in which
-                        ;; case we don't count that as an external
-                        ;; reference from another component.
-                        (and (not (node-to-be-deleted-p ref))
+                (do-leaf-refs (ref fun)
+                  ;; The REF could have been deleted, in which
+                  ;; case we don't count that as an external
+                  ;; reference from another component.
+                  (when (and (not (node-to-be-deleted-p ref))
                              (or (block-flag (node-block ref))
-                                 (not (eq (node-component ref) component)))))
-                      (leaf-refs fun)))
+                                 (not (eq (node-component ref) component))))
+                    (return t))))
               (and (functional-kind-eq fun optional)
                    (flet ((reachable-p (fun)
-                            (some (lambda (ref)
-                                    (and (not (node-to-be-deleted-p ref))
-                                         (block-flag (node-block ref))))
-                                  (leaf-refs fun))))
+                            (do-leaf-refs (ref fun)
+                              (when (and (not (node-to-be-deleted-p ref))
+                                         (block-flag (node-block ref)))
+                                (return t)))))
                      (let ((optional-dispatch (lambda-optional-dispatch fun)))
                        (or (reachable-p optional-dispatch)
                            (reachable-p
@@ -222,7 +222,7 @@
 ;;; will be deleted eventually.
 (defun find-reference-funs (fun)
   (collect ((res))
-    (dolist (ref (leaf-refs fun))
+    (do-leaf-refs (ref fun)
       (let* ((home (node-home-lambda ref))
              (home-kind (functional-kind home))
              (home-externally-visible-p
@@ -318,7 +318,7 @@
                  ;; closed-over variable was unused and thus delete
                  ;; it. See e.g. cmucl-imp 2001-11-29.)
                  (scavenge-closure-var (var)
-                   (when (lambda-var-refs var) ; unless var deleted
+                   (when (some-leaf-refs var) ; unless var deleted
                      (let ((var-home-home (lambda-home (lambda-var-home var))))
                        (scavenge-possibly-deleted-lambda var-home-home))))
                  ;; Scavenge closure over an entry for nonlocal exit.

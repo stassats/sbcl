@@ -192,10 +192,10 @@
                (n (position-or-lose lvar
                                     (combination-args dest)))
                (var (nth n (lambda-vars fun)))
-               (refs (leaf-refs var)))
+               (refs (leaf-refs-start var)))
           (when (and refs
-                     (not (cdr refs)))
-            (let-lvar-dest (node-lvar (car refs)))))
+                     (not (ref-next-ref refs)))
+            (let-lvar-dest (node-lvar (first-ref refs)))))
         dest)))
 
 (defun lvar-dest-var (lvar)
@@ -221,12 +221,11 @@
           (let* ((fun (combination-lambda dest))
                  (n (position-or-lose lvar
                                       (combination-args dest)))
-                 (var (nth n (lambda-vars fun)))
-                 (refs (leaf-refs var)))
-            (loop for ref in refs
-                  for lvar = (node-lvar ref)
-                  when (and lvar (almost-immediately-used-p lvar (lambda-bind fun)))
-                  do (return (values (lvar-dest lvar) lvar))))
+                 (var (nth n (lambda-vars fun))))
+            (do-leaf-refs (ref var)
+              (let ((lvar (node-lvar ref)))
+                (when (and lvar (almost-immediately-used-p lvar (lambda-bind fun)))
+                  (return (values (lvar-dest lvar) lvar))))))
           (values dest lvar)))))
 
 (defun mv-bind-dest (lvar nth-value)
@@ -236,11 +235,11 @@
                  (eq (basic-combination-kind dest) :local))
         (let ((fun (combination-lambda dest)))
           (let* ((var (nth nth-value (lambda-vars fun)))
-                 (refs (leaf-refs var)))
+                 (refs (leaf-refs-start var)))
             (when (and refs
-                       (not (cdr refs)))
+                       (not (ref-next-ref refs)))
               (when (functional-kind-eq fun mv-let)
-                (let-lvar-dest (node-lvar (car refs)))))))))))
+                (let-lvar-dest (node-lvar (first-ref refs)))))))))))
 
 (defun combination-matches (name args combination)
   (and (combination-p combination)
@@ -264,9 +263,9 @@
            (let ((fun (combination-lambda dest)))
              (flet ((erase (var)
                       (setf (lambda-var-type var) *universal-type*)
-                      (loop for ref in (leaf-refs var)
-                            do (derive-node-type ref *wild-type* :from-scratch t)
-                               (erase-lvar-type (node-lvar ref)))))
+                      (do-leaf-refs (ref var)
+                        (derive-node-type ref *wild-type* :from-scratch t)
+                        (erase-lvar-type (node-lvar ref)))))
                (if (functional-kind-eq fun mv-let)
                    (mapc #'erase (lambda-vars fun))
                    (erase
@@ -540,7 +539,7 @@
                                             (node-lexenv dynamic-extent)))
            (propagate-lvar-dx (let-var-initial-value leaf) old-lvar)))
         (clambda
-         (when (and (null (rest (leaf-refs leaf)))
+         (when (and (leaf-single-ref-p leaf)
                     (lexenv-contains-lambda leaf
                                             (node-lexenv dynamic-extent)))
            (let ((fun (functional-entry-fun leaf)))
@@ -733,11 +732,11 @@
         (ir1-convert new-start ctran filtered-lvar form)
 
         ;; Replace PLACEHOLDER with the LVAR.
-        (let* ((refs (leaf-refs placeholder))
-               (node (first refs)))
+        (let* ((refs (leaf-refs-start placeholder))
+               (node (first-ref refs)))
           (cond (refs
                  (let ((victim (node-lvar node)))
-                  (aver (null (rest refs))) ; PLACEHOLDER must be referenced exactly once.
+                  (aver (null (ref-next-ref refs))) ; PLACEHOLDER must be referenced exactly once.
                   (substitute-lvar filtered-lvar lvar)
                   (substitute-lvar lvar victim)
                   (flush-dest victim)))
@@ -817,7 +816,7 @@
   (let ((ref (make-ref leaf))
         (lvar (make-lvar node)))
     (insert-node-before node ref)
-    (push ref (leaf-refs leaf))
+    (add-leaf-ref leaf ref)
     (setf (leaf-ever-used leaf) t)
     (use-lvar ref lvar)
     lvar))
@@ -1024,18 +1023,18 @@
                      (lexenv-contains-lambda (lambda-var-home leaf)
                                              (node-lexenv dynamic-extent))
                      ;; Check the other refs are good.
-                     (dolist (ref (leaf-refs leaf) t)
+                     (do-leaf-refs (ref leaf t)
                        (unless (eq use ref)
                          (when (not (ref-good-for-dx-p ref))
                            (return nil)))))
             (lvar-good-for-dx-p (let-var-initial-value leaf) dynamic-extent)))
          (clambda
           (aver (functional-kind-eq leaf external))
-          (when (and (null (rest (leaf-refs leaf)))
+          (when (and (leaf-single-ref-p leaf)
                      (environment-closure (get-lambda-environment leaf))
                      (lexenv-contains-lambda leaf
                                              (node-lexenv dynamic-extent)))
-            (aver (eq use (first (leaf-refs leaf))))
+            (aver (eq use (first-leaf-ref leaf)))
             t)))))))
 
 (defun lvar-good-for-dx-p (lvar dynamic-extent)
@@ -1062,7 +1061,7 @@
                   for var in (lambda-vars (combination-lambda dest))
                   do (when (eq arg lvar)
                        (return
-                         (dolist (ref (lambda-var-refs var) t)
+                         (do-leaf-refs (ref var t)
                            (unless (ref-good-for-dx-p ref)
                              (return nil)))))
                   finally (sb-impl::unreachable)))))))
@@ -1073,10 +1072,10 @@
                (not (lambda-var-sets var)))
       (let* ((fun (lambda-var-home var))
              (vars (lambda-vars fun))
-             (refs (lambda-refs fun))
+             (refs (leaf-refs-start fun))
              (lvar (and refs
-                        (null (cdr refs))
-                        (ref-lvar (car refs))))
+                        (null (ref-next-ref refs))
+                        (ref-lvar (first-ref refs))))
              (combination (and lvar
                                (lvar-dest lvar))))
         (when (and (combination-p combination)
@@ -1613,7 +1612,7 @@
   ;; deleted its last variable.
   (let* ((fun (lambda-var-home leaf))
          (n (position leaf (lambda-vars fun))))
-    (dolist (ref (leaf-refs fun))
+    (do-leaf-refs (ref fun)
       (let* ((lvar (node-lvar ref))
              (dest (and lvar (lvar-dest lvar))))
         (when (and (basic-combination-p dest)
@@ -1647,7 +1646,7 @@
 ;;; on functions that never had any references, since otherwise
 ;;; DELETE-REF will handle the deletion.
 (defun delete-functional (fun)
-  (aver (and (null (leaf-refs fun))
+  (aver (and (null (some-leaf-refs fun))
              (not (functional-entry-fun fun))))
   (etypecase fun
     (optional-dispatch (delete-optional-dispatch fun))
@@ -1689,7 +1688,7 @@
          (setf (lambda-lets home) (delete clambda (lambda-lets home)))))
       (t
        ;; Function has no reachable references.
-       (dolist (ref (lambda-refs clambda))
+       (do-leaf-refs (ref clambda)
          (mark-for-deletion (node-block ref)))
        ;; If the function isn't a LET, we unlink the function head
        ;; and tail from the component head and tail to indicate that
@@ -1752,7 +1751,7 @@
   (declare (type optional-dispatch leaf))
   (let ((entry (functional-entry-fun leaf)))
     (unless (and entry
-                 (or (leaf-refs entry)
+                 (or (some-leaf-refs entry)
                      (functional-kind-eq entry external)))
       (aver (or (not entry) (functional-kind-eq entry deleted)))
       (setf (functional-kind leaf) (functional-kind-attributes deleted))
@@ -1761,7 +1760,7 @@
                (unless (functional-kind-eq fun deleted)
                  (aver (functional-kind-eq fun optional))
                  (setf (functional-kind fun) (functional-kind-attributes nil))
-                 (if (leaf-refs fun)
+                 (if (some-leaf-refs fun)
                      (or (maybe-let-convert fun)
                          (maybe-convert-to-assignment fun)
                          (reoptimize-lambda fun))
@@ -1782,27 +1781,29 @@
 
 ;; Trigger PROPAGATE-LOCAL-CALL-ARGS
 (defun reoptimize-lambda (fun)
-  (loop for ref in (leaf-refs fun)
-        for dest = (node-dest ref)
-        when (basic-combination-p dest)
-        do (reoptimize-node dest)
-           (loop for arg in (basic-combination-args dest)
-                 do (reoptimize-lvar arg))))
+  (do-leaf-refs (ref fun)
+    (let ((dest (node-dest ref)))
+      (when (basic-combination-p dest)
+        (reoptimize-node dest)
+        (loop for arg in (basic-combination-args dest)
+              do (reoptimize-lvar arg))))))
 
 ;;; Do stuff to delete the semantic attachments of a REF node. When
 ;;; this leaves zero or one reference, we do a type dispatch off of
 ;;; the leaf to determine if a special action is appropriate.
-(defun delete-ref (ref)
+(defun delete-ref (ref &optional (delete-leaf-refs t))
   (declare (type ref ref))
   (let* ((leaf (ref-leaf ref))
-         (refs (delq1 ref (leaf-refs leaf)))
          (home (node-home-lambda ref)))
-    (setf (leaf-refs leaf) refs)
+    (when delete-leaf-refs
+      (delete-leaf-ref leaf ref))
     (when (and (typep leaf '(or clambda lambda-var))
-               (not (find home refs :key #'node-home-lambda)))
+               (not (do-leaf-refs (ref leaf)
+                      (when (eq home (node-home-lambda ref))
+                        (return t)))))
       ;; It was the last reference from this lambda, remove it
       (sset-delete leaf (lambda-calls-or-closes home)))
-    (if refs
+    (if (some-leaf-refs leaf)
         (typecase leaf
           (clambda (or (maybe-let-convert leaf)
                        (maybe-convert-to-assignment leaf)
@@ -2009,9 +2010,9 @@
     ;; We only deal with LET variables, marking the corresponding
     ;; initial value arg as needing to be reoptimized.
     (when (and (functional-kind-eq fun let)
-               (leaf-refs var))
+               (some-leaf-refs var))
       (do ((args (basic-combination-args
-                  (lvar-dest (node-lvar (first (leaf-refs fun)))))
+                  (lvar-dest (node-lvar (first-leaf-ref fun))))
                  (cdr args))
            (vars (lambda-vars fun) (cdr vars)))
           ((eq (car vars) var)
@@ -2250,7 +2251,7 @@
     (unless (functional-kind-eq fun deleted)
       (setf (functional-kind fun) (functional-kind-attributes nil))
       (setf (functional-entry-fun fun) nil)
-      (setf (leaf-refs fun) nil)
+      (setf (leaf-%refs fun) nil)
       (delete-functional fun)))
   (clean-component component)
   (values))
@@ -2400,11 +2401,14 @@ is :ANY, the function name is not checked."
 (defun change-ref-leaf (ref leaf &key recklessly)
   (declare (type ref ref) (type leaf leaf))
   (unless (eq (ref-leaf ref) leaf)
-    (push ref (leaf-refs leaf))
     (update-lvar-dependencies leaf ref)
-    (delete-ref ref)
+    (delete-leaf-ref (ref-leaf ref) ref)
+
+    (add-leaf-ref leaf ref)
+    (delete-ref ref nil)
     (setf (ref-leaf ref) leaf
           (ref-same-refs ref) nil)
+
     (setf (leaf-ever-used leaf) t)
     (let* ((ltype (leaf-type leaf))
            (vltype (make-single-value-type ltype)))
@@ -2421,7 +2425,7 @@ is :ANY, the function name is not checked."
 ;;; Change all REFS for OLD-LEAF to NEW-LEAF.
 (defun substitute-leaf (new-leaf old-leaf)
   (declare (type leaf new-leaf old-leaf))
-  (dolist (ref (leaf-refs old-leaf))
+  (do-leaf-refs (ref old-leaf)
     (change-ref-leaf ref new-leaf))
   (values))
 
@@ -2430,7 +2434,7 @@ is :ANY, the function name is not checked."
 (defun substitute-leaf-if (test new-leaf old-leaf)
   (declare (type leaf new-leaf old-leaf) (type function test))
   (declare (dynamic-extent test))
-  (dolist (ref (leaf-refs old-leaf))
+  (do-leaf-refs (ref old-leaf)
     (when (funcall test ref)
       (change-ref-leaf ref new-leaf)))
   (values))
@@ -2521,12 +2525,10 @@ is :ANY, the function name is not checked."
     (cond ((functional-kind-eq home deleted)
            nil)
           (t (let ((home (lambda-home home)))
-               (flet ((frob (l)
-                        (find home l
-                              :key #'node-home-lambda
-                              :test #'neq)))
-                 (or (frob (leaf-refs var))
-                     (frob (basic-var-sets var)))))))))
+               (or (do-leaf-refs (ref var)
+                     (when (neq (node-home-lambda ref) home)
+                       (return t)))
+                   (find home (basic-var-sets var) :key #'node-home-lambda :test #'neq)))))))
 
 ;;; If there is a non-local exit noted in ENTRY's environment that
 ;;; exits to CONT in that entry, then return it, otherwise return NIL.
@@ -2571,7 +2573,7 @@ is :ANY, the function name is not checked."
                 (return nil)))
              (:rest
               (return (and (null (cdr arg))
-                           (null (leaf-refs (car arg)))
+                           (null (some-leaf-refs (car arg)))
                            ;; Type checking will require reading the
                            ;; variable, but it's done in one of the
                            ;; dispatch functions making it invisible
@@ -2657,7 +2659,7 @@ is :ANY, the function name is not checked."
 (defun let-combination (fun)
   (declare (type clambda fun))
   (aver (functional-letlike-p fun))
-  (lvar-dest (node-lvar (first (leaf-refs fun)))))
+  (lvar-dest (node-lvar (first-leaf-ref fun))))
 
 ;;; Return the initial value lvar for a LET variable, or NIL if there
 ;;; is none.
@@ -2859,7 +2861,7 @@ is :ANY, the function name is not checked."
       (cond ((ref-p use)
              (let ((leaf (ref-leaf use)))
                (when (and (lambda-var-p leaf)
-                          (null (rest (leaf-refs leaf))))
+                          (leaf-single-ref-p leaf))
                  (reoptimize-lambda-var leaf))))
             ((or (listp use) (combination-p use))
              (do-uses (node lvar)
@@ -3023,7 +3025,7 @@ is :ANY, the function name is not checked."
   (when (not (lambda-var-sets lambda-var))
     (let* ((home (lambda-var-home lambda-var))
            (vars (lambda-vars home)))
-      (dolist (ref (lambda-refs home))
+      (do-leaf-refs (ref home)
         (let* ((lvar (node-lvar ref))
                (combination (and lvar
                                  (lvar-dest lvar))))
@@ -3038,7 +3040,7 @@ is :ANY, the function name is not checked."
 
 (defun propagate-lvar-annotations-to-refs (lvar var)
   (when (lvar-annotations lvar)
-    (dolist (ref (leaf-refs var))
+    (do-leaf-refs (ref var)
       (when (node-lvar ref)
         (propagate-lvar-annotations (node-lvar ref) lvar
                                     nil)))))

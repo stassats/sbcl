@@ -891,7 +891,7 @@ and no value was provided for it." name))))))))))
                        (t
                         (setf (leaf-type var) type)
                         (let ((s-type (make-single-value-type type)))
-                          (dolist (ref (leaf-refs var))
+                          (do-leaf-refs (ref var)
                             (derive-node-type ref s-type))))))
            t)
           ((and dtype

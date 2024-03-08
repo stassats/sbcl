@@ -338,7 +338,7 @@
                                                        name)
                                           :note-lexical-bindings nil)))))
     (mapc (lambda (var arg-var)
-            (when (cdr (leaf-refs arg-var))
+            (when (rest-leaf-refs arg-var)
               (setf (leaf-ever-used var) t)))
           fvars arg-vars)
     fun))

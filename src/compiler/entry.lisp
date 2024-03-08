@@ -121,6 +121,7 @@ missing MAKE-LOAD-FORM methods?")
 ;;; don't want to trigger deletion of the XEP (although it shouldn't
 ;;; hurt, since this is called after COMPONENT is compiled.) Instead,
 ;;; we just clobber the REF-LEAF.
+
 (defun replace-toplevel-xeps (component)
   (let ((res nil))
     (dolist (lambda (component-lambdas component))
@@ -140,17 +141,17 @@ missing MAKE-LOAD-FORM methods?")
                             ;; the optional entries reaching it.
                             (not (functional-kind-eq main-entry deleted))
                             (environment-closure (lambda-environment main-entry)))))
-             (dolist (ref (leaf-refs lambda))
+             (do-leaf-refs (ref lambda)
                (let ((ref-component (node-component ref)))
                  (cond ((eq ref-component component))
                        ((or (not (component-toplevelish-p ref-component))
                             closure)
                         (setq res t))
                        (t
+                        (delete-leaf-ref lambda ref)
                         (setf (ref-leaf ref) new)
-                        (push ref (leaf-refs new))
-                        (setf (leaf-refs lambda)
-                              (delq1 ref (leaf-refs lambda))))))))))
+                        (add-leaf-ref new ref))))))))
         (toplevel
          (setq res t))))
     res))
+

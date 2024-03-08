@@ -36,9 +36,10 @@
 
 (defun var-unused-before-sets-p (var)
   (when (lambda-var-sets var)
-    (loop for ref in (leaf-refs var)
-          always (loop for set in (lambda-var-sets var)
-                       thereis (node-dominates-p set ref)))))
+    (do-leaf-refs (ref var t)
+      (unless (loop for set in (lambda-var-sets var)
+                    thereis (node-dominates-p set ref))
+        (return)))))
 
 ;;; We have to allocate the home TNs for variables before we can call
 ;;; ASSIGN-IR2-ENVIRONMENT so that we can close over TNs that haven't
@@ -50,7 +51,7 @@
 (defun assign-lambda-var-tns (fun let-p)
   (declare (type clambda fun))
   (dolist (var (lambda-vars fun))
-    (when (leaf-refs var)
+    (when (some-leaf-refs var)
       (let* ((node (lambda-bind fun))
              (debug-variable-p (not (or (and let-p (policy node (< debug 3)))
                                         (policy node (zerop debug))
@@ -188,7 +189,7 @@
         (some (lambda (fun) (policy fun (>= insert-debug-catch 2))) funs)
         (block punt
           (dolist (fun funs t)
-            (dolist (ref (leaf-refs fun))
+            (do-leaf-refs (ref fun)
               (let* ((lvar (node-lvar ref))
                      (dest (and lvar (lvar-dest lvar))))
                 (flet ((all-returns-tail-calls-p (call)

@@ -63,7 +63,7 @@
                ;; functional.
                (unless (member functional seen)
                  (push functional seen)
-                 (dolist (ref (functional-refs functional))
+                 (do-leaf-refs (ref functional)
                    (handle-functional (node-home-lambda ref))))))
       (unless (or (functional-kind-eq functional deleted)
                   ;; If the block came from an inlined global

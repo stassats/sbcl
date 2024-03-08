@@ -310,7 +310,7 @@
                         (delayed (list tn (find-in-environment what env) n
                                        leaf-dx-p)))
                       (unless (and (lambda-var-p what)
-                                   (null (leaf-refs what)))
+                                   (null (some-leaf-refs what)))
                         (let ((initial-value (closure-initial-value what env nil)))
                           (if initial-value
                               (vop closure-init node ir2-block tn initial-value n
@@ -337,7 +337,7 @@
                    nil)))
     (etypecase leaf
       (lambda-var
-       (when (leaf-refs leaf)
+       (when (some-leaf-refs leaf)
          (let ((tn (find-in-environment leaf (node-environment node)))
                (indirect (lambda-var-indirect leaf))
                (explicit (lambda-var-explicit-value-cell leaf)))
@@ -1491,10 +1491,10 @@
                                (fun-type-required (info :function :type name))))
                (fixed-arg-state (and fixed-args
                                      (sb-vm::make-fixed-call-args-state))))
-          (when (leaf-refs (first vars))
+          (when (some-leaf-refs (first vars))
             (emit-move node block arg-count-tn (leaf-info (first vars))))
           (dolist (arg (rest vars))
-            (when (leaf-refs arg)
+            (when (some-leaf-refs arg)
               (let ((pass (if fixed-args
                               (sb-vm::fixed-call-arg-location (pop arg-types) fixed-arg-state)
                               (standard-arg-location n)))
@@ -1677,7 +1677,7 @@
          (vars (lambda-vars fun)))
     (aver (functional-kind-eq fun mv-let))
     (mapc (lambda (src var)
-            (when (leaf-refs var)
+            (when (some-leaf-refs var)
               (let ((dest (leaf-info var)))
                 (if (and (lambda-var-indirect var)
                          (lambda-var-explicit-value-cell var))
@@ -1856,7 +1856,7 @@
   (let* ((lvar (node-lvar node))
          (2lvar (lvar-info lvar)))
     (aver (eq (ir2-lvar-kind 2lvar) :stack))
-    (when (leaf-refs (find-constant lvar))
+    (when (some-leaf-refs (find-constant lvar))
       (vop current-stack-pointer node block
            (first (ir2-lvar-locs 2lvar))))))
 

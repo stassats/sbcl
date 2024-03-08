@@ -109,7 +109,7 @@
              (eq (info :function :where-from name) :assumed)
              (eq (info :function :kind name) :function))
     (let ((atype (info :function :assumed-type name)))
-      (dolist (ref (leaf-refs var))
+      (do-leaf-refs (ref var)
         (let ((dest (node-dest ref)))
           (when (and (eq (node-component ref) component)
                      (combination-p dest)
