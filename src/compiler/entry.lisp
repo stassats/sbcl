@@ -148,9 +148,8 @@ missing MAKE-LOAD-FORM methods?")
                         (setq res t))
                        (t
                         (setf (ref-leaf ref) new)
-                        (push ref (leaf-refs new))
-                        (setf (leaf-refs lambda)
-                              (delq1 ref (leaf-refs lambda))))))))))
+                        (delete-leaf-ref lambda ref)
+                        (add-leaf-ref new ref))))))))
         (toplevel
          (setq res t))))
     res))

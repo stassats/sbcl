@@ -1272,7 +1272,7 @@
        (let ((fun (bind-lambda node)))
          (functional-kind-case fun
            (let
-            (loop with call = (lvar-dest (node-lvar (first (lambda-refs fun))))
+            (loop with call = (lvar-dest (node-lvar (first-leaf-ref fun)))
                   for var in (lambda-vars fun)
                   and val in (combination-args call)
                   when (and val (lambda-var-constraints var))
@@ -1282,7 +1282,7 @@
                      (maybe-add-eql-var-var-constraint var val gen)
                      (add-var-result-constraints var val gen)))
            (mv-let
-            (add-mv-let-result-constraints (lvar-dest (node-lvar (first (lambda-refs fun)))) fun gen)))))
+            (add-mv-let-result-constraints (lvar-dest (node-lvar (first-leaf-ref fun))) fun gen)))))
       (ref
        (when (ok-ref-lambda-var node)
          (maybe-add-eql-var-lvar-constraint node gen)
@@ -1446,8 +1446,8 @@
                    (setf (lambda-var-constraints var) (make-conset))))
                 (when (and (lambda-var-constraints var)
                            (lambda-var-sets var))
-                  (loop for ref in (lambda-var-refs var)
-                        do (setf (ref-same-refs ref) nil))))))
+                  (do-leaf-refs (ref var)
+                    (setf (ref-same-refs ref) nil))))))
       (frob fun)
       (dolist (let (lambda-lets fun))
         (frob let)))))
@@ -1533,15 +1533,15 @@
             (functional-kind-eq (bind-lambda bind) nil assignment optional cleanup))
        (let ((fun (bind-lambda bind))
              (outs))
-         (loop for ref in (lambda-refs fun)
-               for call = (node-dest ref)
-               for call-in = (and call
-                                  (combination-constraints-in call))
-               when call-in
-               do (if in
-                      (conset-intersection in call-in)
-                      (setf in (copy-conset call-in)))
-                  (push call-in outs))
+         (do-leaf-refs (ref fun)
+           (let* ((call (node-dest ref))
+                  (call-in (and call
+                                (combination-constraints-in call))))
+             (when call-in
+               (if in
+                   (conset-intersection in call-in)
+                   (setf in (copy-conset call-in)))
+               (push call-in outs))))
          (when (rest outs)
            (join-type-constraints in block (not join-types-p) outs))))
       (t
@@ -1580,13 +1580,13 @@
             fun)
         (if (and (bind-p bind)
                  (functional-kind-eq (setf fun (bind-lambda bind)) nil assignment optional cleanup))
-            (loop for ref in (lambda-refs fun)
-                  for call = (node-dest ref)
-                  for call-block = (and call
-                                        (node-block call))
-                  do (unless (and call-block
-                                  (block-flag call-block))
-                       (setq leading nil)))
+            (do-leaf-refs (ref fun)
+              (let* ((call (node-dest ref))
+                     (call-block (and call
+                                      (node-block call))))
+                (unless (and call-block
+                             (block-flag call-block))
+                  (setq leading nil))))
             (dolist (pred (block-pred block))
               (unless (block-flag pred)
                 (setq leading nil))))

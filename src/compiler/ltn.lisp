@@ -369,7 +369,7 @@
                    (cond
                      ;; Needs support from the CALL VOPs, default-unknown-values specifically
                      #+(or x86-64 arm64)
-                     ((not (lambda-var-refs var))
+                     ((not (some-leaf-refs var))
                       nil)
                      (t
                       (primitive-type (basic-var-type var)))))

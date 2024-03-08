@@ -960,7 +960,7 @@
                    (ref (make-ref lambda))
                    (args (butlast all-args)))
               (push lambda (lambda-lets (lambda-home original-lambda)))
-              (push ref (lambda-refs lambda))
+              (add-leaf-ref lambda ref)
               (setf (combination-args call) (last all-args))
               (setf (lambda-vars original-lambda) (last all-vars)
                     (lambda-tail-set lambda) (make-tail-set :funs (list lambda)))

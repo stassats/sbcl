@@ -318,7 +318,7 @@
                  ;; closed-over variable was unused and thus delete
                  ;; it. See e.g. cmucl-imp 2001-11-29.)
                  (scavenge-closure-var (var)
-                   (when (lambda-var-refs var) ; unless var deleted
+                   (when (some-leaf-refs var) ; unless var deleted
                      (let ((var-home-home (lambda-home (lambda-var-home var))))
                        (scavenge-possibly-deleted-lambda var-home-home))))
                  ;; Scavenge closure over an entry for nonlocal exit.

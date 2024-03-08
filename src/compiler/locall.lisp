@@ -262,7 +262,7 @@
                              (minusp (decf i)))
                    return var)))
     (when (and var
-               (not (lambda-var-refs var))
+               (not (some-leaf-refs var))
                (eql (lambda-var-type var) *universal-type*))
       (let* ((info (lambda-var-arg-info var))
              (kind (arg-info-kind info)))

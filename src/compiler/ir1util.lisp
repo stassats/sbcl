@@ -1061,7 +1061,7 @@
                   for var in (lambda-vars (combination-lambda dest))
                   do (when (eq arg lvar)
                        (return
-                         (dolist (ref (lambda-var-refs var) t)
+                         (do-leaf-refs (ref var t)
                            (unless (ref-good-for-dx-p ref)
                              (return nil)))))
                   finally (sb-impl::unreachable)))))))
@@ -1072,10 +1072,10 @@
                (not (lambda-var-sets var)))
       (let* ((fun (lambda-var-home var))
              (vars (lambda-vars fun))
-             (refs (lambda-refs fun))
+             (refs (leaf-refs-start fun))
              (lvar (and refs
-                        (null (cdr refs))
-                        (ref-lvar (car refs))))
+                        (null (ref-next-ref refs))
+                        (ref-lvar (first-ref refs))))
              (combination (and lvar
                                (lvar-dest lvar))))
         (when (and (combination-p combination)
@@ -1688,7 +1688,7 @@
          (setf (lambda-lets home) (delete clambda (lambda-lets home)))))
       (t
        ;; Function has no reachable references.
-       (dolist (ref (lambda-refs clambda))
+       (do-leaf-refs (ref clambda)
          (mark-for-deletion (node-block ref)))
        ;; If the function isn't a LET, we unlink the function head
        ;; and tail from the component head and tail to indicate that
@@ -2250,7 +2250,7 @@
     (unless (functional-kind-eq fun deleted)
       (setf (functional-kind fun) (functional-kind-attributes nil))
       (setf (functional-entry-fun fun) nil)
-      (setf (leaf-refs fun) nil)
+      (setf (leaf-%refs fun) nil)
       (delete-functional fun)))
   (clean-component component)
   (values))
@@ -2521,12 +2521,10 @@ is :ANY, the function name is not checked."
     (cond ((functional-kind-eq home deleted)
            nil)
           (t (let ((home (lambda-home home)))
-               (flet ((frob (l)
-                        (find home l
-                              :key #'node-home-lambda
-                              :test #'neq)))
-                 (or (frob (leaf-refs var))
-                     (frob (basic-var-sets var)))))))))
+               (or (do-leaf-refs (ref var)
+                     (when (neq (node-home-lambda ref) home)
+                       (return t)))
+                   (find home (basic-var-sets var) :key #'node-home-lambda :test #'neq)))))))
 
 ;;; If there is a non-local exit noted in ENTRY's environment that
 ;;; exits to CONT in that entry, then return it, otherwise return NIL.
@@ -3023,7 +3021,7 @@ is :ANY, the function name is not checked."
   (when (not (lambda-var-sets lambda-var))
     (let* ((home (lambda-var-home lambda-var))
            (vars (lambda-vars home)))
-      (dolist (ref (lambda-refs home))
+      (do-leaf-refs (ref home)
         (let* ((lvar (node-lvar ref))
                (combination (and lvar
                                  (lvar-dest lvar))))

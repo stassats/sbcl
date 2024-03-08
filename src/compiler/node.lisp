@@ -820,7 +820,7 @@
   ;;  :ASSUMED, from uses of the object.
   (where-from :assumed :type (member :declared :declared-verify :assumed :defined-here :defined :defined-method))
   ;; list of the REF nodes for this leaf
-  (refs () :type list)
+  (%refs () :type list)
   ;; For tracking whether to warn about unused variables:
   ;; NIL if there was never a REF or SET.
   ;; SET if there was a set but no REF.
@@ -1474,19 +1474,20 @@
   leaf)
 
 
+;;; Should survive deleting the current ref
 (defmacro do-leaf-refs ((var leaf &optional result) &body body)
-  `(dolist (,var (leaf-refs ,leaf) ,result)
+  `(dolist (,var (leaf-%refs ,leaf) ,result)
      ,@body))
 
 
 (defun some-leaf-refs (leaf)
-  (and (leaf-refs leaf) t))
+  (and (leaf-%refs leaf) t))
 
 (defun first-leaf-ref (leaf)
-  (first (leaf-refs leaf)))
+  (first (leaf-%refs leaf)))
 
 (defun leaf-refs-start (leaf)
-  (leaf-refs leaf))
+  (leaf-%refs leaf))
 
 
 (defun first-ref (ref)
@@ -1496,21 +1497,22 @@
   (second ref))
 
 (defun rest-leaf-refs (leaf)
-  (rest (leaf-refs leaf)))
+  (rest (leaf-%refs leaf)))
 
 (defun add-leaf-ref (leaf ref)
-  (push ref (leaf-refs leaf)))
+  (push ref (leaf-%refs leaf)))
 
+;;; Return the remaining leaf ref
 (defun delete-leaf-ref (leaf ref)
-  (setf (leaf-refs leaf)
-        (delq1 ref (leaf-refs leaf))))
+  (setf (leaf-%refs leaf)
+        (delq1 ref (leaf-%refs leaf))))
 
 (defun delete-leaf-ref-if (fun leaf)
-  (setf (leaf-refs leaf)
-        (delete-if fun (leaf-refs leaf))))
+  (setf (leaf-%refs leaf)
+        (delete-if fun (leaf-%refs leaf))))
 
 (defun leaf-single-ref-p (leaf)
-  (not (cdr (leaf-refs leaf))))
+  (not (cdr (leaf-%refs leaf))))
 
 
 ;;; Naturally, the IF node always appears at the end of a block.
