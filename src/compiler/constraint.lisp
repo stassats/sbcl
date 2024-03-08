@@ -1168,7 +1168,7 @@
                      (let ((leaf-type (leaf-type leaf)))
                        (cond
                          ((or (constant-p other)
-                              (and (leaf-refs other) ; protect from
+                              (and (some-leaf-refs other) ; protect from
                                         ; deleted vars
                                    (csubtypep other-type leaf-type)
                                    (not (type= other-type leaf-type))
@@ -1227,15 +1227,15 @@
       (let (mark
             (eq (lambda-var-eq-constraints leaf)))
         (when eq
-          (loop for other-ref in (leaf-refs leaf)
-                unless (eq other-ref ref)
-                do (let ((constraint (gethash (ref-lvar other-ref) eq)))
-                     (when (and constraint
-                                (conset-member constraint in))
-                       (unless mark
-                         (setf mark (list 0))
-                         (setf (ref-same-refs ref) mark))
-                       (setf (ref-same-refs other-ref) mark)))))
+          (do-leaf-refs (other-ref leaf)
+            (unless (eq other-ref ref)
+              (let ((constraint (gethash (ref-lvar other-ref) eq)))
+                (when (and constraint
+                           (conset-member constraint in))
+                  (unless mark
+                    (setf mark (list 0))
+                    (setf (ref-same-refs ref) mark))
+                  (setf (ref-same-refs other-ref) mark))))))
         (when mark
           (reoptimize-node ref)))))
   (values))
