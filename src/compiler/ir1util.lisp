@@ -223,9 +223,9 @@
                                       (combination-args dest)))
                  (var (nth n (lambda-vars fun))))
             (do-leaf-refs (ref var)
-              (when (let ((lvar (node-lvar ref)))
-                      (and lvar (almost-immediately-used-p lvar (lambda-bind fun))))
-                (return (values (lvar-dest lvar) lvar)))))
+              (let ((lvar (node-lvar ref)))
+                (when (and lvar (almost-immediately-used-p lvar (lambda-bind fun)))
+                  (return (values (lvar-dest lvar) lvar))))))
           (values dest lvar)))))
 
 (defun mv-bind-dest (lvar nth-value)
@@ -1794,10 +1794,12 @@
 (defun delete-ref (ref)
   (declare (type ref ref))
   (let* ((leaf (ref-leaf ref))
-         (refs (delete-leaf-ref leaf ref))
-         (home (node-home-lambda ref)))
+         (home (node-home-lambda ref))
+         (refs (delete-leaf-ref leaf ref)))
     (when (and (typep leaf '(or clambda lambda-var))
-               (not (find home refs :key #'node-home-lambda)))
+               (not (do-leaf-refs (ref leaf)
+                      (when (eq home (node-home-lambda ref))
+                        (return t)))))
       ;; It was the last reference from this lambda, remove it
       (sset-delete leaf (lambda-calls-or-closes home)))
     (if refs
