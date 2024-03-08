@@ -1472,6 +1472,46 @@
 (defprinter (ref :identity t)
   (%source-name :test (neq %source-name '.anonymous.))
   leaf)
+
+
+(defmacro do-leaf-refs ((var leaf &optional result) &body body)
+  `(dolist (,var (leaf-refs ,leaf) ,result)
+     ,@body))
+
+
+(defun some-leaf-refs (leaf)
+  (and (leaf-refs leaf) t))
+
+(defun first-leaf-ref (leaf)
+  (first (leaf-refs leaf)))
+
+(defun leaf-refs-start (leaf)
+  (leaf-refs leaf))
+
+
+(defun first-ref (ref)
+  (first ref))
+
+(defun ref-next-ref (ref)
+  (second ref))
+
+(defun rest-leaf-refs (leaf)
+  (rest (leaf-refs leaf)))
+
+(defun add-leaf-ref (leaf ref)
+  (push ref (leaf-refs leaf)))
+
+(defun delete-leaf-ref (leaf ref)
+  (setf (leaf-refs leaf)
+        (delq1 ref (leaf-refs leaf))))
+
+(defun delete-leaf-ref-if (fun leaf)
+  (setf (leaf-refs leaf)
+        (delete-if fun (leaf-refs leaf))))
+
+(defun leaf-single-ref-p (leaf)
+  (not (cdr (leaf-refs leaf))))
+
 
 ;;; Naturally, the IF node always appears at the end of a block.
 (defstruct (cif (:include node)
