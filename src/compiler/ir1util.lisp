@@ -2398,7 +2398,7 @@ is :ANY, the function name is not checked."
 (defun change-ref-leaf (ref leaf &key recklessly)
   (declare (type ref ref) (type leaf leaf))
   (unless (eq (ref-leaf ref) leaf)
-    (push ref (leaf-refs leaf))
+    (add-leaf-ref leaf ref)
     (update-lvar-dependencies leaf ref)
     (delete-ref ref)
     (setf (ref-leaf ref) leaf
