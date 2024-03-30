@@ -177,10 +177,12 @@
 
 (test-util:with-test (:name :debug-data-force-to-heap)
   (let ((a (sb-vm:new-arena (* 1024 1024 1024))))
-    (sb-vm:with-arena (a)
-      (decode-all-debug-data))
-    (assert (null (sb-vm:c-find-heap->arena a)))
-    (sb-vm:destroy-arena a)))
+    (unwind-protect
+         (progn
+           (sb-vm:with-arena (a)
+             (decode-all-debug-data))
+           (assert (zerop (length (sb-vm:c-find-heap->arena a)))))
+      (sb-vm:destroy-arena a))))
 
 (defun test-with-open-file ()
   ;; Force allocation of a new BUFFER containing a new SAP,

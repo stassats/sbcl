@@ -384,10 +384,19 @@
   "Construct and return a list with SIZE elements each set to INITIAL-ELEMENT."
   (declare (explicit-check))
   (%make-list size initial-element))
+
 ;;; This entry point is to be preferred, irrespective of
 ;;; whether or not the backend has vops for %MAKE-LIST.
 (defun %make-list (size initial-element)
   (declare (type index size))
+  (do ((count size (1- count))
+       (result '() (cons initial-element result)))
+      ((<= count 0) result)
+    (declare (type index count))))
+
+(defun %sys-make-list (size initial-element)
+  (declare (type index size)
+           (sb-c::tlab :system))
   (do ((count size (1- count))
        (result '() (cons initial-element result)))
       ((<= count 0) result)
