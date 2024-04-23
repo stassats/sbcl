@@ -1241,6 +1241,29 @@
            (write-char arg str))
           (t
            (output-object arg str)))))))
+
+(defun princ-multiple (destination &rest args)
+  (let ((stream (typecase destination
+                  (null
+                   (return-from princ-multiple
+                     (apply #'princ-multiple-to-string args)))
+                  (string
+                   (with-output-to-string (stream destination)
+                     (apply #'princ-multiple args))
+                   (return-from princ-multiple))
+                  ((member t)
+                   *standard-output*)
+                  (t destination))))
+    (let ((*print-escape* nil)
+          (*print-readably* nil))
+      (do-rest-arg ((arg) args)
+        (typecase arg
+          (string
+           (write-string arg stream))
+          (character
+           (write-char arg stream))
+          (t
+           (output-object arg stream)))))))
 
 ;;;; format interpreter and support functions for user-defined method
 

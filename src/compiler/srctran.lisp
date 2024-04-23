@@ -6000,7 +6000,7 @@
                        (pop args)))))
    (null args)))
 
-(deftransform format ((stream control &rest args) (null (constant-arg string) &rest t))
+(defun a-derictives-p (control args)
   (let ((tokenized
           (handler-case
               (sb-format::tokenize-control-string (coerce (lvar-value control) 'simple-string))
@@ -6022,18 +6022,32 @@
                                        `',(lvar-value arg)
                                        arg-name))))
                            tokenized))))
-      (if (= (length args) 1)
-          `(lambda (stream control ,@arg-names)
-             (declare (ignore stream control)
-                      (ignorable ,@arg-names))
-             (princ-to-string ,@args))
-          `(lambda (stream control ,@arg-names)
-             (declare (ignore stream control)
-                      (ignorable ,@arg-names))
-             (,@(if stringsp
-                    `(concatenate 'string)
-                    `(sb-format::princ-multiple-to-string))
-              ,@args))))))
+      (values arg-names args stringsp))))
+
+(deftransform format ((stream control &rest args) (t (constant-arg string) &rest t) *
+                      :policy (> space 1)) ;; it's slightly slower
+  (multiple-value-bind (arg-names args) (a-derictives-p control args)
+    (if (= (length args) 1)
+        (give-up-ir1-transform)
+        `(lambda (stream control ,@arg-names)
+           (declare (ignore control)
+                    (ignorable ,@arg-names))
+           (sb-format::princ-multiple stream ,@args)))))
+
+(deftransform format ((stream control &rest args) (null (constant-arg string) &rest t))
+  (multiple-value-bind (arg-names args stringsp) (a-derictives-p control args)
+    (if (= (length args) 1)
+        `(lambda (stream control ,@arg-names)
+           (declare (ignore stream control)
+                    (ignorable ,@arg-names))
+           (princ-to-string ,@args))
+        `(lambda (stream control ,@arg-names)
+           (declare (ignore stream control)
+                    (ignorable ,@arg-names))
+           (,@(if stringsp
+                  `(concatenate 'string)
+                  `(sb-format::princ-multiple-to-string))
+            ,@args)))))
 
 (deftransform sb-format::princ-multiple-to-string ((&rest args) (&rest string) * :important nil)
   (let ((arg-names (make-gensym-list (length args))))
