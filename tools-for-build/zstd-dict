@@ -1,0 +1,25 @@
+(defun test () 
+  (gc :full t
+      )
+  (let ((arena (sb-vm:new-arena (* 1024 1024 100) (* 1024 1024 100) 100))
+        (objects))
+    (unwind-protect
+         (progn
+           (sb-vm:with-arena (arena) 
+             (sb-vm:map-allocated-objects
+              (lambda (a b c)
+                (when (typep a 'sb-kernel:code-component)
+                  (push a objects)))
+              :all))
+           (copy-list objects))
+      (sb-vm:destroy-arena arena))))
+
+(defun f ()
+  (let ((codes (delete-duplicates (test))))
+    (loop for i from 0
+          for code in codes
+          do (with-open-file (stream (format nil "/tmp/funmap/~a" i) :direction :output :if-exists :supersede :element-type '(unsigned-byte 8))
+               (unless (consp (sb-c::%code-debug-info code))
+                (write-sequence
+                 (decompress (sb-c::compiled-debug-info-fun-map (sb-c::%code-debug-info code)))
+                 stream))))))

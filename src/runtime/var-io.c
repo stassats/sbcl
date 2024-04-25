@@ -113,25 +113,54 @@ void skip_data_stream(struct varint_unpacker* unpacker)
 }
 
 #ifdef LISP_FEATURE_SB_CORE_COMPRESSION
+#include <stdio.h>
+#include <stdlib.h>
+
+ZSTD_CDict* cdict = NULL;
+ZSTD_DDict* ddict = NULL;
+
+
+void load_dict () {
+    if (cdict)
+        return;
+    FILE *f = fopen("/tmp/dict", "rb");
+    fseek(f, 0, SEEK_END);
+    size_t dict_size = ftell(f);
+    fseek(f, 0, SEEK_SET);
+
+    char *buffer = malloc(dict_size);
+    fread(buffer, dict_size , 1, f);
+    fclose(f);
+
+
+    cdict = ZSTD_createCDict(buffer, dict_size,  22);
+    ddict = ZSTD_createDDict(buffer, dict_size);
+    free(buffer);
+}
+
 char* compress_vector(lispobj vector, size_t *result_size) {
     struct vector *v = VECTOR(vector);
     size_t bytes = vector_len(v);
-
+    load_dict();
 
     size_t buf_size = ZSTD_compressBound(bytes);
     char* buf = successful_malloc(buf_size);
-    size_t ret = ZSTD_compress(buf, buf_size, v->data, bytes, 22);
+    ZSTD_CCtx* ctx = ZSTD_createCCtx();
+
+    size_t ret = ZSTD_compress_usingCDict(ctx, buf, buf_size, v->data, bytes, cdict);
     if (ZSTD_isError(ret)) {
         *result_size = 0;
         free(buf);
+        ZSTD_freeCCtx(ctx);
         return NULL;
     }
     *result_size = ret;
+    ZSTD_freeCCtx(ctx);
     return buf;
 }
 
 unsigned char* decompress_vector(lispobj vector, size_t *result_size) {
-
+    load_dict();
     struct vector *v = VECTOR(vector);
 
     ZSTD_inBuffer input;
@@ -142,29 +171,24 @@ unsigned char* decompress_vector(lispobj vector, size_t *result_size) {
     size_t out_increment = ZSTD_CStreamOutSize();
     size_t buf_size = 0;
 
-    char* buf = NULL;
+    unsigned char* buf = NULL;
     size_t ret;
-
-    ZSTD_DStream *stream = ZSTD_createDStream();
-    if (stream == NULL)
-        lose("unable to create zstd decompression context");
-    ret = ZSTD_initDStream(stream);
-    if (ZSTD_isError(ret))
-        lose("ZSTD_initDStream failed with error: %s", ZSTD_getErrorName(ret));
+    ZSTD_DCtx* ctx = ZSTD_createDCtx();
+    ZSTD_DCtx_refDDict(ctx, ddict);
 
     while (input.pos < input.size) {
         buf = realloc(buf, buf_size + out_increment);
 
         ZSTD_outBuffer output = { buf+buf_size, out_increment, 0 };
 
-        size_t const ret = ZSTD_decompressStream(stream, &output , &input);
+        ret = ZSTD_decompressStream(ctx, &output , &input);
         if (ZSTD_isError(ret))
             lose("ZSTD_decompressStream failed with error: %s",
                  ZSTD_getErrorName(ret));
         buf_size += output.pos;
 
     }
-    ZSTD_freeDStream(stream);
+    ZSTD_freeDCtx(ctx);
 
     *result_size = buf_size;
     return buf;
