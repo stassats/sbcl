@@ -254,7 +254,6 @@
 
 ;;; If true, blocks have been dumped.
 (defconstant packed-debug-fun-blocks-bit (ash 1 1))
-(defconstant packed-debug-fun-blocks-compressed-bit (ash 1 7))
 
 ;;; If true, non-minimal arguments have been dumped.
 (defconstant packed-debug-fun-non-minimal-arguments-bit (ash 1 2))
@@ -334,7 +333,8 @@
   ;; are in sorted order, so we can binary-search. We omit the first
   ;; and last PC, since their values are 0 and the length of the code
   ;; vector.
-  (fun-map (missing-arg) :type (simple-array (unsigned-byte 8) (*)) :read-only t)
+  (fun-map (missing-arg) :type (or (simple-array (unsigned-byte 8) (*))
+                                   (simple-array (signed-byte 8) (*))) :read-only t)
   ;; Location contexts
   ;; A (simple-array * (*)) or a context if there's only one context.
   (contexts nil :type t :read-only t))

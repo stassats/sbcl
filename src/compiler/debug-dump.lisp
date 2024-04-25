@@ -373,9 +373,7 @@
     (when elsewhere-locations
       (dolist (loc (nreverse elsewhere-locations))
         (dump-location-from-info loc tlf-num var-locs)))
-    ;; lz-compress accept any array of octets and returns a simple-array
-    (values (logically-readonlyize (lz-compress byte-buffer))
-            tlf-num)))
+    (values (coerce byte-buffer '(simple-array (unsigned-byte 8) (*))) tlf-num)))
 
 ;;; Return DEBUG-SOURCE structure containing information derived from
 ;;; INFO.
@@ -820,8 +818,6 @@
       (when (compiled-debug-fun-vars dfun)
         (setq flags (logior flags packed-debug-fun-variables-bit)))
       (when (compiled-debug-fun-blocks dfun)
-        (when (typep (compiled-debug-fun-blocks dfun) '(simple-array (signed-byte 8) (*)))
-          (setq flags (logior flags packed-debug-fun-blocks-compressed-bit)))
         (setq flags (logior flags packed-debug-fun-blocks-bit)))
       (when (compiled-debug-fun-tlf-number dfun)
         (setq flags (logior flags packed-debug-fun-tlf-number-bit)))
@@ -951,7 +947,7 @@
             (elsewhere (compiled-debug-fun-elsewhere-pc (cdr dfun))))
         (dump-1-packed-dfun (cdr dfun) prev-start start prev-elsewhere)
         (setq prev-start start prev-elsewhere elsewhere))))
-  (coerce-to-smallest-eltype *byte-buffer*))
+  (logically-readonlyize (compress (coerce *byte-buffer* '(simple-array (unsigned-byte 8) (*))))))
 
 
 ;;;; full component dumping
@@ -1029,3 +1025,51 @@
       (unless (= shift initial)
         (vector-push-extend byte byte-buffer))))
   (values))
+
+(declaim (ftype (sfunction ((array (unsigned-byte 8) 1))
+                           (or (simple-array (unsigned-byte 8) 1)
+                               (simple-array (signed-byte 8) 1)))
+                compress)
+         (ftype (sfunction ((or (simple-array (unsigned-byte 8) 1)
+                                (simple-array (signed-byte 8) 1)))
+                           (simple-array (unsigned-byte 8) 1))
+                decompress))
+
+#-(and sb-core-compression (not sb-xc-host))
+(progn
+  (defun compress (vector)
+    vector)
+
+  (defun decompress (vector)
+    vector))
+
+#+(and sb-core-compression (not sb-xc-host))
+(progn
+  (define-alien-routine compress-vector (* char) (buffer (* char)) (size size-t :out))
+  (define-alien-routine decompress-vector (* unsigned-char) (buffer (* char)) (size size-t :out))
+
+  (defun compress (vector)
+    (declare ((simple-array (unsigned-byte 8) (*)) vector))
+    (multiple-value-bind (pointer length)
+        (with-pinned-objects (vector)
+          (compress-vector (int-sap (get-lisp-obj-address vector))))
+      (if (and (plusp length)
+               (< length (length vector)))
+          (let ((new (make-array length :element-type '(signed-byte 8))))
+            (loop for i below length
+                  do (setf (aref new i) (deref pointer i)))
+            (free-alien pointer)
+            new)
+          vector)))
+
+  (defun decompress (vector)
+    (if (typep vector '(simple-array (signed-byte 8) (*)))
+        (multiple-value-bind (pointer length)
+            (with-pinned-objects (vector)
+              (decompress-vector (int-sap (get-lisp-obj-address vector))))
+          (let ((new (make-array length :element-type '(unsigned-byte 8))))
+            (loop for i below length
+                  do (setf (aref new i) (deref pointer i)))
+            (free-alien pointer)
+            new))
+        vector)))
