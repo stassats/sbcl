@@ -78,6 +78,45 @@
                             vector)
      finally (return i)))
 
+(defun write-var-signed-integer (value vector)
+  (declare (type byte-buffer vector)
+           (type (signed-byte 32) value))
+  (let* ((minus (minusp value))
+         (value (abs value)))
+    (loop
+      for v      :of-type (unsigned-byte 32) = value then (ash v -7)
+      for v-next :of-type (unsigned-byte 32) = (ash v -7)
+      for i fixnum from 0
+      do
+      (let ((last (and (zerop v-next)
+                       (not (logbitp 6 v)))))
+        (vector-push-extend (if last
+                                (dpb (if minus 1 0)
+                                     (byte 2 6) (ldb (byte 6 0) v))
+                                (dpb 1 (byte 1 7) (ldb (byte 7 0) v)))
+                            vector)
+        (when last
+          (return i))))))
+
+(defun read-var-signed-integer (source start)
+  (declare (type byte-buffer source))
+  (loop with result = 0
+        for offset :of-type index from start
+        for k :of-type (integer 0 28) from 0 by 7
+        for octet = (aref source offset)
+        for finalp = (not (logbitp 7 octet))
+        do (setf result (truly-the (unsigned-byte 32)
+                                   (dpb octet (byte (if finalp
+                                                        6
+                                                        7)
+                                                    k)
+                                        result)))
+        when finalp
+        return (values (if (logbitp 6 octet)
+                           (- result)
+                           result)
+                       (1+ offset))))
+
 
 ;;;; packed strings
 ;;;;

@@ -278,9 +278,14 @@
       (write-var-string stepping byte-buffer))
     (when context
       (let ((context (encode-restart-location loc context)))
-        (write-var-integer (or (position context *contexts* :test #'equal)
-                               (vector-push-extend context *contexts*))
-                           byte-buffer))))
+        (cond ((typep context '(and (not (eql 0))
+                                (signed-byte 32)))
+               (vector-push-extend 0 byte-buffer)
+               (write-var-signed-integer context byte-buffer))
+              (t
+               (write-var-integer (1+ (or (position context *contexts* :test #'equal)
+                                          (vector-push-extend context *contexts*)))
+                                  byte-buffer))))))
   (values))
 
 ;;; Extract context info from a Location-Info structure and use it to

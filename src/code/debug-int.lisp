@@ -1859,9 +1859,15 @@ register."
                       ""))
                 (context
                   (and (logtest sb-c::compiled-code-location-context flags)
-                       (compact-vector-ref (sb-c::compiled-debug-info-contexts
-                                            (%code-debug-info (compiled-debug-fun-component debug-fun)))
-                                           (sb-c:read-var-integerf blocks i)))))
+                       (let ((index (sb-c:read-var-integerf blocks i)))
+                         (if (zerop index)
+                             (multiple-value-bind (value index)
+                                 (sb-c::read-var-signed-integer blocks i)
+                               (setf i index)
+                               value)
+                             (compact-vector-ref (sb-c::compiled-debug-info-contexts
+                                                  (%code-debug-info (compiled-debug-fun-component debug-fun)))
+                                                 (1- index)))))))
            (when (or (memq kind '(:block-start :non-local-entry))
                      (and (not elsewhere-p)
                           (> pc elsewhere-pc)
