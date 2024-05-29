@@ -102,8 +102,10 @@ sigtrap_handler(int signal, siginfo_t *siginfo, os_context_t *context)
     uint32_t trap_instruction = *(uint32_t *)OS_CONTEXT_PC(context);
     unsigned code = trap_instruction >> 5 & 0xFF;
     if ((trap_instruction >> 21) != 0x6A1) {
-        lose("Unrecognized trap instruction %08x in sigtrap_handler() (PC: %p)",
-             trap_instruction, (void*)OS_CONTEXT_PC(context));
+        /* lose("Unrecognized trap instruction %08x in sigtrap_handler() (PC: %p)", */
+        /*      trap_instruction, (void*)OS_CONTEXT_PC(context)); */
+        printf("single step %p\n" , OS_CONTEXT_PC(context));
+        arch_handle_single_step_trap(context, 0);
     }
 
     handle_trap(context, code);

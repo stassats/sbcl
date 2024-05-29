@@ -127,3 +127,26 @@ sigill_handler(int signal, siginfo_t *siginfo, os_context_t *context) {
     fake_foreign_function_call(context);
     lose("Unhandled SIGILL at %p.", (void*)OS_CONTEXT_PC(context));
 }
+#include <mach/mach_init.h>
+#include <mach/mach.h>
+#include <mach/thread_status.h>
+#include <stdio.h>
+void singlestep() {
+    arm_debug_state64_t ts;
+    mach_msg_type_number_t count = ARM_DEBUG_STATE64_COUNT;
+    kern_return_t err;
+
+
+    err = thread_get_state(mach_thread_self(), ARM_DEBUG_STATE64, (thread_state_t)&ts, &count);   
+    if (err != KERN_SUCCESS) {
+        printf("thread_get_state failed\n");
+        return;
+    }
+    printf("%p\n", ts.__mdscr_el1);
+    ts.__mdscr_el1 |= 1;
+    err = thread_set_state(mach_thread_self(), ARM_DEBUG_STATE64, (thread_state_t)&ts, ARM_DEBUG_STATE64_COUNT);
+    if (err != KERN_SUCCESS) {
+        printf("thread_set_state failed\n");
+        return;
+    }
+}

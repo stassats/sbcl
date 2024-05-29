@@ -3935,9 +3935,12 @@ register."
   (let ((context (nth-interrupt-context (1- *free-interrupt-context-index*))))
     ;; The following calls must get tail-call eliminated for
     ;; *STEP-FRAME* to get set correctly on non-x86.
-    (if (= kind single-step-before-trap)
-        (handle-single-step-before-trap context)
-        (handle-single-step-around-trap context callee-register-offset))))
+    (if (zerop kind)
+        (cerror "step next" "SINGLE STEP ~a"
+                (context-pc context))
+        (if (= kind single-step-before-trap)
+            (handle-single-step-before-trap context)
+            (handle-single-step-around-trap context callee-register-offset)))))
 
 (defvar *step-frame* nil)
 
