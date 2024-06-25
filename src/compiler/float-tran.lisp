@@ -1888,13 +1888,14 @@
                              (values 0
                                      (- number (* ,@(unless one-p
                                                       '(f-divisor))
-                                                  (- (,',(ecase type
+                                                  (+ (,',(ecase type
                                                            (double-float 'round-double)
                                                            (single-float 'round-single))
                                                       div ,,(keywordicate name))
+                                                     ;; Turn -0 into 0
                                                      ,,(ecase type
-                                                         (double-float -0.0d0)
-                                                         (single-float -0.0f0)))))))))
+                                                         (double-float 0.0d0)
+                                                         (single-float 0.0f0)))))))))
                       #+round-float
                       (when-vop-existsp (:translate %unary-ceiling)
                         (when one-p
@@ -1923,13 +1924,14 @@
                                     (rem (- number (* ,@(unless one-p
                                                           '(f-divisor))
                                                       #+round-float
-                                                      (- (,',(ecase type
+                                                      (+ (,',(ecase type
                                                                (double-float 'round-double)
                                                                (single-float 'round-single))
                                                              div :truncate)
+                                                         ;; Turn -0 into 0
                                                          ,,(ecase type
-                                                             (double-float -0.0d0)
-                                                             (single-float -0.0f0)))
+                                                             (double-float 0.0d0)
+                                                             (single-float 0.0f0)))
                                                       #-round-float
                                                       (locally
                                                           (declare (flushable ,',coerce))
