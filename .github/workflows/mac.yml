@@ -25,6 +25,15 @@ jobs:
         CPATH: /opt/homebrew/include
         LIBRARY_PATH: /opt/homebrew/lib
       run: ./make.sh ${{ matrix.options }} --with-sb-core-compression --xc-host='sbcl --lose-on-corruption --disable-ldb --disable-debugger'
+    - name: tar build
+      run: |
+        cd ..
+        tar -cf sbcl.tar sbcl/
+    - name: save build
+      uses: actions/upload-artifact@v4
+      with:
+        name: sbcl-build-${{ matrix.arch }}${{ matrix.options }}
+        path: /Users/runner/work/sbcl/sbcl.tar
     - name: make binary
       run: |
         name=sbcl-`cat version.lisp-expr | ./run-sbcl.sh --noinform --noprint --eval '(write-line (read))'`-darwin-${{ matrix.arch }}
