@@ -25,4 +25,4 @@ jobs:
             echo "\"`git rev-parse HEAD`\"" > version.lisp-expr
             ./make.sh --with-sb-core-compression --xc-host='sbcl --dynamic-space-size 700MB --lose-on-corruption --disable-ldb --disable-debugger'
             curl -O https://beta.quicklisp.org/quicklisp.lisp
-            ./run-sbcl.sh --load quicklisp.lisp --eval (quicklisp-quickstart:install) --eval '(ql:quickload :ironclad/tests)' --eval '(asdf:test-system :ironclad)'
+            ./run-sbcl.sh --load quicklisp.lisp --eval '(quicklisp-quickstart:install)' --eval '(ql:quickload :ironclad/tests)' --eval '(asdf:test-system :ironclad)'
