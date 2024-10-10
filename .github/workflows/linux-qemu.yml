@@ -19,7 +19,7 @@ jobs:
           githubToken: ${{ github.token }}
           install: |
             apt-get -qq update | true
-            apt-get -qq install sbcl libzstd-dev git build-essential
+            apt-get -qq install sbcl libzstd-dev git build-essential curl
           run: |
             export SBCL_MAKE_TARGET_2_OPTIONS="--disable-ldb --disable-debugger"
             echo "\"`git rev-parse HEAD`\"" > version.lisp-expr
