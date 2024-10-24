@@ -2501,7 +2501,7 @@ you did not expect to see this message, please report it."
   (finish-output *query-io*)
   (multiple-value-list (eval (read *query-io*))))
 
-(defun check-type-error (place place-value type &optional type-string)
+(define-error-wrapper check-type-error (place place-value type &optional type-string)
   (let ((condition
          (make-condition
           'simple-type-error
@@ -2517,7 +2517,7 @@ you did not expect to see this message, please report it."
         :interactive read-evaluated-form
         value))))
 
-(defun check-type-error-trap (place value type)
+(define-error-wrapper check-type-error-trap (place value type)
   (multiple-value-bind (place type type-string)
       (if (stringp type)
           (values (car place) (cdr place) type)
