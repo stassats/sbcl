@@ -1805,7 +1805,21 @@
       (move res 32-bit-array)
       (inst shr res 1)
       DONE)))
-
+(defun foo (vector start end)
+  (declare (simple-character-string vector)
+           (index start end)
+           (optimize (safety 0) speed))
+  (let ((table #.(let* ((n (loop for i below char-code-limit when (both-case-p (code-char i)) maximize i))
+                      (table (make-array n :element-type 'character)))
+                 (loop for i below n
+                       do (setf (aref table i)
+                                (char-downcase (code-char i))))
+                 table)))
+   (loop for i from start below end
+         do (setf (aref vector i)
+                  (aref table (char-code (aref vector i)))))
+    vector)
+  )
 (defun simd-downcase (vector start end)
   ;; (declare (type index start end)
   ;;          (optimize speed (safety 0)))
@@ -1852,6 +1866,48 @@
 
         (inst vpgatherdd search (ea cases bytes 4) mask)
 
+        (inst vmovdqu (ea 32-bit-array) search)
+        (inst add 32-bit-array 32)
+        (inst cmp 32-bit-array end)
+        (inst jmp :l LOOP)
+        (inst vzeroupper)
+        ))
+    vector))
+
+(defun simd-downcase2 (vector start end)
+  ;; (declare (type index start end)
+  ;;          (optimize speed (safety 0)))
+  (let ((table #.(let* ((n (loop for i below char-code-limit when (both-case-p (code-char i)) maximize i))
+                        (table (make-array n :element-type 'character)))
+                   (loop for i below n
+                         do (setf (aref table i)
+                                  (char-downcase (code-char i))))
+                   table)))
+    (declare (optimize sb-c::preserve-single-use-debug-variables))
+    (with-pinned-objects (vector table)
+      (inline-vop (((32-bit-array* sap-reg t) (vector-sap vector))
+                   ((table sap-reg t) (vector-sap table))
+                   ((start any-reg) start)
+                   ((end any-reg) end)
+                   ((left))
+                   ((32-bit-array sap-reg t))
+                   ((bytes int-avx2-reg))
+                   ((page-index))
+                   ((page-index-mask))
+                   ((search))
+                   ((mask)))
+          ()
+
+        (inst shl end 1)
+        (inst lea 32-bit-array (ea 32-bit-array* start 2))
+        (inst add end 32-bit-array*)
+
+        
+        
+        LOOP
+        (inst vmovdqu bytes (ea 32-bit-array))
+        (inst vpcmpeqd mask mask mask)
+        (inst vpgatherdd search (ea table bytes 4) mask)
         (inst vmovdqu (ea 32-bit-array) search)
         (inst add 32-bit-array 32)
         (inst cmp 32-bit-array end)
