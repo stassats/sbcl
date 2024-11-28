@@ -1808,7 +1808,8 @@
 (defun foo (vector start end)
   (declare (simple-character-string vector)
            (index start end)
-           (optimize (safety 0) speed))
+            (optimize (safety 0) speed)
+           )
   (let ((table #.(let* ((n (loop for i below char-code-limit when (both-case-p (code-char i)) maximize i))
                       (table (make-array n :element-type 'character)))
                  (loop for i below n
@@ -1816,8 +1817,11 @@
                                 (char-downcase (code-char i))))
                  table)))
    (loop for i from start below end
-         do (setf (aref vector i)
-                  (aref table (char-code (aref vector i)))))
+         for char = (char-code (aref vector i))
+         when (< char (length table))
+         do
+         (setf (aref vector i)
+               (aref table char)))
     vector)
   )
 (defun simd-downcase (vector start end)
@@ -1889,24 +1893,36 @@
                    ((table sap-reg t) (vector-sap table))
                    ((start any-reg) start)
                    ((end any-reg) end)
+                   ((max-char unsigned-reg) (length table))
                    ((left))
                    ((32-bit-array sap-reg t))
                    ((bytes int-avx2-reg))
                    ((page-index))
                    ((page-index-mask))
                    ((search))
-                   ((mask)))
+                   ((mask))
+                   ((max-char-mask))
+                   ((temp))
+                   ((ones)))
           ()
 
         (inst shl end 1)
         (inst lea 32-bit-array (ea 32-bit-array* start 2))
         (inst add end 32-bit-array*)
 
-        
-        
+        (inst vmovd max-char-mask max-char)
+        (inst vpbroadcastd max-char-mask max-char-mask)
+        (inst vpcmpeqd ones ones ones)
         LOOP
         (inst vmovdqu bytes (ea 32-bit-array))
-        (inst vpcmpeqd mask mask mask)
+
+        (inst vpmaxud mask bytes max-char-mask)
+        (inst vpcmpeqd mask bytes mask)
+        (inst vpxor mask mask ones)
+        (inst vmovdqu search bytes)
+        
+        (move left 32-bit-array)
+        (inst sub left 32-bit-array*)
         (inst vpgatherdd search (ea table bytes 4) mask)
         (inst vmovdqu (ea 32-bit-array) search)
         (inst add 32-bit-array 32)
