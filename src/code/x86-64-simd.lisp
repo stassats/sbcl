@@ -1827,10 +1827,7 @@
 (defun simd-downcase (vector start end)
   ;; (declare (type index start end)
   ;;          (optimize speed (safety 0)))
-  (let ((pages #.(map   '(vector (unsigned-byte 32))
-                        (lambda (x)
-                          (ash x 6))
-                        sb-impl::+character-case-pages+))
+  (let ((pages sb-impl::+character-case-pages+)
         (cases sb-impl::+character-cases+))
     (declare (optimize sb-c::preserve-single-use-debug-variables))
     (with-pinned-objects (vector pages)
@@ -1841,11 +1838,17 @@
                    ((end any-reg) end)
                    ((left))
                    ((32-bit-array sap-reg t))
-                   ((bytes int-avx2-reg))
-                   ((page-index))
+                   ((chars int-avx2-reg))
+                   ((index))
                    ((page-index-mask))
-                   ((search))
-                   ((mask)))
+                   ((page))
+                   ((mask))
+                   ((max-page-index))
+                   ((max-char-mask))
+                   ((temp))
+                   ((ones))
+                   ((byte-mask))
+                   ((cased-chars)))
           ()
 
         (inst shl end 1)
@@ -1854,35 +1857,53 @@
         (inst mov left 63)
         (inst vmovd page-index-mask left)
         (inst vpbroadcastd page-index-mask page-index-mask)
-        
+
+        (inst mov left (length sb-impl::+character-cases+))
+        (inst vmovd max-char-mask left)
+        (inst vpbroadcastd max-char-mask max-char-mask)
+        (inst vpcmpeqd ones ones ones)
+
+        (inst mov left (length sb-impl::+character-case-pages+))
+        (inst vmovd max-page-index left)
+        (inst vpbroadcastd max-page-index max-page-index)
+
+        (inst mov left 255)
+        (inst vmovd byte-mask left)
+        (inst vpbroadcastd byte-mask byte-mask)
         
         LOOP
-        (inst vmovdqu bytes (ea 32-bit-array))
-        (inst vpsrld-imm page-index bytes 6)
-        (inst vpcmpeqd mask mask mask)
+        (inst vmovdqu chars (ea 32-bit-array))
 
-        (inst vpgatherdd search (ea pages page-index 4) mask)
-        (inst vpand bytes bytes page-index-mask)
+        (inst vpsrld-imm index chars 6)
+        (inst vpcmpgtd mask max-page-index index)
 
-        (inst vpaddd bytes bytes search)
-        (inst vpslld-imm bytes bytes 1)
-        (inst vpcmpeqd mask mask mask)
 
-        (inst vpgatherdd search (ea cases bytes 4) mask)
+        (inst VPGATHERDD page (ea pages index) mask)
+        (inst vpand page page byte-mask)
+        (inst vpcmpgtd mask byte-mask page)
+        (inst vpslld-imm page page 6)
+        
+        (inst vpand cased-chars chars page-index-mask)
+        (inst vpaddd cased-chars cased-chars page)
+        (inst vpslld-imm index cased-chars 1)
 
-        (inst vmovdqu (ea 32-bit-array) search)
+        (inst vmovdqu cased-chars chars)
+
+        (inst VPGATHERDD cased-chars (ea cases index 4) mask)
+
+        (inst vmovdqu (ea 32-bit-array) cased-chars)
         (inst add 32-bit-array 32)
         (inst cmp 32-bit-array end)
         (inst jmp :l LOOP)
-        (inst vzeroupper)
-        ))
+        done
+        (inst vzeroupper)))
     vector))
 
 (defun simd-downcase2 (vector start end)
   ;; (declare (type index start end)
   ;;          (optimize speed (safety 0)))
   (let ((table #.(let* ((n (loop for i below char-code-limit when (both-case-p (code-char i)) maximize i))
-                        (table (make-array n :element-type 'character)))
+                        (table (make-array n :element-type '(signed-byte 16))))
                    (loop for i below n
                          do (setf (aref table i)
                                   (char-downcase (code-char i))))
