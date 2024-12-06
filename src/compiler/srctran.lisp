@@ -1470,7 +1470,9 @@
              (numeric-type
               (list arg))
              (union-type
-              (union-type-types arg))
+              (sb-kernel::flatten-numeric-range-types (union-type-types arg)))
+             (numeric-range-type
+              (numeric-range-to-numeric-types arg))
              (list
               arg)
              (t

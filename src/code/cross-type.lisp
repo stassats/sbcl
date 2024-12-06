@@ -101,6 +101,8 @@
            (values nil t)))) ; nothing could be these
        (numeric-type
         (values (number-typep obj type) t))
+       (numeric-range-type
+        (values (numeric-range-typep obj type) t))
        (array-type
         ;; Array types correspond fairly closely between host and target, but
         ;; asking whether an array is definitely non-simple is a nonsensical
@@ -377,3 +379,9 @@
 ;; Use of non-ASCII during build occurs no sooner than make-target-2,
 ;; therefore _every_ character satisfies BASE-CHAR-P prior to that.
 #+sb-unicode (defun base-char-p (x) (characterp x))
+
+;; (defun %other-pointer-subtype-p (x choices)
+;;   (ecase x
+;;     (sb-xc:fixnum nil)
+;;     (sb-xc:bignum
+;;      (member sb-vm:bignum-widetag choices))))

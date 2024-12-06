@@ -2,7 +2,7 @@
 (sb-thread:make-thread (lambda ()
                          (loop (gc :full t) (sleep 0.001)))
                        :name "gc stress")
-
+(setf sb-kernel::*x* t)
 (defpackage :test-util
   (:use :cl :sb-ext)
   (:export #:with-test #:report-test-status #:*failures*
