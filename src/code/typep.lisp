@@ -129,7 +129,10 @@
                  (csubtypep (specifier-type (sb-impl::%fun-ftype object)) type)))
            (t ; strict
             (error "Function types are not a legal argument to TYPEP:~%  ~S"
-                   (type-specifier type))))))))
+                   (type-specifier type))))))
+    (numeric-range-type
+     type
+     nil)))
 
 (defun cached-typep (cache object)
   (let* ((type (cdr cache))
@@ -307,6 +310,9 @@
            (t (values nil t))))
     (alien-type-type
      (values (alien-typep obj (alien-type-type-alien-type type)) t))
+    (numeric-range-type
+     type
+     (values nil nil))
     (hairy-type
      ;; Parse it again to make sure it's really undefined.
      ;; FIXME: This logic also appears in %%TYPEP, and probably needs
