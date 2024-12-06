@@ -2573,6 +2573,8 @@ expansion happened."
            t))))
 
 (define-type-class number :enumerable #'numeric-type-enumerable :might-contain-other-types nil)
+(define-type-class numeric-range :enumerable nil;; #'numeric-type-enumerable
+  :might-contain-other-types nil)
 
 (declaim (inline bounds-unbounded-p))
 (defun bounds-unbounded-p (low high)
@@ -2616,32 +2618,32 @@ expansion happened."
                  (float (or (numeric-type-format type) 'float))
                  (t 'real))))
     (let ((base+bounds
-           (cond ((and (eq base 'integer) high low)
-                  (let ((high-count (logcount high))
-                        (high-length (integer-length high)))
-                    (cond ((= low 0)
-                           (cond ((= high 0) '(integer 0 0))
-                                 ((= high 1) 'bit)
-                                 ((and (= high-count high-length)
-                                       (plusp high-length))
-                                  `(unsigned-byte ,high-length))
-                                 (t
-                                  `(mod ,(1+ high)))))
-                          ((and (= low most-negative-fixnum)
-                                (= high most-positive-fixnum))
-                           'fixnum)
-                          ((and (= low (lognot high))
-                                (= high-count high-length)
-                                (> high-count 0))
-                           `(signed-byte ,(1+ high-length)))
-                          (t
-                           `(integer ,low ,high)))))
-                 (high `(,base ,(or low '*) ,high))
-                 (low
-                  (if (and (eq base 'integer) (= low 0))
-                      'unsigned-byte
-                      `(,base ,low)))
-                 (t base))))
+            (cond ((and (eq base 'integer) high low)
+                   (let ((high-count (logcount high))
+                         (high-length (integer-length high)))
+                     (cond ((= low 0)
+                            (cond ((= high 0) '(integer 0 0))
+                                  ((= high 1) 'bit)
+                                  ((and (= high-count high-length)
+                                        (plusp high-length))
+                                   `(unsigned-byte ,high-length))
+                                  (t
+                                   `(mod ,(1+ high)))))
+                           ((and (= low most-negative-fixnum)
+                                 (= high most-positive-fixnum))
+                            'fixnum)
+                           ((and (= low (lognot high))
+                                 (= high-count high-length)
+                                 (> high-count 0))
+                            `(signed-byte ,(1+ high-length)))
+                           (t
+                            `(integer ,low ,high)))))
+                  (high `(,base ,(or low '*) ,high))
+                  (low
+                   (if (and (eq base 'integer) (= low 0))
+                       'unsigned-byte
+                       `(,base ,low)))
+                  (t base))))
       (ecase complexp
         (:real
          (aver (neq base 'real))
@@ -2652,6 +2654,25 @@ expansion happened."
         ((nil)
          (aver (eq base+bounds 'real))
          'number)))))
+
+(define-type-method (numeric-range :unparse) (flags type)
+  (let ((type (ecase (numeric-range-type-types type)
+                (#.numeric-range-integer 'integer)
+                (#.(logior numeric-range-rational
+                           numeric-range-integer) 'rational)
+                (#.(logior numeric-range-rational
+                           numeric-range-integer
+                           numeric-range-single-float
+                           numeric-range-double-float) 'real)
+                (#.numeric-range-single-float 'single-float)
+                (#.numeric-range-double-float 'double-float)
+                (#.(logior numeric-range-single-float
+                           numeric-range-double-float) 'float)))
+        (ranges (numeric-range-type-ranges type)))
+    `(or
+      ,@(loop for i below (length ranges) by 2
+              collect (list type (or (aref ranges i) '*)
+                            (or (aref ranges (1+ i)) '*))))))
 
 (define-type-method (number :singleton-p) (type)
   (let ((low  (numeric-type-low  type))
@@ -2811,6 +2832,42 @@ expansion happened."
                      :complexp complexp
                      :low low
                      :high high))
+
+(defun make-numeric-range-type (type &rest ranges)
+  (labels ((coerce-number (x)
+             (when x
+               (ecase type
+                 (integer (the integer x))
+                 (rational (the rational x))
+                 (real x)
+                 (single-float (coerce x 'single-float))
+                 (double-float (coerce x 'double-float))
+                 (float x))))
+           (coerce-bound (x)
+             (if (consp x)
+                 (list (coerce-number (car x)))
+                 (coerce-number x))))
+    (let ((type-mask (ecase type
+                       (integer numeric-range-integer)
+                       (rational (logior numeric-range-rational
+                                         numeric-range-integer))
+                       (real (logior numeric-range-rational
+                                     numeric-range-integer
+                                     numeric-range-single-float
+                                     numeric-range-double-float))
+                       (single-float numeric-range-single-float)
+                       (double-float numeric-range-double-float)
+                       (float (logior numeric-range-single-float
+                                      numeric-range-double-float))))
+          (ranges (loop for (low high) in ranges
+                        collect (if low
+                                    (coerce-bound low)
+                                    single-float-negative-infinity)
+                        collect (if high
+                                    (coerce-bound high)
+                                    single-float-positive-infinity))))
+      (new-ctype numeric-range-type 0 type-mask
+                 (coerce ranges 'vector)))))
 
 ;;; Return true if X is "less than or equal" to Y, taking open bounds
 ;;; into consideration. CLOSED is the predicate used to test the bound
@@ -3060,6 +3117,69 @@ expansion happened."
              ((and (eq class1 'integer) (eq class2 'rational))
               (rational-integer-union type2 type1))
              (t nil))))))
+
+(defun union-numeric-ranges (ranges1 ranges2)
+  (when (< (length ranges2)
+           (length ranges1))
+    (rotatef ranges1 ranges2))
+  (let ((i1 0)
+        (i2 0)
+        (result))
+    (loop while (< i1 (length ranges1))
+          do (let ((low1 (aref ranges1 i1))
+                   (high1 (aref ranges1 (1+ i1))))
+               (loop while (< i2 (length ranges2))
+                     do (let ((low2  (aref ranges2 i2))
+                              (high2 (aref ranges2 (1+ i2))))
+                          (cond ((or (and (consp high2)
+                                          (consp low1)
+                                          (>= (car high2)
+                                              (car low1)))
+                                     (numeric-bound-test low1 high2 > >))
+                                 (push low2 result)
+                                 (push high2 result))
+                                ((or (and (consp low2)
+                                          (consp high1)
+                                          (>= (car low2)
+                                              (car high1)))
+                                     (numeric-bound-test low2 high1 > >))
+                                 (return))
+                                (t
+                                 (when (numeric-bound-test low1 low2 >= >)
+                                   (setf low1 low2))
+                                 (when (numeric-bound-test high1 high2 <= <=)
+                                   (setf high1 high2))))
+                          (incf i2 2)))
+               (incf i1 2)
+               (push low1 result)
+               (push high1 result))
+          finally (return (concatenate 'vector (reverse result) (subseq ranges2 i2))))))
+
+(defun numeric-union-to-range (type1 type2)
+  (cond
+    ((and (numtype-aspects-eq type1 type2)
+          (or (numeric-type-low type1)
+              (numeric-type-high type1))
+          (or (numeric-type-low type2)
+              (numeric-type-high type2)))
+     (let ((type (cond ((numtype-aspects-eq type1 (specifier-type 'double-float))
+                        numeric-range-double-float)
+                       ((numtype-aspects-eq type1 (specifier-type 'single-float))
+                        numeric-range-single-float)
+                       ((numtype-aspects-eq type1 (specifier-type 'integer))
+                        numeric-range-integer)
+                       ((numtype-aspects-eq type1 (specifier-type 'rational))
+                        numeric-range-rational))))
+       (when type
+         (new-ctype numeric-range-type 0 type
+                    (union-numeric-ranges (vector (or (numeric-type-low type1)
+                                                      single-float-negative-infinity)
+                                                  (or (numeric-type-high type1)
+                                                      single-float-positive-infinity))
+                                          (vector (or (numeric-type-low type2)
+                                                      single-float-negative-infinity)
+                                                  (or (numeric-type-high type2)
+                                                      single-float-positive-infinity)))))))))
 
 ;;; If it's longer than N
 (defun weaken-numeric-type-union (n type)
