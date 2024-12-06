@@ -332,6 +332,7 @@
       (union         union-type)
       (negation      negation-type)
       (number        numeric-type)
+      (numeric-range    numeric-range-type)
       (array         array-type)
       (character-set character-set-type)
       (member        member-type)
@@ -650,7 +651,7 @@
 ;;;  2. it inserts (:COPIER NIL)
 ;;;  3. it adds :READ-ONLY T to all slots
 ;;;  4. it has slot options to help with hash-consing
-(defmacro def-type-model ((name &rest options) &rest direct-slots)
+(defmacro def-type-model ((name &rest options) &body direct-slots)
   ;; :CONSTRUCTOR* reminds you that it's not a direct translation to defstruct.
   (aver (<= (count :constructor* options :key #'car) 1))
   ;; The private constructor is always positional.
@@ -1082,17 +1083,37 @@
              `(let ((a ,a) (b ,b))
                 (if (listp a)
                     (and (listp b) (eql (car a) (car b)))
-                    (eql a b)))))
+                    (eql a b))))
+           (hash-ranges (a)
+             `(let ((vector ,a)
+                    (h 0))
+                (loop for e across vector
+                      do
+                      (setf h (mix h (numbound-hash e))))
+                h)))
+
 ;;; A NUMERIC-TYPE represents any numeric type, including things
 ;;; such as FIXNUM.
-(def-type-model (numeric-type
-                 (:extra-mix-step)
-                 (:constructor* nil (aspects low high)))
-  (aspects (missing-arg) :type numtype-aspects :hasher numtype-aspects-id :test eq)
-  (low nil :type (or real (cons real null) null)
-       :hasher numbound-hash :test numbound-eql)
-  (high nil :type (or real (cons real null) null)
-        :hasher numbound-hash :test numbound-eql)))
+  (def-type-model (numeric-type
+                   (:extra-mix-step)
+                   (:constructor* nil (aspects low high)))
+    (aspects (missing-arg) :type numtype-aspects :hasher numtype-aspects-id :test eq)
+    (low nil :type (or real (cons real null) null)
+             :hasher numbound-hash :test numbound-eql)
+    (high nil :type (or real (cons real null) null)
+              :hasher numbound-hash :test numbound-eql))
+
+  (defconstant numeric-range-integer      #b0001)
+  (defconstant numeric-range-rational     #b0010)
+  (defconstant numeric-range-single-float #b0100)
+  (defconstant numeric-range-double-float #b1000)
+
+  (def-type-model (numeric-range-type
+                   (:extra-mix-step)
+                   (:constructor* nil (types ranges)))
+    (types (missing-arg) :type fixnum :hasher identity :test eq)
+    (ranges #() :type simple-vector :hasher hash-ranges :test equalp)))
+
 (declaim (inline numeric-type-complexp numeric-type-class numeric-type-format))
 (defun numeric-type-complexp (x) (numtype-aspects-complexp (numeric-type-aspects x)))
 (defun numeric-type-class (x) (numtype-aspects-class (numeric-type-aspects x)))
@@ -1460,6 +1481,16 @@
               (:real
                (and (not (complexp object))
                     (bound-test object))))))))
+
+(defun numeric-range-typep (object type)
+  (when (eql (numeric-range-type-types type)
+             (typecase object
+               (integer numeric-range-integer)
+               (single-float numeric-range-single-float)
+               (double-float numeric-range-double-float)))
+    ;; FIXME: do not cons
+    (subtype-range-vectors (vector object object)
+                           (numeric-range-type-ranges type))))
 
 ;;; Drop NILs, possibly reducing the storage vector length
 (defun rebuild-ctype-hashsets ()

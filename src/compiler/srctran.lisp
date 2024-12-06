@@ -1471,6 +1471,8 @@
               (list arg))
              (union-type
               (union-type-types arg))
+             (sb-kernel::numeric-range-type
+              (sb-kernel::numeric-range-to-numeric-types arg))
              (list
               arg)
              (t
