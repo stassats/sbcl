@@ -2010,5 +2010,8 @@
   (let ((b (& (>> val 3) #x7)))
    (let ((a (>> (<< val 5) 29)))
     (^ a (aref tab b))))))")
+(#(3 235ED22C 72E2CBDA 75E7305A D724089B)
+ "(NIL FLOAT RATIONAL RATIO INTEGER)"
+ "(  (& (+ val (>> val 7)) 7))")
 )
 ;; EOF

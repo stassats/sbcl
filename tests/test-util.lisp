@@ -3,6 +3,7 @@
                          (loop (gc :full t) (sleep 0.001)))
                        :name "gc stress")
 (setf sb-kernel::*x* t)
+(setf sb-kernel::*r* t)
 (defpackage :test-util
   (:use :cl :sb-ext)
   (:export #:with-test #:report-test-status #:*failures*

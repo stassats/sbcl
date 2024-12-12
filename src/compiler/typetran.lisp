@@ -405,6 +405,7 @@
                                                       :complexp :real)
                                type)))
                  (rational 'rational)
+                 (ratio 'ratio)
                  (float (or (numeric-type-format type) 'float))
                  ((nil) 'real)))
          (low (numeric-type-low type))

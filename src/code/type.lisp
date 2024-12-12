@@ -1987,7 +1987,8 @@ expansion happened."
 (defun cl-std-intersection-type-p (type)
   (cond ((eq type (specifier-type-once-only keyword)) 'keyword)
         ((eq type (specifier-type-once-only compiled-function)) 'compiled-function)
-        ((eq type (specifier-type-once-only ratio)) 'ratio))))
+        ;; ((eq type (specifier-type-once-only ratio)) 'ratio)
+        )))
 
 (define-type-method (named :complex-=) (type1 type2)
   (cond
@@ -2617,32 +2618,36 @@ expansion happened."
                 :high nil))))))))
 
 (defun number-parse-bounds (base low high)
-  (cond ((and (eq base 'integer) high low)
-         (let ((high-count (logcount high))
-               (high-length (integer-length high)))
-           (cond ((= low 0)
-                  (cond ((= high 0) '(integer 0 0))
-                        ((= high 1) 'bit)
-                        ((and (= high-count high-length)
-                              (plusp high-length))
-                         `(unsigned-byte ,high-length))
-                        (t
-                         `(mod ,(1+ high)))))
-                 ((and (= low most-negative-fixnum)
-                       (= high most-positive-fixnum))
-                  'fixnum)
-                 ((and (= low (lognot high))
-                       (= high-count high-length)
-                       (> high-count 0))
-                  `(signed-byte ,(1+ high-length)))
-                 (t
-                  `(integer ,low ,high)))))
-        (high `(,base ,(or low '*) ,high))
-        (low
-         (if (and (eq base 'integer) (= low 0))
-             'unsigned-byte
-             `(,base ,low)))
-        (t base)))
+  (flet ((cook-ratio (spec)
+           (if (eq base 'ratio)
+               `(and (rational ,@spec) (not integer))
+               `(,base ,@spec))))
+   (cond ((and (eq base 'integer) high low)
+          (let ((high-count (logcount high))
+                (high-length (integer-length high)))
+            (cond ((= low 0)
+                   (cond ((= high 0) '(integer 0 0))
+                         ((= high 1) 'bit)
+                         ((and (= high-count high-length)
+                               (plusp high-length))
+                          `(unsigned-byte ,high-length))
+                         (t
+                          `(mod ,(1+ high)))))
+                  ((and (= low most-negative-fixnum)
+                        (= high most-positive-fixnum))
+                   'fixnum)
+                  ((and (= low (lognot high))
+                        (= high-count high-length)
+                        (> high-count 0))
+                   `(signed-byte ,(1+ high-length)))
+                  (t
+                   `(integer ,low ,high)))))
+         (high (cook-ratio `(,(or low '*) ,high)))
+         (low
+          (if (and (eq base 'integer) (= low 0))
+              'unsigned-byte
+              (cook-ratio (list low))))
+         (t base))))
 
 (define-type-method (number :unparse) (flags type)
   (let* ((complexp (numeric-type-complexp type))
@@ -2651,6 +2656,7 @@ expansion happened."
          (base (case (numeric-type-class type)
                  (integer 'integer)
                  (rational 'rational)
+                 (ratio 'ratio)
                  (float (or (numeric-type-format type) 'float))
                  (t 'real))))
     (let ((base+bounds (number-parse-bounds base low high)))
@@ -2743,7 +2749,7 @@ expansion happened."
           (return-from coerce-numeric-bound nil))))))
 
 (defun %make-union-numeric-type (class format complexp low high)
-  (declare (type (member integer rational float nil) class))
+  (declare (type (member integer ratio rational float nil) class))
   (macrolet ((unionize (&rest specs)
                `(type-union
                  ,@(loop for (class format coerce simple-coerce) in specs
@@ -2802,7 +2808,7 @@ expansion happened."
 ;;; cases, despite the name, we return *EMPTY-TYPE* or a UNION-TYPE instead of a
 ;;; NUMERIC-TYPE.
 (defun make-numeric-type (&key class format (complexp :real) low high)
-  (declare (type (member integer rational float nil) class))
+  (declare (type (member integer ratio rational float nil) class))
   (declare (inline !compute-numtype-aspect-id))
   (let ((union-type (%make-union-numeric-type
                      class format complexp low high)))
@@ -2929,13 +2935,13 @@ expansion happened."
                     (null complexp2)))
            (values nil t))
           ;; If the classes are specified and different, the types are
-          ;; disjoint unless type2 is RATIONAL and type1 is INTEGER.
+          ;; disjoint unless type2 is RATIONAL and type1 is INTEGER/RATIO.
           ;; [ or type1 is INTEGER and type2 is of the form (RATIONAL
           ;; X X) for integral X, but this is dealt with in the
           ;; canonicalization inside MAKE-NUMERIC-TYPE ]
           ((not (or (eq class1 class2)
                     (null class2)
-                    (and (eq class1 'integer) (eq class2 'rational))))
+                    (and (memq class1 '(integer ratio)) (eq class2 'rational))))
            (values nil t))
           ;; If the float formats are specified and different, the types
           ;; are disjoint.
@@ -2954,15 +2960,31 @@ expansion happened."
 (defun numeric-type-range-mask (type)
   (cond ((not (numeric-type-p type))
          nil)
-        ((numtype-aspects-eq type (specifier-type 'double-float))
+        ((eq (numeric-type-aspects type)
+             (load-time-value
+              (aref *numeric-aspects-v*
+                    (!compute-numtype-aspect-id :real 'float 'double-float))))
          numeric-range-double-float)
-        ((numtype-aspects-eq type (specifier-type 'single-float))
+        ((eq (numeric-type-aspects type)
+             (load-time-value
+              (aref *numeric-aspects-v*
+                    (!compute-numtype-aspect-id :real 'float 'single-float))))
          numeric-range-single-float)
-        ((numtype-aspects-eq type (specifier-type 'integer))
+        ((eq (numeric-type-aspects type)
+             (load-time-value
+              (aref *numeric-aspects-v*
+                    (!compute-numtype-aspect-id :real 'integer nil))))
          numeric-range-integer)
-        ((numtype-aspects-eq type (specifier-type 'rational))
-         (logior numeric-range-integer
-                 numeric-range-rational))))
+        ((eq (numeric-type-aspects type)
+             (load-time-value
+              (aref *numeric-aspects-v*
+                    (!compute-numtype-aspect-id :real 'ratio nil))))
+         numeric-range-ratio)
+        ((eq (numeric-type-aspects type)
+             (load-time-value
+              (aref *numeric-aspects-v*
+                    (!compute-numtype-aspect-id :real 'rational nil))))
+         numeric-range-rational)))
 
 ;;; If the high bound of LOW is adjacent to the low bound of HIGH,
 ;;; then return true, otherwise NIL. Adjacency of floating-point intervals
@@ -3005,7 +3027,8 @@ expansion happened."
         (lowi (numeric-type-low integer))
         (highi (numeric-type-high integer))
         (lowr (numeric-type-low rational))
-        (highr (numeric-type-high rational)))
+        (highr (numeric-type-high rational))
+        (class (numeric-type-class integer)))
     (when (and (eq formatr formati) (eq complexpr complexpi))
       (cond
         ;; handle the special-case that a single integer expands the
@@ -3029,9 +3052,9 @@ expansion happened."
         (t
          (let* ((integers-of-rational
                  (make-numeric-type
-                  :class 'integer :format formatr :complexp complexpr
-                  :low (round-numeric-bound lowr 'integer formatr t)
-                  :high (round-numeric-bound highr 'integer formatr nil)))
+                  :class class :format formatr :complexp complexpr
+                  :low (round-numeric-bound lowr class formatr t)
+                  :high (round-numeric-bound highr class formatr nil)))
                 (new-integer
                  (and (numeric-type-p integers-of-rational)
                       (or (numeric-types-intersect integers-of-rational integer)
@@ -3048,14 +3071,14 @@ expansion happened."
                        (and (or (not (eql new-lowi lowi))
                                 (not (eql new-highi highi)))
                             (make-numeric-type
-                             :class 'integer :format formatr :complexp complexpr
+                             :class class :format formatr :complexp complexpr
                              :low new-lowi :high new-highi)))))
                 (new-lowr
                  (and (consp lowr)
                       (integerp (car lowr))
                       (let ((low-integer
                              (make-numeric-type
-                              :class 'integer :format formati :complexp complexpi
+                              :class class :format formati :complexp complexpi
                               :low (car lowr) :high (car lowr))))
                         (and (numeric-types-intersect integer low-integer)
                              (numeric-type-low low-integer)))))
@@ -3076,6 +3099,40 @@ expansion happened."
              ((or new-integer new-rational)
               (make-union-type nil (list (or new-integer integer) (or new-rational rational))))
              (t nil))))))))
+
+(defun ratio-integer-union (ratio integer)
+  (let ((formatr (numeric-type-format ratio))
+        (formati (numeric-type-format integer))
+        (complexpr (numeric-type-complexp ratio))
+        (complexpi (numeric-type-complexp integer))
+        (lowi (numeric-type-low integer))
+        (highi (numeric-type-high integer))
+        (lowr (numeric-type-low ratio))
+        (highr (numeric-type-high ratio)))
+    (when (and (eq formatr formati) (eq complexpr complexpi))
+      (cond ((and (if lowr
+                      (eql lowi (ceiling (if (consp lowr)
+                                             (car lowr)
+                                             lowr)))
+                      (eql lowi lowr))
+                  (if highr
+                      (eql highi (floor (if (consp highr)
+                                            (car highr)
+                                            highr)))
+                      (eql highi highr)))
+             (modified-numeric-type ratio :class 'rational))
+            ((and (or (not lowi)
+                      (and lowr
+                           (numeric-bound-test lowi lowr <= <=)))
+                  (or (not highi)
+                      (and highr
+                           (numeric-bound-test highi highr >= >=))))
+             (make-union-type
+              nil
+              (list
+               (modified-numeric-type ratio :class 'rational)
+               integer)))))))
+
 (defvar *x* t)
 (define-type-method (number :simple-union2) (type1 type2)
   (declare (type numeric-type type1 type2))
@@ -3106,10 +3163,14 @@ expansion happened."
                                         (numeric-type-high type2)
                                         >= > t)))
 
-             ((and (eq class1 'rational) (eq class2 'integer))
+             ((and (eq class1 'rational) (memq class2 '(integer ratio)))
               (rational-integer-union type1 type2))
-             ((and (eq class1 'integer) (eq class2 'rational))
+             ((and (memq class1 '(integer ratio)) (eq class2 'rational))
               (rational-integer-union type2 type1))
+             ((and (eq class1 'integer) (eq class2 'ratio))
+              (ratio-integer-union type2 type1))
+             ((and (eq class1 'ratio) (eq class2 'integer))
+              (ratio-integer-union type1 type2))
              (*x*
               (let ((range-type (numeric-type-range-mask type1)))
                 (when (and range-type
@@ -3286,7 +3347,7 @@ expansion happened."
                                       (let ((top (cmp>= high2 high1))
                                             (bottom (cmp<= low2 low1)))
                                         (flet ((flip-exclusion (x positive)
-                                                 (if (integerp x)
+                                                 (if integerp
                                                      (if positive
                                                          (1+ x)
                                                          (1- x))
@@ -3385,9 +3446,10 @@ expansion happened."
         (ecase range-type
           (#.numeric-range-integer
            (values 'integer nil))
-          (#.(logior numeric-range-integer
-                     numeric-range-rational)
+          (#.numeric-range-rational
            (values 'rational nil))
+          (#.numeric-range-ratio
+           (values 'ratio nil))
           (#.numeric-range-single-float
            (values 'float 'single-float))
           (#.numeric-range-double-float
@@ -3428,9 +3490,10 @@ expansion happened."
       (ecase (numeric-range-type-types range)
         (#.numeric-range-integer
          (values 'integer nil))
-        (#.(logior numeric-range-integer
-                   numeric-range-rational)
+        (#.numeric-range-rational
          (values 'rational nil))
+        (#.numeric-range-ratio
+           (values 'ratio nil))
         (#.numeric-range-single-float
          (values 'float 'single-float))
         (#.numeric-range-double-float
@@ -3464,9 +3527,10 @@ expansion happened."
       (ecase (numeric-range-type-types range)
         (#.numeric-range-integer
          (values 'integer nil))
-        (#.(logior numeric-range-integer
-                   numeric-range-rational)
+        (#.numeric-range-rational
          (values 'rational nil))
+        (#.numeric-range-ratio
+         (values 'ratio nil))
         (#.numeric-range-single-float
          (values 'float 'single-float))
         (#.numeric-range-double-float
@@ -3495,7 +3559,7 @@ expansion happened."
        (new-ctype numeric-range-type 0 range-type new-range)))))
 
 (defun difference-ranges (range-type range1 range2)
-  (let ((new-range (difference-range-vectors range1 range2)))
+  (let ((new-range (difference-range-vectors range1 range2 (= range-type numeric-range-integer))))
     (case (length new-range)
       (0
        *empty-type*)
@@ -3639,46 +3703,67 @@ expansion happened."
                  (t
                   :call-other-method))))
         ((and (negation-type-p type1)
-              (numeric-range-type-p  (setf type1 (negation-type-type type1))))
-         (if (= (numeric-range-type-types type1)
-                (numeric-range-type-types type2))
-             (difference-ranges (numeric-range-type-types type1)
-                                (numeric-range-type-ranges type2)
-                                (numeric-range-type-ranges type1))
-             type2))
-        (t
-         :call-other-method)))
-
-(define-type-method (number :complex-intersection2) (type1 type2)
-  (cond ((and (negation-type-p type1)
               (numeric-range-type-p (setf type1 (negation-type-type type1))))
-
-         (cond ((and (numtype-aspects-eq type2 (specifier-type 'rational))
-                     (eq (numeric-range-type-types type1) numeric-range-integer))
-                (let ((diff (difference-ranges (numeric-range-type-types type1)
-                                               (vector (or (numeric-type-low type2)
-                                                           single-float-negative-infinity)
-                                                       (or (numeric-type-high type2)
-                                                           single-float-positive-infinity))
-                                               (numeric-range-type-ranges type1))))
-                  (type-union diff (specifier-type 'ratio))))
-               ((eql (numeric-range-type-types type1)
-                     (numeric-type-range-mask type2))
+         (cond ((= (numeric-range-type-types type1)
+                   (numeric-range-type-types type2))
                 (difference-ranges (numeric-range-type-types type1)
-                                   (vector (or (numeric-type-low type2)
-                                               single-float-negative-infinity)
-                                           (or (numeric-type-high type2)
-                                               single-float-positive-infinity))
+                                   (numeric-range-type-ranges type2)
+                                   (numeric-range-type-ranges type1)))
+               ((logtest (numeric-range-type-types type1)
+                         (numeric-range-type-types type2))
+                (difference-ranges (numeric-range-type-types type2)
+                                   (numeric-range-type-ranges type2)
                                    (numeric-range-type-ranges type1)))
                (t
                 type2)))
+        (t
+         :call-other-method)))
+(defvar *r* t)
+(define-type-method (number :complex-intersection2) (type1 type2)
+  (cond ((and (negation-type-p type1)
+              (numeric-range-type-p (negation-type-type type1)))
+         (let* ((type1 (negation-type-type type1))
+                (types1 (numeric-range-type-types type1))
+                (types2 (numeric-type-range-mask type2)))
+           (cond ((eql types1 types2)
+                  (difference-ranges types1
+                                     (vector (or (numeric-type-low type2)
+                                                 single-float-negative-infinity)
+                                             (or (numeric-type-high type2)
+                                                 single-float-positive-infinity))
+                                     (numeric-range-type-ranges type1)))
+                 ((and types1 types2
+                       (logtest types1 types2))
+                  (when (> types2 types1)
+                    (let ((low (numeric-type-low type2))
+                          (high (numeric-type-high type2)))
+                      (difference-ranges types2
+                                         (vector (or low
+                                                     single-float-negative-infinity)
+                                                 (or high
+                                                     single-float-positive-infinity))
+                                         (numeric-range-type-ranges type1)))))
+                 (t
+                  type2))))
+        ((and *r*
+              (eq type1 (specifier-type '(not integer)))
+              (numtype-aspects-eq type2 (specifier-type 'rational)))
+         (let ((low (numeric-type-low type2))
+               (high (numeric-type-high type2)))
+           (make-numeric-type :class 'ratio
+                              :low (if (integerp low)
+                                       (list low)
+                                       low)
+                              :high (if (integerp high)
+                                        (list high)
+                                        high))))
         (t
          :call-other-method)))
 
 ;;; If it's longer than N
 (defun weaken-numeric-type-union (n type)
   (cond ((and (union-type-p type)
-              (nthcdr n (union-type-types type)))
+               (nthcdr n (union-type-types type)))
          (let ((types (union-type-types type))
                by-aspect
                non-numeric
@@ -3937,6 +4022,11 @@ used for a COMPLEX component.~:@>"
     (cond ((not (or (eq complexp1 complexp2)
                     (null complexp1) (null complexp2)))
            nil)
+          ((or (and (eq class1 'integer)
+                    (eq class2 'ratio))
+               (and (eq class2 'integer)
+                    (eq class1 'ratio)))
+           nil)
           ;; If either type is a float, then the other must either be
           ;; specified to be a float or unspecified. Otherwise, they
           ;; are disjoint.
@@ -3986,7 +4076,7 @@ used for a COMPLEX component.~:@>"
   (if x
       (let ((cx (if (consp x) (car x) x)))
         (ecase class
-          ((nil rational) x)
+          ((nil rational ratio) x)
           (integer
            (if (and (consp x) (integerp cx))
                (if up-p (1+ cx) (1- cx))
@@ -4032,10 +4122,11 @@ used for a COMPLEX component.~:@>"
              (class2 (numeric-type-class type2))
              (class (ecase class1
                       ((nil) class2)
-                      ((integer float) class1)
-                      (rational (if (eq class2 'integer)
-                                    'integer
-                                    'rational))))
+                      ((ratio integer float) class1)
+                      (rational (case class2
+                                  (integer 'integer)
+                                  (ratio 'ratio)
+                                  (t 'rational)))))
              (format (or (numeric-type-format type1)
                          (numeric-type-format type2)))
              (low1 (numeric-type-low type1))
@@ -4094,7 +4185,7 @@ used for a COMPLEX component.~:@>"
                    :class 'float
                    :format (ecase class2
                              (float (float-format-max format1 format2))
-                             ((integer rational) format1)
+                             ((integer rational ratio) format1)
                              ((nil)
                               ;; A double-float with any real number is a
                               ;; double-float.
