@@ -3064,136 +3064,102 @@ expansion happened."
             (t
              nil)))))
 
-;;; Either make a disjoint cut or join left-low to a closed right-low bound
-(defun cut-low-bound (left-low left-high right-low integerp)
-  (when (and right-low
-             (not (eql right-low single-float-negative-infinity))
-             (or left-low left-high))
-    (let (new-left-high
-          new-right-low)
-      (flet ((round-down (x)
-               (let ((cx (if (consp x) (car x) x)))
-                 (if (and (consp x) (integerp cx))
-                     (if integerp
-                         (1- (setf new-right-low cx))
-                         (list cx))
-                     (if integerp
-                         (1- (ceiling cx))
-                         (list cx))))))
-        (let ((open-right-low (if (consp right-low)
-                                  (car right-low)
-                                  right-low))
-              (open-left-low (if (consp left-low)
-                                 (car left-low)
-                                 left-low)))
-          (cond
-            ((and left-low
-                  (not (eql left-low single-float-negative-infinity))
-                  (cond ((and integerp
-                              (sb-xc:= left-low open-right-low))
-                         (setf new-right-low open-right-low))
-                        ((and (not integerp)
-                              (not (consp right-low))
-                              (or (not left-high)
-                                  (sb-xc:>= (if (consp left-high)
-                                                (car left-high)
-                                                left-high)
-                                            open-right-low))
-                              (sb-xc:<= open-left-low open-right-low)
-                              (sb-xc:=
-                                       (if (and (consp left-low)
-                                                (integerp open-left-low))
-                                           (1+ open-left-low)
-                                           (ceiling open-left-low))
-                                       (ceiling open-right-low)))
-                         (setf new-right-low left-low))
-                        (t
-                         (sb-xc:>= open-left-low open-right-low)))))
-            ((consp left-high)
-             (if (consp right-low)
-                 (when (> (car left-high)
-                          (car right-low))
-                   (setf new-left-high right-low))
-                 (when (> (car left-high)
-                          right-low)
-                   (setf new-left-high (list right-low)))))
-            ((sb-xc:>= (or left-high
-                           single-float-positive-infinity)
-                       open-right-low)
-             (if (and (not integerp)
-                      left-low
-                      (not (eql left-low single-float-negative-infinity))
-                      (sb-xc:< (ceiling open-left-low)
-                               (ceiling open-right-low)))
-                 (setf new-left-high (list (setf new-right-low (floor open-right-low))))
-                 (setf new-left-high (round-down right-low))))))
-        (values new-left-high (unless (eql new-right-low right-low)
-                                new-right-low))))))
-
-;;; The right counterpart of cut-low-bound
+;;; Given [..., left-high] and [right-low, right-high] drag left-high right as much as possible,
+;;; after doing that cut right-low to exclude that point.
+;;; Return new-left-high and new-right-low.
 (defun cut-high-bound (left-high right-low right-high integerp)
-  (when (and left-high
-             (not (eql left-high single-float-positive-infinity))
-             (or right-low right-high))
-    (let (new-left-high
-          new-right-low)
-      (flet ((round-up (x)
-               (let ((cx (if (consp x) (car x) x)))
-                 (if (and (consp x) (integerp cx))
-                     (if integerp
-                         (1+ (setf new-left-high cx))
-                         (list cx))
-                     (if integerp
-                         (1+ (floor cx))
-                         (list cx))))))
-        (let ((open-left-high (if (consp left-high)
-                                  (car left-high)
-                                  left-high))
-              (open-right-high (if (consp right-high)
-                                   (car right-high)
-                                   right-high)))
-          (cond
-            ((and right-high
-                  (not (eql right-high single-float-positive-infinity))
-                  (cond ((and integerp
-                              (sb-xc:= right-high open-left-high))
-                         (setf new-left-high open-left-high))
-                        ((and (not integerp)
-                              (not (consp left-high))
-                              (or (not right-low)
-                                  (sb-xc:<= (if (consp right-low)
-                                                (car right-low)
-                                                right-low)
-                                            open-left-high))
-                              (sb-xc:>= open-right-high open-left-high)
-                              (sb-xc:= (if (and (consp right-high)
-                                                (integerp open-right-high))
-                                           (1- open-right-high)
-                                           (floor open-right-high))
-                                       (floor open-left-high)))
-                         (setf new-left-high right-high))
-                        (t
-                         (sb-xc:<= open-right-high open-left-high)))))
-            ((consp right-low)
-             (if (consp left-high)
-                 (when (sb-xc:< (car right-low)
-                                (car left-high))
-                   (setf new-right-low left-high))
-                 (when (sb-xc:< (car right-low)
-                                left-high)
-                   (setf new-right-low (list left-high)))))
-            ((sb-xc:<= (or right-low
-                           single-float-negative-infinity)
-                       open-left-high)
-             (if (and (not integerp)
-                      right-high
-                      (not (eql right-high single-float-positive-infinity))
-                      (sb-xc:> (floor open-right-high)
-                               (floor open-left-high)))
-                 (setf new-left-high (list (setf new-right-low (ceiling open-left-high))))
-                 (setf new-right-low (round-up left-high))))))
-        (values new-left-high (unless (eql new-right-low right-low)
-                                new-right-low))))))
+  ;; easier to think about and no need to check in each branch, can be removed later.
+  (let ((left-high (or left-high single-float-positive-infinity))
+        (right-high (or right-high single-float-positive-infinity))
+        (right-low (or right-low single-float-negative-infinity)))
+    (cond ((eql left-high single-float-positive-infinity)
+           ;; can't move any more right
+           (values nil nil))
+          (t
+           (let ((open-left-high (if (consp left-high)
+                                     (car left-high)
+                                     left-high))
+                 (open-right-high (if (consp right-high)
+                                      (car right-high)
+                                      right-high))
+                 (open-right-low (if (consp right-low)
+                                     (car right-low)
+                                     right-low)))
+             (cond
+               ;; right high is before left high, nothing to do
+               ((if (and (consp left-high)
+                         (not (consp right-high)))
+                    (sb-xc:< open-right-high open-left-high)
+                    (sb-xc:<= open-right-high open-left-high))
+                (values nil nil))
+               ;; there's a gap between left-high and right-low
+               ((if (integerp open-right-low) ;; There's a 1 between (1) and (1), but nothing between (1/2) and (1/2)
+                    (sb-xc:>= open-right-low open-left-high)
+                    (sb-xc:> open-right-low open-left-high))
+                (values nil nil))
+               (t
+                (let ((next-integer (if (integerp (if integerp
+                                                      open-left-high
+                                                      left-high))
+                                        (1+ open-left-high)
+                                        (ceiling open-left-high))))
+                  (if (if (consp right-high)
+                          (sb-xc:< next-integer open-right-high)
+                          (sb-xc:<= next-integer open-right-high))
+                      (if integerp
+                          (values (if (and (consp left-high)
+                                           (integerp open-left-high))
+                                      open-left-high)
+                                  next-integer)
+                          (values (list next-integer) (list next-integer)))
+                      (values right-high nil))))))))))
+
+;;; The inverse
+(defun cut-low-bound (left-low left-high right-low integerp)
+  (let ((left-low (or left-low single-float-negative-infinity))
+        (left-high (or left-high single-float-positive-infinity))
+        (right-low (or right-low single-float-negative-infinity)))
+    (cond ((eql left-low single-float-negative-infinity)
+           ;; can't move any more left
+           (values nil nil))
+          (t
+           (let ((open-left-low (if (consp left-low)
+                                    (car left-low)
+                                    left-low))
+                 (open-left-high (if (consp left-high)
+                                     (car left-high)
+                                     left-high))
+                 (open-right-low (if (consp right-low)
+                                     (car right-low)
+                                     right-low)))
+             (cond
+               ;; left low is after right low, nothing to do
+               ((and (if (and (consp right-low)
+                              (not (consp left-low)))
+                         (sb-xc:> open-left-low open-right-low)
+                         (sb-xc:>= open-left-low open-right-low)))
+                (values nil nil))
+               ;; there's a gap between left-high and right-low
+               ((if (integerp open-right-low) ;; There's a 1 between (1) and (1), but nothing between (1/2) and (1/2)
+                    (sb-xc:>= open-right-low open-left-high)
+                    (sb-xc:> open-right-low open-left-high))
+                (values nil nil))
+               (t
+                (let ((prev-integer (if (integerp (if integerp
+                                                      open-right-low
+                                                      right-low))
+                                        (1- open-right-low)
+                                        (floor open-right-low))))
+                  (if (if (consp left-low)
+                          (sb-xc:> prev-integer open-left-low)
+                          (sb-xc:>= prev-integer open-left-low))
+                      (if integerp
+                          (values prev-integer
+                                  (if (and (consp right-low)
+                                           (integerp open-right-low))
+                                      open-right-low))
+                          (values (list prev-integer) (list prev-integer)))
+                      (values nil left-low))))))))))
 
 ;;; Return a numeric type that is a supertype for both TYPE1 and TYPE2.
 (defun rational-integer-union (rational integer)
@@ -3210,7 +3176,7 @@ expansion happened."
       ;; partition the types into disjoint parts
       (multiple-value-bind (left-high new-middle-low)
           (cut-low-bound lowi highi lowr (eq class 'integer))
-        (multiple-value-bind  (new-middle-high right-low)
+        (multiple-value-bind (new-middle-high right-low)
             (cut-high-bound highr lowi highi (eq class 'integer))
           (let* ((left-integer
                    (and left-high
