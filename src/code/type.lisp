@@ -1896,7 +1896,31 @@ expansion happened."
                     (when (setq u (,simplify2 first r))
                       (return (,name (nsubstitute u r rest)))))))))))
   (def simplify-intersections intersection-type-p type-intersection2)
-  (def simplify-unions union-type-p type-union2))
+  ;; (def simplify-unions union-type-p type-union2)
+  )
+
+
+(defun simplify-unions (types)
+  (when types
+    ;; KLUDGE: unify integer with ratios before rationals
+    ;; otherwise 
+    (let ((types (:dbg (stable-sort (loop for type in types
+                                     when (union-type-p type)
+                                     append (compound-type-types type)
+                                     else collect type)
+                               #'< :key (lambda (x)
+                                          (typecase x
+                                            (numeric-type
+                                             (or (numeric-type-range-mask x) -1))
+                                            (numeric-range-type
+                                             (or (numeric-range-type-types x) -1))
+                                            (t -1)))))))
+      (multiple-value-bind (first rest)
+          (values (car types) (cdr types))
+        (let ((rest (simplify-unions rest)) u)
+          (dolist (r rest (cons first rest))
+            (when (setq u (type-union2 first r))
+              (return (simplify-unions (nsubstitute u r rest))))))))))
 
 (defun maybe-distribute-one-union (union-type types)
   (let* ((intersection (%type-intersection types))
@@ -3093,7 +3117,9 @@ expansion happened."
                     (sb-xc:<= open-right-high open-left-high))
                 (values nil nil))
                ;; there's a gap between left-high and right-low
-               ((if (integerp open-right-low) ;; There's a 1 between (1) and (1), but nothing between (1/2) and (1/2)
+               ((if (and (consp right-low)
+                         (consp left-high)
+                         (integerp open-right-low)) ;; There's a 1 between (1) and (1), but nothing between (1/2) and (1/2)
                     (sb-xc:>= open-right-low open-left-high)
                     (sb-xc:> open-right-low open-left-high))
                 (values nil nil))
@@ -3119,7 +3145,7 @@ expansion happened."
   (let ((left-low (or left-low single-float-negative-infinity))
         (left-high (or left-high single-float-positive-infinity))
         (right-low (or right-low single-float-negative-infinity)))
-    (cond ((eql left-low single-float-negative-infinity)
+    (cond ((eql right-low single-float-negative-infinity)
            ;; can't move any more left
            (values nil nil))
           (t
@@ -3140,7 +3166,9 @@ expansion happened."
                          (sb-xc:>= open-left-low open-right-low)))
                 (values nil nil))
                ;; there's a gap between left-high and right-low
-               ((if (integerp open-right-low) ;; There's a 1 between (1) and (1), but nothing between (1/2) and (1/2)
+               ((if (and (consp left-high)
+                         (consp right-low)
+                         (integerp open-right-low)) ;; There's a 1 between (1) and (1), but nothing between (1/2) and (1/2)
                     (sb-xc:>= open-right-low open-left-high)
                     (sb-xc:> open-right-low open-left-high))
                 (values nil nil))
@@ -3981,7 +4009,14 @@ expansion happened."
                         (rotatef range1 range2)
                         (rotatef type1 type2)
                         (rotatef types2 types1))
-                      (union-2ranges types1 types2 range1 range2)))))))
+                      (union-2ranges types1 types2 range1 range2))))
+                 ((= types1 numeric-range-integer)
+                  (let ((rationals1 (type-union type1 (specifier-type 'rational)))
+                        (rationals2 (type-union type2 (specifier-type 'rational))))
+                   (type-union
+                    (type-difference (type-intersection type2 (specifier-type 'integer))
+                                     type1)
+                    (type-intersection type2 (specifier-type '(not integer)))))))))
         ((and (negation-type-p type1)
               (typep (negation-type-type type1) '(or numeric-type numeric-range-type)))
          (make-negation-type (type-difference (negation-type-type type1) type2)))))
