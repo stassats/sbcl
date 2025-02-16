@@ -4655,4 +4655,12 @@
    ()
    `(lambda (a)
       (ftype-test-opt a))
-   ((nil) (condition 'type-error))))
+   ((nil) (condition 'type-error)))
+  (assert (type-specifiers-equal
+           (caddr
+            (sb-kernel:%simple-fun-type #'ftype-test-key))
+           '(values (or null fixnum) &optional)))
+  (assert (type-specifiers-equal
+           (caddr
+            (sb-kernel:%simple-fun-type #'ftype-test-opt))
+           '(values (or null fixnum) &optional))))
