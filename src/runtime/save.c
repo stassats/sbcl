@@ -48,7 +48,7 @@
 
 /* write_memsize_options uses a simple serialization scheme that
  * consists of one word of magic, one word indicating the size of the
- * core entry, and one word per struct field. 
+ * core entry, and one word per struct field.
  * options == 2 => accept memsize options at runtime.
  * options == 1 => don't accept them
 */
