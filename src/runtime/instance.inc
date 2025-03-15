@@ -19,11 +19,11 @@ static inline int instance_length(lispobj header)
     //   so those have to be masked off.
     // * If the object is in hashed-and-moved state and the original instance payload
     //   length was odd (total object length was even), then add 1.
-    //   This can be detected by ANDing some bits, bit 10 being the least-significant
+    //   This can be detected by ANDing some bits, bit INSTANCE_LENGTH_SHIFT being the least-significant
     //   bit of the original size, and bit 9 being the 'hashed+moved' bit.
     // * 64-bit machines do not need 'long' right-shifts, so truncate to int.
 
-    int extra = ((unsigned int)header >> 10) & ((unsigned int)header >> 9) & 1;
+    int extra = ((unsigned int)header >> INSTANCE_LENGTH_SHIFT) & ((unsigned int)header >> 9) & 1;
     return (((unsigned int)header >> INSTANCE_LENGTH_SHIFT) & INSTANCE_LENGTH_MASK) + extra;
 }
 

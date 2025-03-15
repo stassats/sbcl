@@ -198,11 +198,33 @@
     (setf  (sb-kernel::standard-classoid-old-layouts classoid)
            new-previous)))
 
+(defvar *locked-instance* nil)
+
+(defmacro with-instance-lock (instance &body body)
+  (declare (ignorable instance))
+  `(flet ((body ()
+            ,@body))
+     (sb-sys:without-interrupts
+       (cond #+sb-thread
+             ((and (%instancep instance)
+                   (%pcl-instance-p instance))
+              (if (eq *locked-instance* instance) ;; a recursive invocation
+                  (body)
+                  (unwind-protect
+                       (progn
+                         (sb-thread::grab-header-bit-spinlock sb-vm::standard-instance-lock-flag ,instance)
+                         (let ((*locked-instance* instance))
+                           (body)))
+                    (sb-thread::release-header-bit-spinlock sb-vm::standard-instance-lock-flag ,instance))))
+             (t
+              (with-world-lock ()
+                (body)))))))
+
 ;;; FIXME: This is not a good name: part of the contract here is that
 ;;; we return the valid wrapper, which is not obvious from the name
 ;;; (or the names of our callees.)
 (defun check-wrapper-validity (instance)
-  (with-world-lock ()
+  (with-instance-lock instance
     (let* ((owrapper (layout-of instance))
            (state (layout-invalid owrapper)))
       (aver (not (eq state :uninitialized)))
