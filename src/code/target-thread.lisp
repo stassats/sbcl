@@ -112,6 +112,55 @@ WITH-CAS-LOCK can be entered recursively."
                (,new nil))
            (unless (eq ,old ,cas-form)
              (bug "Failed to release CAS lock!")))))))
+
+#+sb-thread
+(defun grab-header-bit-spinlock (bit instance)
+  (declare ((integer 0 (#.sb-vm:n-word-bits)) bit))
+  (with-pinned-objects (instance)
+    (let* ((header-sap (int-sap (sb-ext:truly-the sb-vm:word (- (get-lisp-obj-address instance) sb-vm:instance-pointer-lowtag))))
+           (header (sap-ref-word header-sap 0)))
+      (loop until (loop repeat 100
+                        do
+                        (setf (ldb (byte 1 bit) header) 0)
+                        when (let* ((new (dpb 1 (byte 1 bit) header))
+                                    (old (sb-ext:cas (#+64-bit sb-sys:sap-ref-64
+                                                      #-64-bit sb-sys:sap-ref-32
+                                                      header-sap 0)
+                                                     header new)))
+                               (cond ((eq old header))
+                                     (t
+                                      (setf header old)
+                                      nil)))
+                        return t
+                        else
+                        do (sb-ext:spin-loop-hint))
+            do (thread-yield)))))
+
+#+sb-thread
+(defun release-header-bit-spinlock (bit instance)
+  (declare ((integer 0 (#.sb-vm:n-word-bits)) bit)
+           (optimize speed))
+  (with-pinned-objects (instance)
+    (let* ((header-sap (int-sap (sb-ext:truly-the sb-vm:word (- (get-lisp-obj-address instance) sb-vm:instance-pointer-lowtag))))
+           (header (sap-ref-word header-sap 0)))
+      (loop until (loop repeat 100
+                        do
+                        (unless (logbitp bit header)
+                          (error "Unlocked"))
+                        when (let* ((new (dpb 0 (byte 1 bit) header))
+                                    (old (sb-ext:cas (#+64-bit sb-sys:sap-ref-64
+                                                      #-64-bit sb-sys:sap-ref-32
+                                                      header-sap 0)
+                                                     header new)))
+                               (cond ((eq old header))
+                                     (t
+                                      (setf header old)
+                                      nil)))
+                        return t
+                        else
+                        do (sb-ext:spin-loop-hint))
+            do (thread-yield)))))
+
 ;;; Conditions
 
 (define-condition thread-error (error)

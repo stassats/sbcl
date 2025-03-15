@@ -462,6 +462,7 @@
 ;;; that implement lazily computed stable hash codes.
 (defconstant stable-hash-required-flag 8)
 (defconstant hash-slot-present-flag    9)
+(defconstant standard-instance-lock-flag 10)
 
 #+immobile-space
 (progn
