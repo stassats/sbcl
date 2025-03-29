@@ -570,6 +570,22 @@
                                block2))))))))
   (values))
 
+(defun lambda-var-closed-over-refs-p (fun var)
+  (declare (type lambda-var var))
+  (let ((env (get-lambda-environment fun)))
+    (dolist (ref (leaf-refs var))
+      (unless (eq (get-node-environment ref) env)
+        (return t)))))
+
+(defun lambda-with-closed-over-&more-p (fun)
+  (and (lambda-optional-dispatch fun)
+       (loop
+         for var in (lambda-vars fun)
+         for info = (lambda-var-arg-info var)
+         thereis (and info
+                      (eq (arg-info-kind info) :more-context)
+                      (lambda-var-closed-over-refs-p fun var)) )))
+
 ;;; Mark all tail-recursive uses of function result continuations with
 ;;; the corresponding TAIL-SET.
 (defun tail-annotate (component)
@@ -577,18 +593,21 @@
   (dolist (fun (component-lambdas component))
     (let ((ret (lambda-return fun)))
       (when ret
-        (let ((result (return-result ret)))
+        (let ((result (return-result ret))
+              (closed-&more (find-if #'lambda-with-closed-over-&more-p
+                                     (tail-set-funs (lambda-tail-set fun)))))
           (do-uses (use result)
             (when (and (immediately-used-p result use)
                        (not (and (combination-p use)
                                  (lvar-fun-is (combination-fun use) '(break))))
-                       (or (not (eq (node-derived-type use) *empty-type*))
-                           (not (basic-combination-p use))
+                       (or (not (basic-combination-p use))
                            ;; This prevents external entry points from
                            ;; showing up in the backtrace: we always
                            ;; want tail calls inside XEPs to the
                            ;; functions they are the entry point for.
-                           (eq (basic-combination-kind use) :local)))
+                           (eq (basic-combination-kind use) :local)
+                           (and (not closed-&more)
+                                (not (eq (node-derived-type use) *empty-type*)))))
               (setf (node-tail-p use) t)))))))
   ;; Tail call non-returning functions if no debugging is wanted.
   (dolist (block (block-pred (component-tail component)))
