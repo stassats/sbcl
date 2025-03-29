@@ -1374,7 +1374,7 @@ bootstrapping.
 ;; The two variants of INVOKE-FAST-METHOD-CALL differ in how REST-ARGs
 ;; are handled. The first one will get REST-ARG as a single list (as
 ;; the last argument), and will thus need to use APPLY. The second one
-;; will get them as a &MORE argument, so we can pass the arguments
+;; will get them as a &REST argument, so we can pass the arguments
 ;; directly with MULTIPLE-VALUE-CALL and %MORE-ARG-VALUES.
 
 (defmacro invoke-fast-method-call (method-call restp &rest required-args+rest-arg)
@@ -1460,17 +1460,13 @@ bootstrapping.
        (trace-emf-call-internal ,emf ,format ,args))))
 
 (defmacro invoke-effective-method-function-fast
-    (emf restp &key required-args rest-arg more-arg)
+    (emf restp &key required-args rest-arg)
   `(progn
      (trace-emf-call ,emf ,restp (list ,@required-args rest-arg))
-     ,(if more-arg
-          `(invoke-fast-method-call/more ,emf
-                                         ,@more-arg
-                                         ,@required-args)
-          `(invoke-fast-method-call ,emf
-                                    ,restp
-                                    ,@required-args
-                                    ,@rest-arg))))
+     (invoke-fast-method-call ,emf
+                              ,restp
+                              ,@required-args
+                              ,@rest-arg)))
 
 (defun effective-method-optimized-slot-access-clause
     (emf restp required-args)
@@ -1513,7 +1509,7 @@ bootstrapping.
 ;;; to make less work for the compiler we take a path that doesn't
 ;;; involve the slot-accessor clause (where EMF is a FIXNUM) at all.
 (macrolet ((def (name &optional narrow)
-             `(defmacro ,name (emf restp &key required-args rest-arg more-arg)
+             `(defmacro ,name (emf restp &key required-args rest-arg)
                 (unless (constantp restp)
                   (error "The RESTP argument is not constant."))
                 (setq restp (constant-form-value restp))
@@ -1524,14 +1520,10 @@ bootstrapping.
                        (trace-emf-call ,emf-n ,restp (list ,@required-args ,@rest-arg))
                        (etypecase ,emf-n
                          (fast-method-call
-                          ,(if more-arg
-                               `(invoke-fast-method-call/more ,emf-n
-                                                              ,@more-arg
-                                                              ,@required-args)
-                               `(invoke-fast-method-call ,emf-n
-                                                         ,restp
-                                                         ,@required-args
-                                                         ,@rest-arg)))
+                          (invoke-fast-method-call ,emf-n
+                                                   ,restp
+                                                   ,@required-args
+                                                   ,@rest-arg))
                          ,@,(unless narrow
                               `(effective-method-optimized-slot-access-clause
                                 emf-n restp required-args))

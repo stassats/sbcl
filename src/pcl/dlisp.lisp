@@ -55,31 +55,16 @@
 (defun make-dfun-lambda-list (nargs applyp)
   (let ((required (make-dfun-required-args nargs)))
     (if applyp
-        (nconc required
-               ;; Use &MORE arguments to avoid consing up an &REST list
-               ;; that we might not need at all. See MAKE-EMF-CALL and
-               ;; INVOKE-EFFECTIVE-METHOD-FUNCTION for the other
-               ;; pieces.
-               '(&more .dfun-more-context. .dfun-more-count.))
+        (nconc required '(&rest .rest.))
         required)))
 
 (defun make-dlap-lambda-list (nargs applyp)
   (let ((required (make-dfun-required-args nargs)))
-    ;; Return the full lambda list, the required arguments, a form
-    ;; that will generate a rest-list, and a list of the &MORE
-    ;; parameters used.
-    ;; Beware of deep voodoo! The DEFKNOWN for %LISTIFY-REST-ARGS says that its
-    ;; second argument is INDEX, but the THE form below is "weaker" on account
-    ;; of the vop operand restrictions or something that I don't understand.
-    ;; Which is to say, PCL compilation reliably broke when changed to INDEX.
     (if applyp
-        (values (sys-tlab-append required '(&more .more-context. .more-count.))
+        (values (sys-tlab-append required '(&rest .rest.))
                 required
-                '((sb-c:%listify-rest-args
-                   .more-context. (the (and unsigned-byte fixnum)
-                                    .more-count.)))
-                '(.more-context. .more-count.))
-        (values required required nil nil))))
+                '(.rest.))
+        (values required required nil))))
 
 (defun make-emf-call (nargs applyp fn-variable &optional emf-type)
   (let ((required (make-dfun-required-args nargs)))
@@ -89,18 +74,9 @@
        ,fn-variable
        ,applyp
        :required-args ,required
-       ;; INVOKE-EFFECTIVE-METHOD-FUNCTION will decide whether to use
-       ;; the :REST-ARG version or the :MORE-ARG version depending on
-       ;; the type of the EMF.
        :rest-arg ,(if applyp
-                      ;; Creates a list from the &MORE arguments.
-                      '((sb-c:%listify-rest-args ; See above re. voodoo
-                         .dfun-more-context.
-                         (the (and unsigned-byte fixnum)
-                           .dfun-more-count.)))
-                      nil)
-       :more-arg ,(when applyp
-                    '(.dfun-more-context. .dfun-more-count.)))))
+                      '(.rest.)
+                      nil))))
 
 (defun make-fast-method-call-lambda-list (nargs applyp)
   (list* '.pv. '.next-method-call. (make-dfun-lambda-list nargs applyp)))
@@ -177,14 +153,13 @@
 (defvar *precompiling-lap* nil)
 
 (defun emit-default-only (metatypes applyp)
-  (multiple-value-bind (lambda-list args rest-arg more-arg)
+  (multiple-value-bind (lambda-list args rest-arg)
       (make-dlap-lambda-list (length metatypes) applyp)
     (generating-lisp '(emf)
                      lambda-list
                      `(invoke-effective-method-function emf
                                                         ,applyp
                                                         :required-args ,args
-                                                        :more-arg ,more-arg
                                                         :rest-arg ,rest-arg))))
 
 ;;; --------------------------------
@@ -282,11 +257,6 @@
       (:makunbound `(progn (setf ,read-form +slot-unbound+) ,(car arglist)))
       (:writer `(setf ,read-form ,(car arglist))))))
 
-(defmacro emit-reader/writer-macro (reader/writer 1-or-2-class class-slot-p)
-  (let ((*precompiling-lap* t))
-    (values
-     (emit-reader/writer reader/writer 1-or-2-class class-slot-p))))
-
 ;; If CACHED-INDEX-P is false, then the slot location is a constant and
 ;; the cache holds layouts eligible to use that index.
 ;; If true, then the cache is a map of layout -> index.
@@ -312,20 +282,9 @@
                     (when cached-index-p 'index)
                     (unless class-slot-p '(slots)))))))
 
-(defmacro emit-one-or-n-index-reader/writer-macro
-    (reader/writer cached-index-p class-slot-p)
-  (let ((*precompiling-lap* t))
-    (values
-     (emit-one-or-n-index-reader/writer reader/writer
-                                        cached-index-p
-                                        class-slot-p))))
-
 (defun emit-miss (miss-fn args applyp)
   (if applyp
-      `(multiple-value-call ,miss-fn ,@args
-                            (sb-c:%more-arg-values .more-context.
-                                                    0
-                                                    .more-count.))
+      `(apply ,miss-fn ,@args .rest.)
       `(funcall ,miss-fn ,@args)))
 
 ;; (cache-emf, return-value):
@@ -335,9 +294,9 @@
 ;;  T   / T   : Look for the EMF for argument layouts. Return it when in cache.
 ;;
 ;;  METATYPES must be acceptable to EMIT-FETCH-WRAPPER.
-;;  APPLYP says whether there is a &MORE context.
+;;  APPLYP says whether there is a &REST arg
 (defun emit-checking-or-caching (cached-emf-p return-value-p metatypes applyp)
-  (multiple-value-bind (lambda-list args rest-arg more-arg)
+  (multiple-value-bind (lambda-list args rest-arg)
       (make-dlap-lambda-list (length metatypes) applyp)
     (generating-lisp
      `(cache ,@(unless cached-emf-p '(emf)) miss-fn)
@@ -349,18 +308,9 @@
                         `(invoke-effective-method-function
                           emf ,applyp
                           :required-args ,args
-                          :more-arg ,more-arg
                           :rest-arg ,rest-arg))
                     (emit-miss 'miss-fn args applyp)
                     (when cached-emf-p 'emf))))))
-
-(defmacro emit-checking-or-caching-macro (cached-emf-p
-                                          return-value-p
-                                          metatypes
-                                          applyp)
-  (let ((*precompiling-lap* t))
-    (values
-     (emit-checking-or-caching cached-emf-p return-value-p metatypes applyp))))
 
 (defun emit-dlap (cache-var args metatypes hit-form miss-form value-var
                   &optional slot-vars)

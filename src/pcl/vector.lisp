@@ -824,6 +824,7 @@
 ;;; funcalls a result of method-function. BUT, this is needed to make
 ;;; early methods work.
 (defun method-function-from-fast-function (fmf plist)
+
   (declare (type function fmf))
   (let* ((method-function nil)
          (snl (getf plist :slot-name-lists))

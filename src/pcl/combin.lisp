@@ -287,11 +287,7 @@
         (mc-args-p
          (let* ((required (make-dfun-required-args nreq))
                 (gf-args (if applyp
-                             `(list* ,@required
-                                     (sb-c::%listify-rest-args
-                                      .dfun-more-context.
-                                      (the (and unsigned-byte fixnum)
-                                        .dfun-more-count.)))
+                             `(list* ,@required .rest.)
                              `(list ,@required))))
            `(named-lambda ,name ,ll
               (declare (ignore .pv. .next-method-call.))
@@ -302,7 +298,7 @@
          `(named-lambda ,name ,ll
             (declare (ignore .pv. .next-method-call.))
             (declare (ignorable ,@(make-dfun-required-args nreq)
-                                ,@(when applyp '(.dfun-more-context. .dfun-more-count.))))
+                                ,@(when applyp '(.rest.))))
             ,effective-method))))))
 
 (defun expand-emf-call-method (gf form metatypes applyp env)
@@ -586,45 +582,45 @@
         (aver any-keyp)
         (values (if allowp t keys) nopt)))))
 
-(defun check-applicable-keywords (start valid-keys more-context more-count)
+(defun check-applicable-keywords (start valid-keys &rest args)
+  (declare (optimize speed))
   (let ((allow-other-keys-seen nil)
         (allow-other-keys nil)
+        (count (length args))
         (i start))
-    (declare (type index i more-count)
+    (declare (type index i)
              (optimize speed))
-    (flet ((current-value ()
-             (sb-c::%more-arg more-context i)))
-      (declare (inline current-value))
+    (macrolet ((current-value ()
+                 `(nth i args)))
       (collect ((invalid))
         (loop
-           (when (>= i more-count)
-             (when (and (invalid) (not allow-other-keys))
-               (%program-error "~@<invalid keyword argument~P: ~
+         (when (>= i count)
+           (when (and (invalid) (not allow-other-keys))
+             (%program-error "~@<invalid keyword argument~P: ~
                                 ~{~S~^, ~} (valid keys are ~{~S~^, ~}).~@:>"
-                               (length (invalid)) (invalid) valid-keys))
-             (return))
-           (let ((key (current-value)))
-             (incf i)
-             (cond
-               ((not (symbolp key))
-                (%program-error "~@<keyword argument not a symbol: ~S.~@:>"
-                                key))
-               ((= i more-count)
-                (sb-c::%odd-key-args-error))
-               ((eq key :allow-other-keys)
-                ;; only the leftmost :ALLOW-OTHER-KEYS has any effect
-                (unless allow-other-keys-seen
-                  (setq allow-other-keys-seen t
-                        allow-other-keys (current-value))))
-               ((eq t valid-keys))
-               ((not (memq key valid-keys)) (invalid key))))
-           (incf i))))))
+                             (length (invalid)) (invalid) valid-keys))
+           (return))
+         (let ((key (current-value)))
+           (incf i)
+           (cond
+             ((not (symbolp key))
+              (%program-error "~@<keyword argument not a symbol: ~S.~@:>"
+                              key))
+             ((= i count)
+              (sb-c::%odd-key-args-error))
+             ((eq key :allow-other-keys)
+              ;; only the leftmost :ALLOW-OTHER-KEYS has any effect
+              (unless allow-other-keys-seen
+                (setq allow-other-keys-seen t
+                      allow-other-keys (current-value))))
+             ((eq t valid-keys))
+             ((not (memq key valid-keys)) (invalid key))))
+         (incf i))))))
 
 (defun wrap-with-applicable-keyword-check (effective valid-keys keyargs-start)
   `(let ((.valid-keys. ',valid-keys)
          (.keyargs-start. ',keyargs-start))
-     (check-applicable-keywords
-      .keyargs-start. .valid-keys. .dfun-more-context. .dfun-more-count.)
+     (apply #'check-applicable-keywords .keyargs-start. .valid-keys. .rest.)
      ,effective))
 
 ;;;; the STANDARD method combination type. This is coded by hand
