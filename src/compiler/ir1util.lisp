@@ -2892,8 +2892,9 @@ is :ANY, the function name is not checked."
     (or (eq kind :full)
         (eq kind :unknown-keys)
         ;; It has an ir2-converter, but needs to behave like a full call.
-        (eq (lvar-fun-name (basic-combination-fun call) t)
-            '%coerce-callable-for-call)
+        (memq (lvar-fun-name (basic-combination-fun call) t)
+              '(%coerce-callable-for-call
+                %coerce-callable-to-fun))
         (and (eq kind :known)
              (let ((info (basic-combination-fun-info call)))
                (and

@@ -301,11 +301,59 @@
   (inst add lr-tn lr-tn 4)
   (inst br lr-tn))
 
+(define-assembly-routine (%coerce-callable-to-fun
+                          (:translate sb-c::%coerce-callable-to-fun)
+                          (:policy :fast-safe)
+                          (:arg-types t)
+                          (:result-types t)
+                          (:save-p t;; :compute-only
+                                   ))
+    ((:arg fun descriptor-reg lexenv-offset)
+     (:res result descriptor-reg lexenv-offset))
+  START
+  (inst and tmp-tn fun lowtag-mask)
+  (inst cmp tmp-tn fun-pointer-lowtag)
+  (inst b :ne NOT-FUNCTION)
+  (move result fun)
+  (inst ret)
+
+  NOT-FUNCTION
+  (inst cmp tmp-tn other-pointer-lowtag)
+  (inst b :ne NOT-CALLABLE)
+
+  (inst ldrb tmp-tn (@ fun (- other-pointer-lowtag)))
+  (inst cmp tmp-tn symbol-widetag)
+  (inst b :ne NOT-CALLABLE)
+
+  (loadw tmp-tn fun symbol-fdefn-slot other-pointer-lowtag)
+  (inst cbz tmp-tn UNDEFINED)
+  (loadw result tmp-tn fdefn-fun-slot other-pointer-lowtag)
+  (inst ret)
+
+  UNDEFINED
+  (inst mov tmp-tn cfp-tn)
+  (inst mov cfp-tn csp-tn)
+  (inst stp tmp-tn lr-tn (@ csp-tn 16 :post-index))
+  (cerror-call nil 'undefined-fun-error fun)
+  (inst ldr cfp-tn (@ csp-tn -16 :pre-index))
+  (inst ret)
+
+  NOT-CALLABLE
+  (inst cmp fun null-tn) ;; NIL doesn't have SYMBOL-WIDETAG
+  (inst b :eq UNDEFINED)
+  (inst mov tmp-tn cfp-tn)
+  (inst mov cfp-tn csp-tn)
+  (inst stp tmp-tn lr-tn (@ csp-tn 16 :post-index))
+  (cerror-call nil 'sb-kernel::object-not-callable-error fun)
+  (inst ldr cfp-tn (@ csp-tn -16 :pre-index))
+  (inst b START))
+
 
 ;;;; Non-local exit noise.
 
 (define-assembly-routine (throw
-                          (:return-style :full-call-no-return))
+                           (:return-style :full-call-no-return)
+                           (:save-p :compute-only))
     ((:arg target descriptor-reg r0-offset)
      (:arg start any-reg r9-offset)
      (:arg count any-reg nargs-offset)

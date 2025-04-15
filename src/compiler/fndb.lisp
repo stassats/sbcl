@@ -2102,7 +2102,7 @@
   (values (simple-array * (*)) index index index)
   (foldable flushable no-verify-arg-count))
 (defknown %set-symbol-package ((and symbol (not null)) (or package null)) t ())
-(defknown (%coerce-callable-to-fun %coerce-callable-for-call)
+(defknown (%coerce-callable-to-fun %coerce-callable-for-call %coerce-callable-to-fun2)
     (function-designator)
     function (flushable no-verify-arg-count))
 (defknown array-bounding-indices-bad-error (t t t) nil (no-verify-arg-count))
