@@ -69,15 +69,20 @@
   #+host-quirks-ecl (declare (notinline cl:make-array))
 
   (aver element-type)
-  ;; Canonicalize
-  (setq element-type (type-specifier (specifier-type element-type)))
+
   ;; Expressed type must be _exactly_ one of the supported ones.
-  (unless (find (case element-type
-                  #-sb-unicode (base-char 'character)
-                  (t element-type))
-                sb-vm:*specialized-array-element-type-properties*
-                :key #'sb-vm:saetp-specifier :test 'equal)
-    (error "No specialized array element-type for: ~a" element-type))
+  (flet ((f ()
+           (find (case element-type
+                   #-sb-unicode (base-char 'character)
+                   (t element-type))
+                 sb-vm:*specialized-array-element-type-properties*
+                 :key #'sb-vm:saetp-specifier :test 'equal)))
+    (unless (or (f)
+                (progn
+                  ;; Canonicalize
+                  (setq element-type (type-specifier (specifier-type element-type)))
+                  (f)))
+      (error "No specialized array element-type for: ~a" element-type)))
 
   (let ((array (cl:make-array dims
                               :element-type element-type
@@ -87,6 +92,16 @@
       (setf (gethash array *array-to-specialization*)
             (cons element-type retain-specialization-for-after-xc-core)))
     array))
+
+(defun sb-xc:make-sequence (result-type length &rest args)
+  (destructuring-bind (array element-type dimensions) (typexpand result-type)
+    (assert (eq array 'simple-array))
+    (unless (or (eq dimensions '*)
+                (eql dimensions 1)
+                (equal dimensions '(*)))
+      (assert (= (car dimensions) length)))
+    (apply #'sb-xc:make-array length :element-type element-type args)))
+
 (defun sb-xc:array-element-type (array)
   (cond ((car (gethash array *array-to-specialization*)))
         ((bit-vector-p array) 'bit)

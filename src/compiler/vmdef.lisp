@@ -50,16 +50,16 @@
     (dolist (dest-sc (cons to-sc (sc-alternate-scs to-sc)))
       (let ((vec (sc-move-costs dest-sc))
             (dest-costs (sc-load-costs dest-sc)))
-        (setf (svref vec (sc-number from-sc)) cost)
+        (setf (aref vec (sc-number from-sc)) cost)
         (dolist (sc (append (sc-alternate-scs from-sc)
                             (sc-constant-scs from-sc)))
           (let* ((scn (sc-number sc))
-                 (total (+ (svref from-costs scn)
-                           (svref dest-costs to-scn)
+                 (total (+ (aref from-costs scn)
+                           (aref dest-costs to-scn)
                            cost))
-                 (old (svref vec scn)))
-            (unless (and old (< old total))
-              (setf (svref vec scn) total))))))))
+                 (old (aref vec scn)))
+            (unless (< -1 old total)
+              (setf (aref vec scn) total))))))))
 
 ;;;; primitive type definition
 

@@ -152,7 +152,7 @@
                              :constant-scs (mapcar #'sc-or-lose
                                                    ',constant-scs))))
            (setf (gethash ',name *backend-sc-names*) res)
-           (setf (svref (sc-load-costs res) ',number) 0)))
+           (setf (aref (sc-load-costs res) ',number) 0)))
 
        (let ((old (svref *backend-sc-numbers* ',number)))
          (when (and old (not (eq (sc-name old) ',name)))
@@ -195,7 +195,7 @@
          (unless (eq from-sc to-sc)
            (let ((num (sc-number from-sc)))
              (setf (svref (sc-move-funs to-sc) num) ',name)
-             (setf (svref (sc-load-costs to-sc) num) ',cost)))))
+             (setf (aref (sc-load-costs to-sc) num) ',cost)))))
 
      (defun ,name ,lambda-list
        (declare (ignorable ,(car lambda-list)))
@@ -1153,14 +1153,14 @@
 (defun compute-loading-costs (op load-p)
   (declare (type operand-parse op))
   (let ((scs (operand-parse-scs op))
-        (costs (make-array sb-vm:sc-number-limit :initial-element nil))
+        (costs (sb-xc:make-sequence 'cost-vector sb-vm:sc-number-limit :initial-element -1))
         (load-scs (make-array sb-vm:sc-number-limit :initial-element nil))
         (cond-scs))
     (dolist (sc-name (reverse scs))
       (let ((load-sc (gethash sc-name *backend-sc-names*)))
         (cond (load-sc
                (let* ((load-scn (sc-number load-sc)))
-                 (setf (svref costs load-scn) 0)
+                 (setf (aref costs load-scn) 0)
                  (setf (svref load-scs load-scn) t)
                  (dolist (op-sc (append (when load-p
                                           (sc-constant-scs load-sc))
@@ -1169,28 +1169,29 @@
                           (load (if load-p
                                     (aref (sc-load-costs load-sc) op-scn)
                                     (aref (sc-load-costs op-sc) load-scn))))
-                     (unless load
+                     (unless (>= load 0)
                        (error "no move function defined to move ~:[from~;to~] SC ~
                       ~S~%~:[to~;from~] alternate or constant SC ~S"
                               load-p sc-name load-p (sc-name op-sc)))
 
-                     (let ((op-cost (svref costs op-scn)))
-                       (when (or (not op-cost) (< load op-cost))
-                         (setf (svref costs op-scn) load)))
+                     (let ((op-cost (aref costs op-scn)))
+                       (when (or (= op-cost -1)
+                                 (< load op-cost))
+                         (setf (aref costs op-scn) load)))
 
                      (let ((op-load (svref load-scs op-scn)))
                        (unless (eq op-load t)
                          (pushnew load-scn (svref load-scs op-scn))))))
 
                  (dotimes (i sb-vm:sc-number-limit)
-                   (unless (svref costs i)
+                   (when (= (aref costs i) -1)
                      (let ((op-sc (svref *backend-sc-numbers* i)))
                        (when op-sc
                          (let ((cost (if load-p
-                                         (svref (sc-move-costs load-sc) i)
-                                         (svref (sc-move-costs op-sc) load-scn))))
-                           (when cost
-                             (setf (svref costs i) cost)))))))))
+                                         (aref (sc-move-costs load-sc) i)
+                                         (aref (sc-move-costs op-sc) load-scn))))
+                           (when (/= cost -1)
+                             (setf (aref costs i) cost)))))))))
               ((let ((cond-sc (getf *backend-cond-scs* sc-name)))
                  (when cond-sc
                    (push cond-sc cond-scs))))
@@ -1213,7 +1214,8 @@
                                        ',(svref load-scs load-scn))))))))))
 
 (defconstant-eqx +no-costs+
-  (make-array sb-vm:sc-number-limit :initial-element 0)
+    (sb-xc:make-sequence 'cost-vector sb-vm:sc-number-limit :initial-element 0
+                         #+sb-xc-host :retain-specialization-for-after-xc-core #+sb-xc-host t)
   #'equalp)
 
 (defconstant-eqx +no-loads+

@@ -95,7 +95,7 @@
         (get-operand-info ref)
       (collect ((losers))
         (dolist (scn (primitive-type-scs ptype))
-          (unless (svref costs scn)
+          (unless (aref costs scn)
             (losers (svref *backend-sc-numbers* scn))))
 
         (unless (losers)
@@ -237,8 +237,8 @@
       ((null ref))
     (flet ((add-costs (cost)
              (dolist (scn scs)
-               (let ((res (svref cost scn)))
-                 (unless res
+               (let ((res (aref (the cost-vector cost) scn)))
+                 (when (= res -1)
                    (bad-costs-error ref))
                  (incf (aref costs scn) res)))))
       (let* ((vop (tn-ref-vop ref))
@@ -255,14 +255,14 @@
                (when rep
                  (if write-p
                      (dolist (scn scs)
-                       (let ((res (svref (sc-move-costs
-                                          (svref *backend-sc-numbers* scn))
-                                         (sc-number rep))))
-                         (when res
+                       (let ((res (aref (sc-move-costs
+                                         (svref *backend-sc-numbers* scn))
+                                        (sc-number rep))))
+                         (when (plusp res)
                            (incf (aref costs scn) res))))
                      (dolist (scn scs)
-                       (let ((res (svref (sc-move-costs rep) scn)))
-                         (when res
+                       (let ((res (aref (sc-move-costs rep) scn)))
+                         (when (plusp res)
                            (incf (aref costs scn) res))))))))
             (t
              (do ((cost (funcall costs-slot info) (cdr cost))
@@ -945,7 +945,7 @@
                       (op (vop-args vop) (tn-ref-across op)))
                      ((null cost))
                   (when (eq op read)
-                    (when (eql (svref (car cost) sb-vm:zero-sc-number) 0)
+                    (when (eql (aref (the cost-vector (car cost)) sb-vm:zero-sc-number) 0)
                       (change-tn-ref-tn read (zero-tn)))
                     (return)))))))))
 

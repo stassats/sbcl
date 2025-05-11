@@ -317,10 +317,9 @@
     ;; of internals back to nothing. Is there way to not do that?
     (export (intern name package-name) package-name))
   (dolist (name '("DEFMACRO" "DEFSTRUCT" "DEFTYPE"
-                  "MAKE-ARRAY"
+                  "MAKE-ARRAY" "MAKE-SEQUENCE"
                   "SIMPLE-VECTOR"
-                  "TYPEP"
-                  ))
+                  "TYPEP"))
     (export (intern name package-name) package-name)))
 
 (defun count-symbols (pkg)

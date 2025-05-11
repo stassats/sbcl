@@ -23,6 +23,9 @@
 
 ;;; vectors indexed by SC numbers
 (deftype sc-vector () `(simple-vector ,sb-vm:sc-number-limit))
+#+sb-xc-host
+(sb-xc:deftype cost-vector () `(simple-array (signed-byte 8) (,sb-vm:sc-number-limit)))
+(deftype cost-vector () `(simple-array (signed-byte 8) (,sb-vm:sc-number-limit)))
 (deftype sc-bit-vector () `(simple-bit-vector ,sb-vm:sc-number-limit))
 
 ;;; Bitset representation of a set of locations in a finite SC.
@@ -707,10 +710,10 @@
   ;; argument and result
   (arg-costs nil :type list)
   (result-costs nil :type list)
-  ;; if true, SC-VECTORs representing the loading costs for any more
+  ;; if true, COST-VECTORs representing the loading costs for any more
   ;; args and results
-  (more-arg-costs nil :type (or sc-vector null))
-  (more-result-costs nil :type (or sc-vector null))
+  (more-arg-costs nil :type (or cost-vector null))
+  (more-result-costs nil :type (or cost-vector null))
   ;; lists of SC-VECTORs mapping each SC to the SCs that we can load
   ;; into. If a SC is directly acceptable to the VOP, then the entry
   ;; is T. Otherwise, it is a list of the SC numbers of all the SCs
@@ -933,8 +936,8 @@
   ;; for this SC.
   (move-funs (make-array sb-vm:sc-number-limit :initial-element nil)
              :type sc-vector)
-  (load-costs (make-array sb-vm:sc-number-limit :initial-element nil)
-              :type sc-vector)
+  (load-costs (sb-xc:make-sequence 'cost-vector sb-vm:sc-number-limit :initial-element -1)
+              :type cost-vector)
   ;; a vector mapping from SC numbers to possibly
   ;; representation-specific move and coerce VOPs. Each entry is a
   ;; list of VOP-INFOs for VOPs that move/coerce an object in the
@@ -959,8 +962,8 @@
   ;; info is needed at meta-compile time, while the MOVE-VOPs don't
   ;; exist till load time. If no move is defined, then the entry is
   ;; NIL.
-  (move-costs (make-array sb-vm:sc-number-limit :initial-element nil)
-              :type sc-vector)
+  (move-costs (sb-xc:make-sequence 'cost-vector sb-vm:sc-number-limit :initial-element -1)
+              :type cost-vector)
   ;; similar to Move-VOPs, except that we only ever use the entries
   ;; for this SC and its alternates, since we never combine complex
   ;; representation conversion with argument passing.

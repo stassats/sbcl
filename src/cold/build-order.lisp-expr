@@ -200,9 +200,7 @@
  ;; This has ASSEMBLY-UNIT-related stuff needed by core.lisp.
  ;; and LABEL, needed by IR2-NLX-INFO
  ("src/compiler/early-assem")
- ;; for e.g. PRIMITIVE-TYPE, needed by "vmdef"
- ("src/compiler/vop" :c-headers :block-compile)
- ("src/compiler/backend" :c-headers)
+
 
  ;; sparc-vm and ppc-vm need sc+offset defined to get at internal
  ;; error args. This file contains stuff previously in
@@ -210,16 +208,7 @@
  ;; 2002-02-05
  ("src/code/sc-offset" :c-headers)
 
- ;; for e.g. MAX-VOP-TN-REFS, needed by "meta-vmdef"
- ("src/compiler/vmdef" :c-headers)
-
  ("src/code/defmacro" :c-headers)
- ;; for e.g. !DEF-PRIMITIVE-TYPE, needed by primtype.lisp, and
- ;; DEFINE-STORAGE-CLASS, needed by target/vm.lisp
- ("src/compiler/meta-vmdef" :c-headers)
-
- ;; for e.g. DESCRIPTOR-REG, needed by primtype.lisp
- ("src/compiler/{arch}/vm" :c-headers)
 
  ("src/code/cross-sxhash" :c-headers :not-target)
  ("src/code/alieneval" :c-headers)
@@ -253,7 +242,6 @@
  ("src/code/class" :c-headers)
  ("src/pcl/pre-warm")
  ("src/code/pathname" :not-host)
- ("src/code/target-sxhash" :not-host) ; needs most-fooative-foo-float constants
 
  ("src/code/debug-info" :c-headers)
 
@@ -264,7 +252,22 @@
  ("src/compiler/constantp" :c-headers)
  ("src/code/deftype" :c-headers)     ; on host for SB-XC:DEFTYPE
  ("src/code/type" :c-headers)
+
+ ;; for e.g. PRIMITIVE-TYPE, needed by "vmdef"
+ ("src/compiler/vop" :c-headers :block-compile)
+ ("src/compiler/backend" :c-headers)
+ ;; for e.g. MAX-VOP-TN-REFS, needed by "meta-vmdef"
+ ("src/compiler/vmdef" :c-headers)
+ ;; for e.g. !DEF-PRIMITIVE-TYPE, needed by primtype.lisp, and
+ ;; DEFINE-STORAGE-CLASS, needed by target/vm.lisp
+ ("src/compiler/meta-vmdef" :c-headers)
+
+ ;; for e.g. DESCRIPTOR-REG, needed by primtype.lisp
+ ("src/compiler/{arch}/vm" :c-headers)
+
  ("src/compiler/generic/vm-type" :c-headers)
+
+ ("src/code/target-sxhash" :not-host) ; needs most-fooative-foo-float constants
  ("src/code/pred" :not-host)
 
  ("src/compiler/generic/primtype" :c-headers)
