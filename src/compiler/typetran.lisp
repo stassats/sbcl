@@ -46,7 +46,9 @@
           (cons (cons type name)
                 (remove name *backend-type-predicates*
                         :key #'cdr)))
-    (%deftransform name nil '(function (t) *) #'fold-type-predicate)))
+    (%deftransform name nil '(function (t) *)
+                   (deftransform fold-type-predicate ((object) * * :node node :defun-only lambda)
+                     (ir1-transform-type-predicate object type node)))))
 
 
 (define-source-transform typep (object spec &optional env)
@@ -291,17 +293,6 @@
    (ir1-transform-specifier-type (lvar-value type))
    node))
 
-;;; This is the IR1 transform for simple type predicates. It checks
-;;; whether the single argument is known to (not) be of the
-;;; appropriate type, expanding to T or NIL as appropriate.
-(deftransform fold-type-predicate ((object) * * :node node :defun-only t)
-  (let ((ctype (gethash (leaf-source-name
-                         (ref-leaf
-                          (lvar-uses
-                           (basic-combination-fun node))))
-                        *backend-predicate-types*)))
-    (aver ctype)
-    (ir1-transform-type-predicate object ctype node)))
 
 ;;; If FIND-CLASSOID is called on a constant class, locate the
 ;;; CLASSOID-CELL at load time.
