@@ -333,8 +333,12 @@
           target))))))
 
 ;;; Ignore AMOUNT
+
+;;; Ignore AMOUNT.
+;;; Join </<= and eq into <=.
 (defun join-equality-constraints (var block in)
   (let* ((constraints (make-hash-table :test #'equal))
+         (relations (make-hash-table :test #'eq))
          (pred (block-pred block))
          (i -1))
     (loop for pred in pred
@@ -364,7 +368,44 @@
                                        (if overall-min
                                            (min (max amount (second existing)) overall-min)
                                            (max amount (second existing)))
-                                       overall-min))))))))))
+                                       overall-min))))))
+                (let ((relation (gethash in-con relations)))
+                  (flet ((expand-relations (op1 not1 op2 not2)
+                           (when not1
+                             (setf op1 (not-operator op1)))
+                           (when not2
+                             (setf op2 (not-operator op2)))
+                           (when (and op1 op2)
+                             (if (eq op1 op2)
+                                 op1
+                                 (case op1
+                                   (eq
+                                    (case op2
+                                      ((< <=) '<=)
+                                      ((> >=) '>=)))
+                                   (<
+                                    (case op2
+                                      ((<= eq) '<=)))
+                                   (>
+                                    (case op2
+                                      ((>= eq) '>=)))
+                                   (<=
+                                    (case op2
+                                      ((< eq) '<=)))
+                                   (>=
+                                    (case op2
+                                      ((> eq) '>=))))))))
+                    (cond (relation
+                           (destructuring-bind (index common-op common-not) relation
+                             (when (>= index (1- i))
+                               (let ((new-common (expand-relations in-op not-p common-op common-not)))
+                                 (when new-common
+                                   (setf (first relation) i
+                                         (second relation) new-common
+                                         (third relation) nil))))))
+                          ((= i 0)
+                           (setf (gethash in-con relations)
+                                 (list i in-op not-p))))))))))
     (dohash ((key value) constraints)
       (when (= (car value) i)
         (destructuring-bind (y op not-p) key
@@ -374,7 +415,17 @@
                                                y
                                                not-p
                                                (second value))
-           in))))))
+           in))))
+    (dohash ((y relation) relations)
+      (destructuring-bind (index op not-p) relation
+
+        (when (and (= index i)
+                   (not not-p)
+                   (member op '(<= >=)))
+          (conset-adjoin
+           (find-or-create-equality-constraint op var y not-p)
+           in)
+          t)))))
 
 (defun try-equality-constraint (call gen)
   (let ((constraint (fun-info-equality-constraint (basic-combination-fun-info call)))

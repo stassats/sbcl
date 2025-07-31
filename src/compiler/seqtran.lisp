@@ -4004,6 +4004,12 @@
                               :policy (> speed space))
   (upgraded-element-type-specifier-or-give-up vector t)
   `(let (result)
-     (loop for i from (1- (length vector)) downto 0
-           do (setf result (cons (aref vector i) result)))
+     (let ((i (length vector)))
+       (loop while (> i 0)
+             do
+             (decf i)
+             (push (aref vector i) result)))
      result))
+
+
+

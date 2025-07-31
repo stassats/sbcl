@@ -1998,3 +1998,23 @@
    (lambda (x)
      (when (typep (the (or float (rational (-1/2) (1))) (nth-value 1 (truncate x 1))) 'float) x))
    (or float null)))
+
+(with-test (:name :join-equality-relations)
+  (assert-type
+   (lambda (x y)
+     (declare (optimize (debug 2)))
+     (if (or (< x y)
+             (eq x y))
+         (<= x y)
+         (error "x")))
+   (eql t))
+  (assert (= (count 'sb-kernel:%check-bound
+                    (ctu:ir1-named-calls
+                     `(lambda (v)
+                        (declare (simple-vector v))
+                        (let ((i (length v)))
+                          (loop while (> i 0)
+                                do
+                                (print (aref v (decf i))))))
+                     nil))
+             0)))
