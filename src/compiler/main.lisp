@@ -1186,9 +1186,15 @@ necessary, since type inference may take arbitrarily long to converge.")
 ;;; "3.2.3.1 Processing of Top Level Forms".
 (defun process-toplevel-form (form path compile-time-too)
   (declare (list path))
-
   (catch 'process-toplevel-form-error-abort
-    (let* ((path (or (get-source-path form) (cons form path)))
+    (let* ((path (or (get-source-path form)
+                     ;; The whole form doesn't, maybe one of its CDRs match (after being transformed by a macro)
+                     (when (consp form)
+                       (loop for cdr on (cdr form)
+                             for path = (get-source-path cdr)
+                             when path
+                             return (list* 'original-source-start (1- (second path)) (cddr path))))
+                     (cons form path)))
            (*current-path* path)
            (*compiler-error-bailout*
             (lambda (&optional condition)
