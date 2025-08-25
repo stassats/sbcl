@@ -2,6 +2,8 @@
 (declaim (sb-ext:start-block fun1 fun3))
 
 (defun fun1 (x)
+  (opaque-identity 1)
+  (opaque-identity 1)
   (print x))
 
 (defun fun2 ()

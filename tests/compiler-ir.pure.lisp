@@ -208,6 +208,8 @@
     (let ((fun (inspect-ir
                 '(lambda (mod r/m)
                   (flet ((make-machine-ea (base &optional disp index scale)
+                           (opaque-identity 1) ;; prevent inlining
+                           (opaque-identity 2)
                            (list base
                                  disp
                                  index
@@ -235,6 +237,8 @@
     (let ((fun (inspect-ir
                 '(lambda (n)
                   (labels ((id (n)
+                             (opaque-identity 1) ;; prevent inlining
+                             (opaque-identity 2)
                              n))
                     (case n
                       ((a b c d e f g)

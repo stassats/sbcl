@@ -174,7 +174,7 @@
 
 (with-test (:name :block-defconstant-same-component)
   (ctu:file-compile
-   `((defun foo-before-defconstant (x) x)
+   `((defun foo-before-defconstant (x) (opaque-identity 1) (opaque-identity 1) x)
      (defconstant +testconstant3+ '(1 2 3 4 5 6))
      (defun bar-after-defconstant () (foo-before-defconstant +testconstant3+)))
    :block-compile t

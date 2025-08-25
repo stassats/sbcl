@@ -472,63 +472,101 @@
       (clear-flags component)))
   (values))
 
+(defun local-inline-expansion-ok (call fun)
+  (and (policy call
+           (and (>= speed space)
+                (>= speed compilation-speed)))
+       (not (functional-kind-eq (node-home-lambda call) external))
+       (inline-expansion-ok call fun)))
+
 ;;; If policy is auspicious and CALL is not in an XEP and we don't seem
 ;;; to be in an infinite recursive loop, then change the reference to
 ;;; reference a fresh copy. We return whichever function we decide to
 ;;; reference.
 (defun maybe-expand-local-inline (original-functional ref call)
-  (if (and (policy call
-               (and (>= speed space)
-                    (>= speed compilation-speed)))
-           (not (functional-kind-eq (node-home-lambda call) external))
-           (inline-expansion-ok call original-functional))
-      (let* ((end (component-last-block (node-component call)))
-             (pred (block-prev end)))
-        (multiple-value-bind (losing-local-object converted-lambda)
-            (catch 'locall-already-let-converted
-              (with-ir1-environment-from-node call
-                (let* ((*inline-expansions*
-                         (register-inline-expansion original-functional call))
-                       (functional-lexenv (functional-lexenv original-functional))
-                       (call-policy (lexenv-policy (node-lexenv call)))
-                       ;; The inline expansion should be converted
-                       ;; with the policy in effect at this call site,
-                       ;; not the policy saved in the original
-                       ;; functional.
-                       (*lexenv*
-                         (if (eq (lexenv-policy functional-lexenv)
-                                  call-policy)
-                             functional-lexenv
-                             (make-lexenv :default functional-lexenv
-                                          :policy call-policy))))
-                  (values nil
-                          (ir1-convert-lambda
-                           (functional-inline-expansion original-functional)
-                           :debug-name (debug-name 'local-inline
-                                                   (leaf-%source-name original-functional)))))))
-          (cond (losing-local-object
-                 (if (functional-p losing-local-object)
-                     (let ((*compiler-error-context* call))
-                       (compiler-notify "couldn't inline expand because expansion ~
+  (let* ((end (component-last-block (node-component call)))
+         (pred (block-prev end)))
+    (multiple-value-bind (losing-local-object converted-lambda)
+        (catch 'locall-already-let-converted
+          (with-ir1-environment-from-node call
+            (let* ((*inline-expansions*
+                     (register-inline-expansion original-functional call))
+                   (functional-lexenv (functional-lexenv original-functional))
+                   (call-policy (lexenv-policy (node-lexenv call)))
+                   ;; The inline expansion should be converted
+                   ;; with the policy in effect at this call site,
+                   ;; not the policy saved in the original
+                   ;; functional.
+                   (*lexenv*
+                     (if (eq (lexenv-policy functional-lexenv)
+                             call-policy)
+                         functional-lexenv
+                         (make-lexenv :default functional-lexenv
+                                      :policy call-policy))))
+              (values nil
+                      (ir1-convert-lambda
+                       (functional-inline-expansion original-functional)
+                       :debug-name (debug-name 'local-inline
+                                               (leaf-%source-name original-functional)))))))
+      (cond (losing-local-object
+             (if (functional-p losing-local-object)
+                 (let ((*compiler-error-context* call))
+                   (compiler-notify "couldn't inline expand because expansion ~
                                          calls this LET-converted local function:~
                                          ~%  ~S"
-                                        (leaf-debug-name losing-local-object)))
-                     (let ((*compiler-error-context* call))
-                       (compiler-notify "implementation limitation: couldn't inline ~
+                                    (leaf-debug-name losing-local-object)))
+                 (let ((*compiler-error-context* call))
+                   (compiler-notify "implementation limitation: couldn't inline ~
                                          expand because expansion refers to ~
                                          the optimized away object ~S."
-                                        losing-local-object)))
-                 (loop for block = (block-next pred) then (block-next block)
-                       until (eq block end)
-                       do (setf (block-delete-p block) t))
-                 (loop for block = (block-next pred) then (block-next block)
-                       until (eq block end)
-                       do (delete-block block t))
-                 original-functional)
-                (t
-                 (change-ref-leaf ref converted-lambda)
-                 converted-lambda))))
-      original-functional))
+                                    losing-local-object)))
+             (loop for block = (block-next pred) then (block-next block)
+                   until (eq block end)
+                   do (setf (block-delete-p block) t))
+             (loop for block = (block-next pred) then (block-next block)
+                   until (eq block end)
+                   do (delete-block block t))
+             original-functional)
+            (t
+             (change-ref-leaf ref converted-lambda)
+             converted-lambda)))))
+
+;;; Inline a local function consisting of a single call.
+(defun auto-inlinep (fun)
+  (when (and (functional-kind-eq fun nil)
+             (not (and (lambda-p fun)
+                       (lambda-optional-dispatch fun)))
+             (not (typep (functional-%debug-name fun)
+                         '(cons (member xep tl-xep
+                                 &optional-processor &more-processor)))))
+    (let* ((main-entry (main-entry fun))
+          (bind (lambda-bind main-entry))
+          (call-count 0)
+          (blocks))
+      (when (functional-kind-eq main-entry nil)
+       (labels ((walk (block last-if last)
+                  (do-nodes (node nil block)
+                    (typecase node
+                      (basic-combination
+                       (unless (combination-is node '(%coerce-callable-for-call
+                                                      %rest-values)) ;; allow APPLY &REST
+                         (when (> (incf call-count) 1)
+                           (return-from walk nil))))))
+                  (let ((last-node (block-last block)))
+                    (cond ((or (return-p last-node)
+                               (node-tail-p last-node)
+                               (and (valued-node-p last-node)
+                                    (eq (node-derived-type last-node) *empty-type*))))
+                          (last nil)
+                          (t
+                           (unless (member block blocks :test #'eq)
+                             (push block blocks)
+                             (loop for next in (block-succ block)
+                                   always (walk next nil
+                                                ;; Allow one trailing IF, for NOT and for predicate functions.
+                                                (not (and last-if
+                                                          (if-p last-node)))))))))))
+         (walk (node-block bind) t nil))))))
 
 ;;; Dispatch to the appropriate function to attempt to convert a call.
 ;;; REF must be a reference to a FUNCTIONAL. This is called in IR1
@@ -562,21 +600,23 @@
                      (functional-entry-fun original-fun)
                      original-fun))
             (*compiler-error-context* call))
-
-        (when (and (or (eq (functional-inlinep fun) 'inline)
-                       (and (and (neq (component-kind component) :initial)
-                                 (neq (node-component (lambda-bind (main-entry fun))) component))
-                            ;; If it's in a different component then inline it anyway,
-                            ;; othrewise it won't get any benefits of maybe-inline.
-                            (eq (functional-inlinep fun) 'maybe-inline)))
-
-                   (rest (leaf-refs original-fun))
+        (when (and (rest (leaf-refs original-fun))
                    ;; Some REFs are already unused bot not yet deleted,
                    ;; avoid unnecessary inlining
                    (> (count-if #'node-lvar (leaf-refs original-fun)) 1)
                    ;; Don't inline if the function is not going to be
                    ;; let-converted.
-                   (let-convertable-p call fun))
+                   (let-convertable-p call fun)
+                   (local-inline-expansion-ok call fun)
+                   (or (eq (functional-inlinep fun) 'inline)
+                       (and (and (neq (component-kind component) :initial)
+                                 (neq (node-component (lambda-bind (main-entry fun))) component))
+                            ;; If it's in a different component then inline it anyway,
+                            ;; otherwise it won't get any benefits of maybe-inline.
+                            (eq (functional-inlinep fun) 'maybe-inline))
+                       (and (neq (functional-inlinep fun) 'notinline)
+                            (policy call (/= preserve-single-use-debug-variables 3))
+                            (auto-inlinep fun))))
           (setq fun (maybe-expand-local-inline fun ref call)))
         ;; Expanding inline might move it to the current component
         (when (or (eq (component-kind component) :initial)

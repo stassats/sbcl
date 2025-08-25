@@ -1004,7 +1004,7 @@
 (declaim (inline foo-inline))
 (defun foo-inline (x) (quux-marker x))
 (declaim (maybe-inline foo-maybe-inline))
-(defun foo-maybe-inline (x) (quux-marker x))
+(defun foo-maybe-inline (x) (opaque-identity 1) (opaque-identity 1) (quux-marker x))
 
 (with-test (:name :nested-inline-calls)
   (let ((fun '(lambda (x) (foo-inline (foo-inline (foo-inline x))))))

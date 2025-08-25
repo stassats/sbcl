@@ -27,8 +27,10 @@
 (defun xref/1 ()
   (flet ((foo ()
            (bar *a*)))
+    (declare (notinline foo))
     (flet ((xref/2 ()
              1))
+      (declare (notinline xref/2))
       (foo)
       (xref/2))))
 
@@ -58,6 +60,7 @@
 
 (flet ((z ()
          (xref/2)))
+  (declare (notinline z))
   ;; Should:
   ;;   call xref/2
   ;;   not call z
