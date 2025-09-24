@@ -541,6 +541,8 @@ during backtrace.
   ;; and some other state fields.
   (state-word :c-type "struct thread_state_word"
               :length #.(/ 64 sb-vm:n-word-bits))
+  (stw)
+  (stw-lock)
   ;; Statistical CPU profiler data recording buffer
   (sprof-data)
   (sprof-enable :special sb-thread::*sprof-enable*) ; = 0 to block SIGPROF

@@ -392,6 +392,9 @@ void create_main_lisp_thread(lispobj function) {
     if (!th || arch_os_thread_init(th)==0 || !init_shared_attr_object())
         lose("can't create initial thread");
     th->sprof_enable = make_fixnum(1);
+    th->stw = 0;
+    th->stw_lock = 0;
+
 #if defined LISP_FEATURE_SB_THREAD && !defined LISP_FEATURE_GCC_TLS && !defined LISP_FEATURE_WIN32
     pthread_key_create(&current_thread, 0);
 #endif
@@ -489,6 +492,8 @@ init_new_thread(struct thread *th,
 #ifdef LISP_FEATURE_SB_SAFEPOINT
     csp_around_foreign_call(th) = (lispobj)scribble;
 #endif
+    th->stw = 0;
+    th->stw_lock = 0;
     __attribute__((unused)) int lock_ret = mutex_acquire(&all_threads_lock);
     gc_assert(lock_ret);
     link_thread(th);
@@ -996,6 +1001,8 @@ int sb_thread_kill (pthread_t thread, int sig) {
  * can't have died (i.e. if ESRCH could be returned, then that implies that
  * the memory shouldn't be there) */
 
+long write_stw(long old, long new, void * stw);
+
 static __attribute__((unused)) struct timespec stw_begin_realtime, stw_begin_cputime;
 void gc_stop_the_world()
 {
@@ -1023,19 +1030,29 @@ void gc_stop_the_world()
             os_sem_wait(&semaphores->state_sem);
             int state = get_thread_state(th);
             if (state == STATE_RUNNING) {
-                rc = pthread_kill(th->os_thread,SIG_STOP_FOR_GC);
-                /* This used to bogusly check for ESRCH.
-                 * I changed the ESRCH case to just fall into lose() */
-                if (rc) lose("cannot suspend thread %p: %d, %s",
-                     // KLUDGE: assume that os_thread can be cast as pointer.
-                     // See comment in 'interr.h' about that.
-                     (void*)th->os_thread, rc, strerror(rc));
+                write_stw(0, 1, &th->stw);
+                if (write_stw(0, 1, &th->stw_lock) == 0) {
+                    semaphores->stw_ffi = 0;
+                    rc = pthread_kill(th->os_thread,SIG_STOP_FOR_GC);
+                    /* This used to bogusly check for ESRCH.
+                     * I changed the ESRCH case to just fall into lose() */
+                    if (rc) lose("cannot suspend thread %p: %d, %s",
+                                 // KLUDGE: assume that os_thread can be cast as pointer.
+                                 // See comment in 'interr.h' about that.
+                                 (void*)th->os_thread, rc, strerror(rc));
+                } else {
+                    /* printf("skip\n"); */
+
+                    semaphores->stw_ffi = 1;
+                    scrub_thread_control_stack(th);
+                }
             }
             os_sem_post(&semaphores->state_sem);
         }
     }
     for_each_thread(th) {
-        if (th != me) {
+        struct extra_thread_data *semaphores = thread_extra_data(th);
+        if (th != me && !semaphores->stw_ffi) {
             __attribute__((unused)) int state = thread_wait_until_not(STATE_RUNNING, th);
             gc_assert(state != STATE_RUNNING);
         }
@@ -1064,6 +1081,8 @@ void gc_start_the_world()
     }
 #endif
     struct thread *th, *me = get_sb_vm_thread();
+
+
     __attribute__((unused)) int lock_ret;
     /* if a resumed thread creates a new thread before we're done with
      * this loop, the new thread will be suspended waiting to acquire
@@ -1075,10 +1094,15 @@ void gc_start_the_world()
            * any value other than what was already observed?
            * No harm in being cautious though with regard to compiler reordering */
             int state = get_thread_state(th);
-            if (state != STATE_DEAD) {
+            struct extra_thread_data *semaphores = thread_extra_data(th);
+            write_stw(1, 0, &th->stw);
+            if (state != STATE_DEAD && !semaphores->stw_ffi) {
+                write_stw(1, 0, &th->stw_lock);
                 if(state != STATE_STOPPED)
                     lose("gc_start_the_world: bad thread state %x", state);
                 set_thread_state(th, STATE_RUNNING, 0);
+            } else {
+                /* printf("skip\n"); */
             }
         }
     }

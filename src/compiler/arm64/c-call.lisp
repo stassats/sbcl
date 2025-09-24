@@ -237,13 +237,22 @@
       (store-stack-tn nfp-save cur-nfp))
     (assemble ()
       #+sb-thread
-      (progn
+      (assemble ()
         (inst add temp csp-tn (* 2 n-word-bytes))
         ;; Build a new frame to stash a pointer to the current code object
         ;; for the GC to see.
         (inst adr temp2 return)
         (inst stp cfp-tn temp2 (@ csp-tn))
         (storew-pair csp-tn thread-control-frame-pointer-slot temp thread-control-stack-pointer-slot thread-tn)
+
+        (inst add temp thread-tn (* thread-stw-lock-slot n-word-bytes))
+
+        LOOP
+        (inst mov temp2 0)
+        (inst mov tmp-tn 2)
+        (inst casa temp2 tmp-tn temp)
+        (inst tbnz temp2 0 LOOP)
+
         ;; OK to run GC without stopping this thread from this point
         ;; on.
         #+sb-safepoint
@@ -269,7 +278,21 @@
         ;; No longer OK to run GC except at safepoints.
         #+sb-safepoint
         (storew zr-tn thread-tn thread-saved-csp-slot)
-        (storew zr-tn thread-tn thread-control-stack-pointer-slot))
+
+        (inst add temp thread-tn (* thread-stw-slot n-word-bytes))
+        LOOP2
+        (inst mov temp2 0)
+        (inst casl temp2 zr-tn temp)
+        (inst cbnz temp2 LOOP2)
+        ;; (inst brk stw-trap)
+        OK2)
+
+        (inst add temp thread-tn (* thread-stw-lock-slot n-word-bytes))
+        (inst stlr zr-tn temp)
+
+      (storew zr-tn thread-tn thread-control-stack-pointer-slot)
+
+
       return
       #-sb-thread
       (progn

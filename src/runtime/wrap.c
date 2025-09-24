@@ -530,6 +530,7 @@ void sb_nanosleep(time_t sec, int nsec)
     struct timespec rmtp;
 
     while(nanosleep(&rqtp, &rmtp) && errno == EINTR) {
+        printf("INTR\n");
         rqtp = rmtp;
     }
 }

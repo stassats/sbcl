@@ -428,6 +428,15 @@ GNAME(do_pending_interrupt):
         brk trap_PendingInterrupt
 	ret
 
+        .align 2
+	.global	GNAME(write_stw)
+	TYPE(write_stw)
+
+GNAME(write_stw):
+        casal x0, x1, [x2]
+	ret
+
+
 #ifdef __ELF__
 // Mark the object as not requiring an executable stack.
 .section .note.GNU-stack,"",%progbits

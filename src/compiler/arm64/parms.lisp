@@ -94,6 +94,7 @@
 (defenum (:start 8)
   halt-trap
   pending-interrupt-trap
+  stw-trap
   cerror-trap
   breakpoint-trap
   fun-end-breakpoint-trap

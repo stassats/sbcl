@@ -3514,7 +3514,9 @@ garbage_collect_generation(generation_index_t generation, int raise,
         /* Scrub the unscavenged control stack space, so that we can't run
          * into any stale pointers in a later GC (this is done by the
          * stop-for-gc handler in the other threads). */
-        scrub_control_stack();
+        for_each_thread(th)
+            scrub_thread_control_stack(th);
+        /* scrub_control_stack(); */
 # endif
     }
 #endif

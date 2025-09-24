@@ -2234,6 +2234,11 @@ handle_trap(os_context_t *context, int trap)
         arch_skip_instruction(context);
         interrupt_handle_pending(context);
         break;
+    /* case 10: // FIXME: trap_STW */
+    /*     arch_skip_instruction(context); */
+    /*     printf("STW trap\n"); */
+    /*     sig_stop_for_gc_handler(SIG_STOP_FOR_GC, NULL, context); */
+    /*     break; */
 #endif
     case trap_Error:
     case trap_Cerror:

@@ -709,6 +709,8 @@
          (nt "Halt trap"))
         (#.pending-interrupt-trap
          (nt "Pending interrupt trap"))
+        (#.sb-vm::stw-trap
+         (nt "STW"))
         (#.error-trap
          (handle-break-args #'snarf-error-junk code stream dstate))
         (#.cerror-trap
