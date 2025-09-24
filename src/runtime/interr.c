@@ -98,7 +98,7 @@ void set_lossage_handler(void (*handler)(void))
 static
 void print_message(char *fmt, va_list ap)
 {
-    fprintf(stderr, " in SBCL pid %d" THREAD_ID_LABEL, getpid(), THREAD_ID_VALUE);
+    fprintf(stderr, " in SBCL pid %llx %d" THREAD_ID_LABEL, thread_extra_data(get_sb_vm_thread())->tid, getpid(), THREAD_ID_VALUE);
     if (fmt) {
         fprintf(stderr, ":\n");
         vfprintf(stderr, fmt, ap);

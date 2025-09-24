@@ -336,3 +336,18 @@
   (:generator 1
     (inst mov arg0 (if (sc-is x immediate) (tn-value x) x))
     (invoke-asm-routine 'switch-to-arena arg1)))
+
+(define-vop (enter-without-gcing)
+  (:temporary (:sc unsigned-reg) lock temp)
+  (:generator 1
+    (inst add lock thread-tn (* thread-without-gcing-lock-slot n-word-bytes))
+    (inst mov tmp-tn 1)
+    LOOP
+    (inst mov temp 0)
+    (inst casa temp tmp-tn lock)
+    (inst cbnz temp LOOP)))
+
+(define-vop (exit-without-gcing)
+  (:generator 1
+    (inst add tmp-tn thread-tn (* thread-without-gcing-lock-slot n-word-bytes))
+    (inst stlr zr-tn tmp-tn)))

@@ -154,6 +154,15 @@ int verify_heap(__attribute__((unused)) lispobj* cur_thread_approx_stackptr,
     if (verify(PERMGEN_SPACE_START, permgen_space_free_pointer, &state, 0)) goto out;
     if (verbose)
         fprintf(stderr, " [dynamic]");
+    /* { */
+    /*     struct thread* th; */
+    /*     for_each_thread(th) { */
+    /*         if (th->state_word.state == STATE_DEAD) continue; */
+    /*         lispobj* stackptr = access_control_stack_pointer(th); */
+    /*         my_printf("verify %llx %p %p-%p\n", thread_extra_data(th)->tid, csp_around_foreign_call(th), th->control_stack_start, stackptr); */
+    /*         if (verify((lispobj)th->control_stack_start, stackptr, &state, VERIFYING_STACK)) goto out; */
+    /*     } */
+    /* } */
     state.flags |= VERIFYING_GENERATIONAL;
 #ifdef LISP_FEATURE_MARK_REGION_GC
     parallel_walk_generation(verify_range, -1, &state);

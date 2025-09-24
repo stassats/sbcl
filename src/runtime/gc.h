@@ -67,6 +67,7 @@ extern os_vm_size_t bytes_consed_between_gcs;
  * lisp signal handler array, or other similar array */
 #define VERIFYING_UNFORMATTED (1<<13)
 #define VERIFY_PRINT_HEADER_ON_FAILURE (1<<14)
+#define VERIFYING_STACK (1<<15)
 
 extern generation_index_t verify_gens;
 #define MAX_ERR_OBJS 5

@@ -571,7 +571,7 @@
            "--no-sysinit"
            "--no-userinit"
            "--noprint"
-           "--disable-debugger"
+
            #+gc-stress "--eval" #+gc-stress "(push :gc-stress *features*)"
            "--load" load
            "--eval" (write-to-string eval

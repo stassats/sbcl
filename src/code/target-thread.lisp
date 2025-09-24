@@ -2045,6 +2045,7 @@ session."
                 (setq *thruption-pending* nil)
                 (handle-thread-exit))))))))))
   ;; this returns to C, so return a single value
+  (%primitive sb-vm::enter-without-gcing)
   0)
 ) ; end PROGN for #+sb-thread
 
