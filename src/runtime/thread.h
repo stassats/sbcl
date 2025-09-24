@@ -64,6 +64,10 @@ struct extra_thread_data
     uint32_t state_not_running_waitcount;
     uint32_t state_not_stopped_waitcount;
 #endif
+#ifdef LISP_FEATURE_NONSTOP_FOREIGN_CALLS
+    pthread_mutex_t foreign_exit_lock;
+#endif
+
 #if defined LISP_FEATURE_SB_THREAD && defined LISP_FEATURE_UNIX
     // According to https://github.com/adrienverge/openfortivpn/issues/105
     //   "using GCD semaphore in signal handlers is documented to be unsafe"
@@ -97,6 +101,7 @@ struct extra_thread_data
     // and allocation switches back and forth between arena and heap.
     page_index_t mixed_page_hint;
     page_index_t cons_page_hint;
+    unsigned long long tid;
 };
 #define thread_extra_data(thread) \
   ((struct extra_thread_data*)((char*)(thread) + dynamic_values_bytes))
@@ -167,10 +172,10 @@ extern pthread_key_t current_thread;
 #endif
 #endif
 
-#ifndef LISP_FEATURE_SB_SAFEPOINT
-# define THREAD_CSP_PAGE_SIZE 0
-#else
+#if defined(LISP_FEATURE_SB_SAFEPOINT) | defined(LISP_FEATURE_NONSTOP_FOREIGN_CALLS)
 # define THREAD_CSP_PAGE_SIZE os_reported_page_size
+#else
+# define THREAD_CSP_PAGE_SIZE 0
 #endif
 
 /* sigaltstack() - "Signal stacks are automatically adjusted
@@ -270,13 +275,17 @@ typedef struct init_thread_data {
 #endif
 } init_thread_data;
 
+#if defined(LISP_FEATURE_SB_SAFEPOINT) | defined(LISP_FEATURE_NONSTOP_FOREIGN_CALLS)
+#define csp_around_foreign_call(thread) *(((lispobj*)thread)-1)
+#endif
+
 #ifdef LISP_FEATURE_SB_SAFEPOINT
 void thread_in_safety_transition(os_context_t *ctx);
 void thread_in_lisp_raised(os_context_t *ctx);
 void thread_interrupted(os_context_t *ctx);
 extern void thread_register_gc_trigger();
 
-#define csp_around_foreign_call(thread) *(((lispobj*)thread)-1)
+
 
 static inline
 void push_gcing_safety(struct gcing_safety *into)

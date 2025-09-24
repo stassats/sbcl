@@ -3434,6 +3434,14 @@ garbage_collect_generation(generation_index_t generation, int raise,
         }
     }
 
+#ifdef LISP_FEATURE_NONSTOP_FOREIGN_CALLS
+    for (int i = 0; i < NSIG; i++) {
+        lispobj fun = lisp_sig_handlers[i];
+        if(functionp(fun))
+            pin_exact_root(fun);
+    }
+#endif
+
     // Thread creation optionally no longer synchronizes the creating and
     // created thread. When synchronized, the parent thread is responsible
     // for pinning the start function for handoff to the created thread.
@@ -4258,8 +4266,13 @@ bool ignore_memoryfaults_on_unprotected_pages = 0;
 extern bool continue_after_memoryfault_on_unprotected_pages;
 bool continue_after_memoryfault_on_unprotected_pages = 0;
 
+int handle_csp_violation(os_context_t *ctx, os_vm_address_t fault_address);
+
 int gencgc_handle_wp_violation(__attribute__((unused)) void* context, void* fault_addr)
 {
+    
+    if (handle_csp_violation(context, fault_addr))
+        return 1;
     page_index_t page_index = find_page_index(fault_addr);
 
     /* Check whether the fault is within the dynamic space. */

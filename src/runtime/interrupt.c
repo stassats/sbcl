@@ -1402,6 +1402,10 @@ sig_stop_for_gc_handler(int __attribute__((unused)) signal,
 
     was_in_lisp = !foreign_function_call_active_p(thread);
 
+#ifdef LISP_FEATURE_NONSTOP_FOREIGN_CALLS
+    /* gc_assert(!csp_around_foreign_call(thread)); */
+#endif
+
     if (was_in_lisp) {
         /* need the context stored so it can have registers scavenged */
         fake_foreign_function_call(context);
@@ -1478,6 +1482,60 @@ sig_stop_for_gc_handler(int __attribute__((unused)) signal,
     }
 }
 
+#ifdef LISP_FEATURE_NONSTOP_FOREIGN_CALLS
+
+bool set_thread_csp_access(struct thread* th, bool writable)
+{
+    os_protect((char*)th - THREAD_CSP_PAGE_SIZE,
+               THREAD_CSP_PAGE_SIZE,
+               writable? (OS_VM_PROT_READ|OS_VM_PROT_WRITE)
+               : (OS_VM_PROT_READ));
+    return csp_around_foreign_call(th) != 0;
+}
+
+int
+handle_csp_violation(os_context_t *ctx, os_vm_address_t fault_address)
+{
+    struct thread *th = get_sb_vm_thread();
+
+    if ((lispobj*)fault_address == &csp_around_foreign_call(th)) {
+        if (read_TLS(GC_INHIBIT,th) == NIL) {
+            int exiting = csp_around_foreign_call(th) != 0;
+            if (exiting) {
+                /* gc_stop_the_world has left this thread untouched,
+                   wait for gc_start_the_world */
+                pthread_mutex_t *exit_lock = &thread_extra_data(th)->foreign_exit_lock;
+                mutex_acquire(exit_lock);
+                mutex_release(exit_lock);
+            }
+            else {
+                /* gc_stop_the_world has either already sent a signal
+                or will send it soon, wait for it. */
+                sigset_t mask;
+                sigfillset(&mask);
+                sigdelset(&mask, SIG_STOP_FOR_GC);
+                sigsuspend(&mask);
+                /* sigset_t pending; */
+                /* sigpending(&pending); */
+                /* if(sigismember(&pending, SIG_STOP_FOR_GC)) { */
+                /*     sigfillset(&pending); */
+                /*     sigdelset(&pending, SIG_STOP_FOR_GC); */
+                /*     sigsuspend(&pending); */
+                /* } else */
+                /*     sig_stop_for_gc_handler(0, NULL, ctx); */
+            }
+        } else {
+            /* Inside without-gcing, re-enable access to the csp page
+               to be able to proceed, the thread will stop upon exit from
+               without-gcing */
+            set_thread_csp_access(th, 1);
+        }
+        return 1;
+    }
+
+    return 0;
+}
+#endif
 #endif
 
 void

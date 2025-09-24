@@ -74,10 +74,8 @@
 	brk trap_PendingInterrupt         ; \
 1:
 #endif
-#ifdef LISP_FEATURE_SB_SAFEPOINT
-# define THREAD_SAVED_CSP_OFFSET (- N_WORD_BYTES)
-#endif
 
+#define THREAD_SAVED_CSP_OFFSET (- N_WORD_BYTES)
 
 #ifdef LISP_FEATURE_OS_THREAD_STACK
 	.align 2
@@ -331,7 +329,7 @@ GNAME(call_into_c):
         LEAVE_PA
 #endif
 
-#ifdef LISP_FEATURE_SB_SAFEPOINT
+#if defined(LISP_FEATURE_SB_SAFEPOINT) | defined (LISP_FEATURE_NONSTOP_FOREIGN_CALLS)
 	/* OK to run GC without stopping this thread from this point on. */
 	str     reg_CSP, [reg_THREAD, THREAD_SAVED_CSP_OFFSET]
 #endif
@@ -364,10 +362,10 @@ GNAME(call_into_c):
         mov     reg_R11,#0
 #endif
 
-# ifdef LISP_FEATURE_SB_SAFEPOINT
+#if defined(LISP_FEATURE_SB_SAFEPOINT) | defined (LISP_FEATURE_NONSTOP_FOREIGN_CALLS)
 	/* No longer OK to run GC except at safepoints. */
 	str     xzr, [reg_THREAD, THREAD_SAVED_CSP_OFFSET]
-# endif
+#endif
 
 
         // Restore the Lisp stack and frame pointers
