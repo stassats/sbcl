@@ -3121,7 +3121,7 @@ static void semiconservative_pin_stack(struct thread* th,
 #if GENCGC_IS_PRECISE && !defined(reg_CODE)
 
 static int boxed_registers[] = BOXED_REGISTERS;
-
+int my_printf(const char *format, ...);
 /* Pin all (condemned) code objects pointed to by the chain of in-flight calls
  * based on scanning from the innermost frame pointer. This relies on an exact backtrace,
  * which some of our architectures have trouble obtaining. But it's theoretically
@@ -3141,6 +3141,7 @@ static void pin_call_chain_and_boxed_registers(struct thread* th) {
       }
     }
     int i = fixnum_value(read_TLS(FREE_INTERRUPT_CONTEXT_INDEX,th));
+    my_printf("pin_call_chain_and_boxed_registers %d in  %llx %p\n", i, thread_extra_data(th)->tid, csp_around_foreign_call(th));
     for (i = i - 1; i >= 0; --i) {
         os_context_t* context = nth_interrupt_context(i, th);
         maybe_pin_code((lispobj)*os_context_register_addr(context, reg_LR));
@@ -3148,12 +3149,14 @@ static void pin_call_chain_and_boxed_registers(struct thread* th) {
         for (unsigned i = 0; i < (sizeof(boxed_registers) / sizeof(int)); i++) {
             lispobj word = *os_context_register_addr(context, boxed_registers[i]);
             if (is_lisp_pointer(word)) {
+                my_printf("%llx ", word);
 #ifdef LISP_FEATURE_SOFT_CARD_MARKS
                 impart_mark_stickiness(word);
 #endif
                 pin_exact_root(word);
             }
         }
+        my_printf("\n");
     }
 
 }
@@ -3434,6 +3437,14 @@ garbage_collect_generation(generation_index_t generation, int raise,
         }
     }
 
+#ifdef LISP_FEATURE_NONSTOP_FOREIGN_CALLS
+    for (int i = 0; i < NSIG; i++) {
+        lispobj fun = lisp_sig_handlers[i];
+        if(functionp(fun))
+            pin_exact_root(fun);
+    }
+#endif
+
     // Thread creation optionally no longer synchronizes the creating and
     // created thread. When synchronized, the parent thread is responsible
     // for pinning the start function for handoff to the created thread.
@@ -3514,7 +3525,16 @@ garbage_collect_generation(generation_index_t generation, int raise,
         /* Scrub the unscavenged control stack space, so that we can't run
          * into any stale pointers in a later GC (this is done by the
          * stop-for-gc handler in the other threads). */
+#ifdef LISP_FEATURE_NONSTOP_FOREIGN_CALLS
+        for_each_thread(th) {
+            /* Threads stopped by gc_stop_the_world scrub the stack on
+             * their own in sig_stop_for_gc_handler. */
+            if (foreign_function_call_active_p(th))
+                scrub_thread_control_stack(th);
+        }
+#else
         scrub_control_stack();
+#endif
 # endif
     }
 #endif
@@ -3800,6 +3820,7 @@ long tot_gc_nsec;
 void NO_SANITIZE_ADDRESS NO_SANITIZE_MEMORY
 collect_garbage(generation_index_t last_gen)
 {
+    gc_assert(!gc_active_p);
     ++n_lisp_gcs;
     THREAD_JIT_WP(0);
     generation_index_t gen = 0, i;
@@ -4109,7 +4130,13 @@ lisp_alloc(int flags, struct alloc_region *region, sword_t nbytes,
            int page_type, struct thread *thread)
 {
     os_vm_size_t trigger_bytes = 0;
-
+    if(gc_active_p) {
+        int my_printf(const char *format, ...);
+        my_printf("gc_active_p\n");
+        /* csp_around_foreign_call(thread) = 0; */
+        lose("lisp_alloc %llx %p %p\n", thread_extra_data(thread)->tid, csp_around_foreign_call(thread),
+             thread->control_stack_pointer);
+    }
     gc_assert(nbytes > 0);
 
     /* Check for alignment allocation problems. */
@@ -4258,8 +4285,13 @@ bool ignore_memoryfaults_on_unprotected_pages = 0;
 extern bool continue_after_memoryfault_on_unprotected_pages;
 bool continue_after_memoryfault_on_unprotected_pages = 0;
 
+int handle_csp_violation(os_context_t *ctx, os_vm_address_t fault_address);
+
 int gencgc_handle_wp_violation(__attribute__((unused)) void* context, void* fault_addr)
 {
+
+    if (handle_csp_violation(context, fault_addr))
+        return 1;
     page_index_t page_index = find_page_index(fault_addr);
 
     /* Check whether the fault is within the dynamic space. */

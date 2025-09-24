@@ -59,10 +59,15 @@ maintained."
            ;; to grab them with GC inhibited.
            (let ((*in-without-gcing* t))
              (unwind-protect
-                  (let* ((*allow-with-interrupts* nil)
-                         (*interrupts-enabled* nil)
-                         (*gc-inhibit* t))
-                    (,without-gcing-body))
+                  (progn
+                    #+nonstop-foreign-calls
+                    (sb-sys:%primitive sb-vm::enter-without-gcing)
+                    (let* ((*allow-with-interrupts* nil)
+                           (*interrupts-enabled* nil)
+                           (*gc-inhibit* t))
+                      (,without-gcing-body)))
+               #+nonstop-foreign-calls
+               (sb-sys:%primitive sb-vm::exit-without-gcing)
                ;; This is not racy because can_hande_now()
                ;; defers signals if *GC-INHIBIT* is NIL but there
                ;; is a pending gc or stop-for-gc.

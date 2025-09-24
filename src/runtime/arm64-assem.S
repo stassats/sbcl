@@ -74,10 +74,8 @@
 	brk trap_PendingInterrupt         ; \
 1:
 #endif
-#ifdef LISP_FEATURE_SB_SAFEPOINT
-# define THREAD_SAVED_CSP_OFFSET (- N_WORD_BYTES)
-#endif
 
+#define THREAD_SAVED_CSP_OFFSET (- N_WORD_BYTES)
 
 #ifdef LISP_FEATURE_OS_THREAD_STACK
 	.align 2
@@ -214,6 +212,14 @@ GNAME(call_into_lisp):
 
 	// Clear FFCA, so the runtime knows that we're "in lisp".
 #ifdef LISP_FEATURE_SB_THREAD
+#if defined(LISP_FEATURE_SB_SAFEPOINT) || defined (LISP_FEATURE_NONSTOP_FOREIGN_CALLS)
+	ldr     x3, [reg_THREAD, THREAD_SAVED_CSP_OFFSET]
+        str     x3, [sp,#-16]!
+        cbz     x3, 1f
+	str     xzr, [reg_THREAD, THREAD_SAVED_CSP_OFFSET]
+1:      
+
+#endif
         str     xzr,[reg_THREAD, THREAD_CONTROL_STACK_POINTER_OFFSET]
 #else
 	ldr     reg_NL3, =GNAME(foreign_function_call_active)
@@ -264,6 +270,12 @@ Lno_args:
 // Save the lisp stack and frame pointers.
 #ifdef LISP_FEATURE_SB_THREAD
 	stp     reg_CFP,reg_CSP, [reg_THREAD, THREAD_CONTROL_FRAME_POINTER_OFFSET]
+#if defined(LISP_FEATURE_SB_SAFEPOINT) || defined (LISP_FEATURE_NONSTOP_FOREIGN_CALLS)
+        ldr     x3, [sp],#16
+        cbz     x3, Lskip
+	str     reg_CSP, [reg_THREAD, THREAD_SAVED_CSP_OFFSET]
+Lskip:
+#endif
 #else
 	ENTER_PA
 
@@ -331,7 +343,7 @@ GNAME(call_into_c):
         LEAVE_PA
 #endif
 
-#ifdef LISP_FEATURE_SB_SAFEPOINT
+#if defined(LISP_FEATURE_SB_SAFEPOINT) || defined (LISP_FEATURE_NONSTOP_FOREIGN_CALLS)
 	/* OK to run GC without stopping this thread from this point on. */
 	str     reg_CSP, [reg_THREAD, THREAD_SAVED_CSP_OFFSET]
 #endif
@@ -364,10 +376,10 @@ GNAME(call_into_c):
         mov     reg_R11,#0
 #endif
 
-# ifdef LISP_FEATURE_SB_SAFEPOINT
+#if defined(LISP_FEATURE_SB_SAFEPOINT) || defined (LISP_FEATURE_NONSTOP_FOREIGN_CALLS)
 	/* No longer OK to run GC except at safepoints. */
 	str     xzr, [reg_THREAD, THREAD_SAVED_CSP_OFFSET]
-# endif
+#endif
 
 
         // Restore the Lisp stack and frame pointers
@@ -427,6 +439,30 @@ GNAME(fun_end_breakpoint_end):
 GNAME(do_pending_interrupt):
         brk trap_PendingInterrupt
 	ret
+
+#ifdef LISP_FEATURE_NONSTOP_FOREIGN_CALLS
+        .align 2
+	.global	GNAME(grab_without_gcing_lock)
+	TYPE(grab_without_gcing_lock)
+
+GNAME(grab_without_gcing_lock):
+        add x3, x0, THREAD_WITHOUT_GCING_LOCK_OFFSET
+        mov w5, #2
+1:
+        mov w6, #0
+        casal w6,w5,[x3]
+        cbnz w6, 1b
+        ret
+
+        .align 2
+	.global	GNAME(release_without_gcing_lock)
+	TYPE(release_without_gcing_lock)
+
+GNAME(release_without_gcing_lock):
+        add x3, x0, THREAD_WITHOUT_GCING_LOCK_OFFSET
+        stlr xzr, [x3]
+        ret
+#endif
 
 #ifdef __ELF__
 // Mark the object as not requiring an executable stack.

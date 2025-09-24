@@ -50,7 +50,7 @@
 #include "search.h"
 #include "murmur_hash.h"
 #include "incremental-compact.h"
-
+int my_printf(const char *format, ...);
 os_vm_size_t dynamic_space_size = DEFAULT_DYNAMIC_SPACE_SIZE;
 os_vm_size_t thread_control_stack_size = DEFAULT_CONTROL_STACK_SIZE;
 
@@ -2228,11 +2228,11 @@ bool maybe_gc(os_context_t *context)
     lispobj gc_happened;
     __attribute__((unused)) struct thread *thread = get_sb_vm_thread();
     bool were_in_lisp = !foreign_function_call_active_p(thread);
-
+    gc_assert(were_in_lisp);
     if (were_in_lisp) {
         fake_foreign_function_call(context);
     }
-
+    my_printf("maybe_gc %llx\n",  thread_extra_data(thread)->tid);
     /* SUB-GC may return without GCing if *GC-INHIBIT* is set, in
      * which case we will be running with no gc trigger barrier
      * thing for a while.  But it shouldn't be long until the end
@@ -2406,6 +2406,7 @@ scrub_thread_control_stack(struct thread *th)
 void
 scavenge_control_stack(struct thread *th)
 {
+    my_printf("scavenge_control_stack in  %llx %p\n", thread_extra_data(th)->tid, csp_around_foreign_call(th));
 #ifndef LISP_FEATURE_MARK_REGION_GC
     if (!compacting_p()) {
         long nwords = (lispobj*)access_control_stack_pointer(th) - th->control_stack_start;
@@ -2703,7 +2704,7 @@ scavenge_interrupt_contexts(struct thread *th)
     os_context_t *context;
 
     index = fixnum_value(read_TLS(FREE_INTERRUPT_CONTEXT_INDEX,th));
-
+    my_printf("scavenge_interrupt_contexts %d in  %llx %p\n", index, thread_extra_data(th)->tid, csp_around_foreign_call(th));
 #if defined(DEBUG_PRINT_CONTEXT_INDEX)
     printf("Number of active contexts: %d\n", index);
 #endif

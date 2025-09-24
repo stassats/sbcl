@@ -505,6 +505,8 @@ during backtrace.
   (mixed-tlab :c-type "struct alloc_region" :length 3)
   ;; END of slots to keep near the beginning.
 
+  #+nonstop-foreign-calls
+  (without-gcing-lock)
   #+x86-64 (msan-param-tls) ; = &__msan_param_tls, unconditional wrt #+-msan
 
   ;; This is the original address at which the memory was allocated,

@@ -2044,6 +2044,8 @@ session."
                 #+sb-safepoint
                 (setq *thruption-pending* nil)
                 (handle-thread-exit))))))))))
+  #+nonstop-foreign-calls
+  (%primitive sb-vm::enter-without-gcing)
   ;; this returns to C, so return a single value
   0)
 ) ; end PROGN for #+sb-thread

@@ -39,6 +39,160 @@
  *   See src/code/signal.lisp
  *
  * - WHN 20000728, dan 20010128 */
+#include <stdarg.h>
+#include <stdio.h>
+#include <unistd.h>
+
+static void number_to_string(int n, char *buffer) {
+    if (n == 0) {
+        buffer[0] = '0';
+        buffer[1] = '\0';
+        return;
+    }
+    int i = 0;
+    long long num = n;
+    if (num < 0) {
+        buffer[i++] = '-';
+        num = -num;
+    }
+    int start_of_num = i;
+    while (num != 0) {
+        buffer[i++] = (num % 10) + '0';
+        num = num / 10;
+    }
+    buffer[i] = '\0';
+    int end = i - 1;
+    while (start_of_num < end) {
+        char temp = buffer[start_of_num];
+        buffer[start_of_num] = buffer[end];
+        buffer[end] = temp;
+        start_of_num++;
+        end--;
+    }
+}
+
+static void unsigned_long_long_to_hex(unsigned long long n, char *buffer) {
+    if (n == 0) {
+        buffer[0] = '0';
+        buffer[1] = '\0';
+        return;
+    }
+    const char *hex_digits = "0123456789abcdef";
+    int i = 0;
+    while (n != 0) {
+        buffer[i++] = hex_digits[n % 16];
+        n = n / 16;
+    }
+    buffer[i] = '\0';
+    int start = 0;
+    int end = i - 1;
+    while (start < end) {
+        char temp = buffer[start];
+        buffer[start] = buffer[end];
+        buffer[end] = temp;
+        start++;
+        end--;
+    }
+}
+
+// --- Standalone helper functions for buffered writing ---
+
+// Flushes the buffer to standard output
+static void flush_buffer(char *buffer, int *buffer_idx, int *total_written) {
+    if (*buffer_idx > 0) {
+        write(1, buffer, *buffer_idx);
+        *total_written += *buffer_idx;
+        *buffer_idx = 0;
+    }
+}
+
+// Adds a single character to the buffer, flushing if full
+static void add_char_to_buffer(char c, char *buffer, int *buffer_idx, int *total_written) {
+    buffer[(*buffer_idx)++] = c;
+    if (*buffer_idx == 1024) {
+        flush_buffer(buffer, buffer_idx, total_written);
+    }
+}
+
+// Adds a string to the buffer
+static void add_string_to_buffer(const char *str, char *buffer, int *buffer_idx, int *total_written) {
+    if (str == NULL) {
+        str = "(null)";
+    }
+    for (int i = 0; str[i] != '\0'; i++) {
+        add_char_to_buffer(str[i], buffer, buffer_idx, total_written);
+    }
+}
+
+
+// --- The main my_printf implementation ---
+
+int my_printf(const char *format, ...) {
+    return 0;
+    va_list args;
+    va_start(args, format);
+
+    char buffer[1024];
+    int buffer_idx = 0;
+    int total_written = 0;
+
+    // Buffer for number-to-string conversions
+    char num_buffer[21];
+
+    for (int i = 0; format[i] != '\0'; i++) {
+        if (format[i] == '%') {
+            i++;
+            if (format[i] == 'l' && format[i+1] == 'l' && format[i+2] == 'x') {
+                i += 2;
+                unsigned long long num = va_arg(args, unsigned long long);
+                unsigned_long_long_to_hex(num, num_buffer);
+                add_string_to_buffer(num_buffer, buffer, &buffer_idx, &total_written);
+            } else {
+                switch (format[i]) {
+                    case 'd': {
+                        int num = va_arg(args, int);
+                        number_to_string(num, num_buffer);
+                        add_string_to_buffer(num_buffer, buffer, &buffer_idx, &total_written);
+                        break;
+                    }
+                    case 's': {
+                        char *str = va_arg(args, char *);
+                        add_string_to_buffer(str, buffer, &buffer_idx, &total_written);
+                        break;
+                    }
+                    case 'c': {
+                        char c = (char)va_arg(args, int);
+                        add_char_to_buffer(c, buffer, &buffer_idx, &total_written);
+                        break;
+                    }
+                    case 'p': {
+                        void *ptr = va_arg(args, void *);
+                        if (ptr == NULL) {
+                            add_string_to_buffer("(nil)", buffer, &buffer_idx, &total_written);
+                        } else {
+                            add_string_to_buffer("0x", buffer, &buffer_idx, &total_written);
+                            unsigned_long_long_to_hex((uintptr_t)ptr, num_buffer);
+                            add_string_to_buffer(num_buffer, buffer, &buffer_idx, &total_written);
+                        }
+                        break;
+                    }
+                    case '%': {
+                        add_char_to_buffer('%', buffer, &buffer_idx, &total_written);
+                        break;
+                    }
+                }
+            }
+        } else {
+            add_char_to_buffer(format[i], buffer, &buffer_idx, &total_written);
+        }
+    }
+
+    // Flush any remaining characters in the buffer
+    flush_buffer(buffer, &buffer_idx, &total_written);
+
+    va_end(args);
+    return total_written;
+}
 
 #include "genesis/sbcl.h"
 
@@ -1032,7 +1186,7 @@ interrupt_handle_pending(os_context_t *context)
 
     struct thread *thread = get_sb_vm_thread();
     struct interrupt_data *data = &thread_interrupt_data(thread);
-
+    my_printf("pending %llx\n", thread_extra_data(thread)->tid);
     if (arch_pseudo_atomic_atomic(thread)) {
         lose("Handling pending interrupt in pseudo atomic.");
     }
@@ -1376,8 +1530,9 @@ sig_stop_for_gc_handler(int __attribute__((unused)) signal,
                         os_context_t *context)
 {
     struct thread *thread = get_sb_vm_thread();
+    my_printf("sig_stop_for_gc_handler %llx\n", thread_extra_data(thread)->tid);
     bool was_in_lisp;
-
+    gc_assert(thread->without_gcing_lock != 1);
     /* Test for GC_INHIBIT _first_, else we'd trap on every single
      * pseudo atomic until gc is finally allowed. */
     if (read_TLS(GC_INHIBIT,thread) != NIL) {
@@ -1387,6 +1542,7 @@ sig_stop_for_gc_handler(int __attribute__((unused)) signal,
     } else if (arch_pseudo_atomic_atomic(thread)) {
         event0("stop_for_gc deferred for PA");
         write_TLS(STOP_FOR_GC_PENDING, LISP_T, thread);
+        my_printf("stop_for_gc deferred for PA\n");
         arch_set_pseudo_atomic_interrupted(thread);
         maybe_save_gc_mask_and_block_deferrables(context);
         return;
@@ -1401,6 +1557,10 @@ sig_stop_for_gc_handler(int __attribute__((unused)) signal,
     /* Not PA and GC not inhibited -- we can stop now. */
 
     was_in_lisp = !foreign_function_call_active_p(thread);
+
+#ifdef LISP_FEATURE_NONSTOP_FOREIGN_CALLS
+    gc_assert(!csp_around_foreign_call(thread));
+#endif
 
     if (was_in_lisp) {
         /* need the context stored so it can have registers scavenged */
@@ -1476,8 +1636,123 @@ sig_stop_for_gc_handler(int __attribute__((unused)) signal,
     if (was_in_lisp) {
         undo_fake_foreign_function_call(context);
     }
+    my_printf("sig_stop_for_gc_handler resumed %llx\n", thread_extra_data(thread)->tid);
 }
 
+#ifdef LISP_FEATURE_NONSTOP_FOREIGN_CALLS
+
+bool set_thread_csp_access(struct thread* th, bool writable)
+{
+    os_protect((char*)th - THREAD_CSP_PAGE_SIZE,
+               THREAD_CSP_PAGE_SIZE,
+               writable? (OS_VM_PROT_READ|OS_VM_PROT_WRITE)
+               : (OS_VM_PROT_READ));
+    return csp_around_foreign_call(th) != 0;
+}
+
+int
+handle_csp_violation(os_context_t *context, os_vm_address_t fault_address)
+{
+    struct thread *th = get_sb_vm_thread();
+
+    if ((lispobj*)fault_address == &csp_around_foreign_call(th)) {
+        gc_assert(th->without_gcing_lock != 1);
+        //gc_assert(!arch_pseudo_atomic_atomic(th)); //
+        my_printf(" handle_csp_violation in  %llx %p %p\n", thread_extra_data(th)->tid, csp_around_foreign_call(th), fault_address);
+        if (arch_pseudo_atomic_atomic(th)) {
+            write_TLS(STOP_FOR_GC_PENDING, LISP_T, th);
+            arch_set_pseudo_atomic_interrupted(th);
+            maybe_save_gc_mask_and_block_deferrables(context);
+            set_thread_csp_access(th, 1);
+            my_printf("pa_inter\n");
+            return 1;
+        }
+        int exiting = csp_around_foreign_call(th) != 0;
+        sigset_t mask;
+
+        if (read_TLS(GC_INHIBIT,th) == NIL) {
+            if (exiting) {
+                /* gc_stop_the_world has left this thread untouched,
+                   wait for gc_start_the_world */
+                my_printf("exiting %llx\n", thread_extra_data(th)->tid);
+                /* gc_assert(!read_TLS(IN_WITHOUT_GCING,th)); */
+                pthread_mutex_t *exit_lock = &thread_extra_data(th)->foreign_exit_lock;
+                dispatch_semaphore_signal(thread_extra_data(th)->debug_sem);
+
+                mutex_acquire(exit_lock);
+                //csp_around_foreign_call(th) = 0;
+                mutex_release(exit_lock);
+                /* my_printf("exited %llx\n", thread_extra_data(th)->tid); */
+            }
+            else {
+                my_printf("entering %llx\n", thread_extra_data(th)->tid);
+                /* gc_stop_the_world has either already sent a signal
+                or will send it soon, wait for it. */
+
+                sigfillset(&mask);
+                sigdelset(&mask, SIG_STOP_FOR_GC);
+                sigsuspend(&mask);
+                my_printf(" sigsuspend done %llx\n", thread_extra_data(th)->tid);
+
+                /* sigemptyset(&mask); */
+                /* sigaddset(&mask, SIG_STOP_FOR_GC); */
+                /* int signal; */
+                /* sigwait(&mask, &signal); */
+                /* gc_assert(signal == SIG_STOP_FOR_GC); */
+
+                /* sig_stop_for_gc_handler(SIG_STOP_FOR_GC, NULL, context); */
+                /* my_printf(" sigsuspend done %llx\n", thread_extra_data(th)->tid); */
+
+                /* sigset_t pending; */
+                /* sigpending(&pending); */
+                /* if(sigismember(&pending, SIG_STOP_FOR_GC)) { */
+                /*     sigfillset(&pending); */
+                /*     sigdelset(&pending, SIG_STOP_FOR_GC); */
+                /*     sigsuspend(&pending); */
+                /* } else */
+                /*     sig_stop_for_gc_handler(0, NULL, context); */
+            }
+        } else {
+            lose("without-gcing");
+        }
+/* { /\* Inside without-gcing *\/ */
+        /*     /\* Stop upon exiting from without-gcing *\/ */
+        /*     gc_assert(!gc_active_p); */
+        /*     my_printf("wogc %llx %d\n", thread_extra_data(th)->tid, exiting); */
+        /*     /\* Unprotect the page to be able to proceed *\/ */
+        /*     set_thread_csp_access(th, 1); */
+        /*     if (exiting) { */
+        /*         pthread_mutex_t *exit_lock = &thread_extra_data(th)->foreign_exit_lock; */
+        /*         write_TLS(STOP_FOR_GC_PENDING, LISP_T, th); */
+        /*         dispatch_semaphore_signal(thread_extra_data(th)->debug_sem); */
+        /*         mutex_acquire(exit_lock); */
+        /*         mutex_release(exit_lock); */
+        /*     } else { */
+        /*         if (read_TLS(STOP_FOR_GC_PENDING, th) == NIL) { */
+        /*             /\* sigfillset(&mask); *\/ */
+        /*             /\* sigdelset(&mask, SIG_STOP_FOR_GC); *\/ */
+        /*             /\* sigsuspend(&mask); *\/ */
+
+        /*             sigemptyset(&mask); */
+        /*             sigaddset(&mask, SIG_STOP_FOR_GC); */
+        /*             int signal; */
+        /*             my_printf(" wogc sigwait %llx\n", thread_extra_data(th)->tid); */
+
+        /*             sigwait(&mask, &signal); */
+        /*             gc_assert(signal == SIG_STOP_FOR_GC); */
+
+        /*             sig_stop_for_gc_handler(SIG_STOP_FOR_GC, NULL, context); */
+        /*             my_printf(" wogc sigsuspend done %llx\n", thread_extra_data(th)->tid); */
+        /*         } */
+        /*     } */
+        /*     gc_assert(read_TLS(STOP_FOR_GC_PENDING, th) != NIL); */
+        /* } */
+        return 1;
+    }
+
+    return 0;
+}
+#endif
 #endif
 
 void
@@ -1915,6 +2190,7 @@ extern void restore_sbcl_signals () {
 static void
 low_level_handle_now_handler(int signal, siginfo_t *info, void *void_context)
 {
+    my_printf("low_level_handle_now_handler %d %llx\n", signal,  thread_extra_data(get_sb_vm_thread())->tid);
     /* We forgo SAVE_ERRNO / RESTORE_ERRNO here because those can resignal to a
      * different thread. It never makes sense with synchronous signals such as SIGILL,
      * SIGTRAP, SIGFPE, SIGSEGV which are necessarily thread-specific; nor SIGABRT
