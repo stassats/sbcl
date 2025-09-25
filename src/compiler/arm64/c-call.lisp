@@ -245,13 +245,13 @@
         (inst stp cfp-tn temp2 (@ csp-tn))
         (storew-pair csp-tn thread-control-frame-pointer-slot temp thread-control-stack-pointer-slot thread-tn)
 
-        (inst add temp thread-tn (* thread-stw-lock-slot n-word-bytes))
+        (inst add temp thread-tn (* thread-stw-slot n-word-bytes))
 
         LOOP
-        (inst mov temp2 0)
-        (inst mov tmp-tn 2)
-        (inst casa temp2 tmp-tn temp)
-        (inst tbnz temp2 0 LOOP)
+        (inst mov (32-bit-reg temp2) 0)
+        (inst mov (32-bit-reg tmp-tn) 2)
+        (inst casal (32-bit-reg temp2) (32-bit-reg tmp-tn) temp)
+        (inst cbnz (32-bit-reg temp2) LOOP)
 
         ;; OK to run GC without stopping this thread from this point
         ;; on.
@@ -281,14 +281,11 @@
 
         (inst add temp thread-tn (* thread-stw-slot n-word-bytes))
         LOOP2
-        (inst mov temp2 0)
-        (inst casl temp2 zr-tn temp)
-        (inst cbnz temp2 LOOP2)
-        ;; (inst brk stw-trap)
+        (inst mov temp2 2)
+        (inst casal temp2 zr-tn temp)
+        (inst cmp temp2 2)
+        (inst b :ne LOOP2)
         OK2)
-
-        (inst add temp thread-tn (* thread-stw-lock-slot n-word-bytes))
-        (inst stlr zr-tn temp)
 
       (storew zr-tn thread-tn thread-control-stack-pointer-slot)
 

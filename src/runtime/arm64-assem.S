@@ -212,6 +212,19 @@ GNAME(call_into_lisp):
 #endif
         ENTER_PA
 
+        add x3, reg_THREAD, THREAD_STW_OFFSET
+        ldr w5, [x3]
+
+        cmp w5, 2
+        csel w5,w5,wzr,eq
+        str x5, [sp,#-16]!
+        bne Lok
+Lloop:
+        mov x6,x5
+        casal x6,xzr,[x3]
+        cmp x6,x5
+        bne Lloop
+Lok:    
 	// Clear FFCA, so the runtime knows that we're "in lisp".
 #ifdef LISP_FEATURE_SB_THREAD
         str     xzr,[reg_THREAD, THREAD_CONTROL_STACK_POINTER_OFFSET]
@@ -261,6 +274,16 @@ Lno_args:
         // Return value
         mov     x0, reg_R0
 
+        ldr x5, [sp],#16
+        cmp x5, 2
+        bne Lok2
+        add x3, reg_THREAD, THREAD_STW_OFFSET
+
+Lloop2:
+        mov x6, #0
+        casal x6,x5,[x3]
+        cbnz x6, Lloop2
+Lok2:  
 // Save the lisp stack and frame pointers.
 #ifdef LISP_FEATURE_SB_THREAD
 	stp     reg_CFP,reg_CSP, [reg_THREAD, THREAD_CONTROL_FRAME_POINTER_OFFSET]
@@ -436,6 +459,13 @@ GNAME(write_stw):
         casal x0, x1, [x2]
 	ret
 
+        .align 2
+	.global	GNAME(write_stw32)
+	TYPE(write_stw32)
+
+GNAME(write_stw32):
+        casal w0, w1, [x2]
+	ret
 
 #ifdef __ELF__
 // Mark the object as not requiring an executable stack.

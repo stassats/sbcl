@@ -65,6 +65,7 @@ struct extra_thread_data
     uint32_t state_not_stopped_waitcount;
 #endif
     int stw_ffi;
+    int stw_pending;
 #if defined LISP_FEATURE_SB_THREAD && defined LISP_FEATURE_UNIX
     // According to https://github.com/adrienverge/openfortivpn/issues/105
     //   "using GCD semaphore in signal handlers is documented to be unsafe"
@@ -98,6 +99,7 @@ struct extra_thread_data
     // and allocation switches back and forth between arena and heap.
     page_index_t mixed_page_hint;
     page_index_t cons_page_hint;
+    unsigned long long tid;
 };
 #define thread_extra_data(thread) \
   ((struct extra_thread_data*)((char*)(thread) + dynamic_values_bytes))

@@ -2257,6 +2257,7 @@ bool maybe_gc(os_context_t *context)
      */
 #if HAVE_GC_STW_SIGNAL
     check_gc_signals_unblocked_or_lose(os_context_sigmask_addr(context));
+    printf("ublock\n")
     unblock_gc_stop_signal();
 #endif
     /* FIXME: Nothing must go wrong during GC else we end up running

@@ -711,6 +711,7 @@ alloc_thread_struct(void* spaces) {
     os_sem_init(&extra_data->state_not_running_sem, 0);
     os_sem_init(&extra_data->state_not_stopped_sem, 0);
     extra_data->stw_ffi = 0;
+    extra_data->stw_pending = 0;
 #endif
 #if defined LISP_FEATURE_UNIX && defined LISP_FEATURE_SB_THREAD
     os_sem_init(&extra_data->sprof_sem, 0);

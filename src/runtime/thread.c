@@ -393,7 +393,6 @@ void create_main_lisp_thread(lispobj function) {
         lose("can't create initial thread");
     th->sprof_enable = make_fixnum(1);
     th->stw = 0;
-    th->stw_lock = 0;
 
 #if defined LISP_FEATURE_SB_THREAD && !defined LISP_FEATURE_GCC_TLS && !defined LISP_FEATURE_WIN32
     pthread_key_create(&current_thread, 0);
@@ -466,6 +465,7 @@ init_new_thread(struct thread *th,
                 init_thread_data __attribute__((unused)) *scribble,
                 int guardp)
 {
+    pthread_threadid_np(NULL, &thread_extra_data(th)->tid);
     ASSIGN_CURRENT_THREAD(th);
     if(arch_os_thread_init(th)==0) {
         /* FIXME: handle error */
@@ -493,7 +493,6 @@ init_new_thread(struct thread *th,
     csp_around_foreign_call(th) = (lispobj)scribble;
 #endif
     th->stw = 0;
-    th->stw_lock = 0;
     __attribute__((unused)) int lock_ret = mutex_acquire(&all_threads_lock);
     gc_assert(lock_ret);
     link_thread(th);
@@ -1002,10 +1001,12 @@ int sb_thread_kill (pthread_t thread, int sig) {
  * the memory shouldn't be there) */
 
 long write_stw(long old, long new, void * stw);
+long write_stw32(int old, int new, void * stw);
 
 static __attribute__((unused)) struct timespec stw_begin_realtime, stw_begin_cputime;
 void gc_stop_the_world()
 {
+    printf("stop\n");
 #ifdef MEASURE_STOP_THE_WORLD_PAUSE
     /* The thread performing stop-the-world does not use sig_stop_for_gc_handler on itself,
      * so it would not accrue time spent stopped. Force it to, by considering it "paused"
@@ -1029,10 +1030,15 @@ void gc_stop_the_world()
             struct extra_thread_data *semaphores = thread_extra_data(th);
             os_sem_wait(&semaphores->state_sem);
             int state = get_thread_state(th);
+            int tid;
+            pthread_threadid_np(th, &tid);
+            long st;
             if (state == STATE_RUNNING) {
-                write_stw(0, 1, &th->stw);
-                if (write_stw(0, 1, &th->stw_lock) == 0) {
+
+                ((int*)&th->stw)[1] = 1;
+                if ((st = write_stw32(0, 1, &th->stw)) == 0) {
                     semaphores->stw_ffi = 0;
+                    printf("got %p\n", thread_extra_data(th)->tid);
                     rc = pthread_kill(th->os_thread,SIG_STOP_FOR_GC);
                     /* This used to bogusly check for ESRCH.
                      * I changed the ESRCH case to just fall into lose() */
@@ -1041,7 +1047,8 @@ void gc_stop_the_world()
                                  // See comment in 'interr.h' about that.
                                  (void*)th->os_thread, rc, strerror(rc));
                 } else {
-                    /* printf("skip\n"); */
+
+                    printf("skip %p %ld\n", thread_extra_data(th)->tid, st);
 
                     semaphores->stw_ffi = 1;
                     scrub_thread_control_stack(th);
@@ -1053,11 +1060,17 @@ void gc_stop_the_world()
     for_each_thread(th) {
         struct extra_thread_data *semaphores = thread_extra_data(th);
         if (th != me && !semaphores->stw_ffi) {
+            int tid;
+            pthread_threadid_np(th, &tid);
+
+
+            printf("waiting for %p\n", thread_extra_data(th)->tid);
             __attribute__((unused)) int state = thread_wait_until_not(STATE_RUNNING, th);
             gc_assert(state != STATE_RUNNING);
         }
     }
     event0("/gc_stop_the_world:end");
+    printf("stopped\n");
 }
 
 void gc_start_the_world()
@@ -1095,14 +1108,14 @@ void gc_start_the_world()
            * No harm in being cautious though with regard to compiler reordering */
             int state = get_thread_state(th);
             struct extra_thread_data *semaphores = thread_extra_data(th);
-            write_stw(1, 0, &th->stw);
-            if (state != STATE_DEAD && !semaphores->stw_ffi) {
-                write_stw(1, 0, &th->stw_lock);
+            if (semaphores->stw_ffi) {
+                gc_assert(write_stw32(1, 0, ((int*)&th->stw) + 1) == 1);
+            }
+            else if (state != STATE_DEAD) {
+                gc_assert(write_stw((1L<<32)+1, 0, &th->stw) == (1L<<32)+1);
                 if(state != STATE_STOPPED)
                     lose("gc_start_the_world: bad thread state %x", state);
                 set_thread_state(th, STATE_RUNNING, 0);
-            } else {
-                /* printf("skip\n"); */
             }
         }
     }
