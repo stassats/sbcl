@@ -215,14 +215,14 @@ GNAME(call_into_lisp):
         add x3, reg_THREAD, THREAD_STW_OFFSET
         ldr w5, [x3]
 
-        cmp w5, 2
+        cmp w5, #2
         csel w5,w5,wzr,eq
         str x5, [sp,#-16]!
         bne Lok
 Lloop:
-        mov x6,x5
+        mov x6,#2
         casal x6,xzr,[x3]
-        cmp x6,x5
+        cmp x6,#2
         bne Lloop
 Lok:    
 	// Clear FFCA, so the runtime knows that we're "in lisp".
@@ -274,16 +274,6 @@ Lno_args:
         // Return value
         mov     x0, reg_R0
 
-        ldr x5, [sp],#16
-        cmp x5, 2
-        bne Lok2
-        add x3, reg_THREAD, THREAD_STW_OFFSET
-
-Lloop2:
-        mov x6, #0
-        casal x6,x5,[x3]
-        cbnz x6, Lloop2
-Lok2:  
 // Save the lisp stack and frame pointers.
 #ifdef LISP_FEATURE_SB_THREAD
 	stp     reg_CFP,reg_CSP, [reg_THREAD, THREAD_CONTROL_FRAME_POINTER_OFFSET]
@@ -301,6 +291,16 @@ Lok2:
 
         LEAVE_PA
 #endif
+        ldr w5, [sp],#16
+        cmp w5, #2
+        bne Lok2
+        add x3, reg_THREAD, THREAD_STW_OFFSET
+
+Lloop2:
+        mov w6, #0
+        casal w6,w5,[x3]
+        cbnz w6, Lloop2
+Lok2:
 
 	// Restore saved registers.
 
@@ -466,6 +466,32 @@ GNAME(write_stw):
 GNAME(write_stw32):
         casal w0, w1, [x2]
 	ret
+
+        .align 2
+	.global	GNAME(wait_for_lisp_mode)
+	TYPE(wait_for_lisp_mode)
+
+GNAME(wait_for_lisp_mode):
+        add x3, x0, THREAD_STW_OFFSET
+Lloop3:
+        mov x6,#2
+        casal x6,xzr,[x3]
+        cmp x6,#2
+        bne Lloop3
+        ret
+
+        .align 2
+	.global	GNAME(wait_for_foreign_mode)
+	TYPE(wait_for_foreign_mode)
+
+GNAME(wait_for_foreign_mode):
+        add x3, x0, THREAD_STW_OFFSET
+        mov w5,#2
+Lloop4:
+        mov w6, #0
+        casal w6,w5,[x3]
+        cbnz w6, Lloop4
+        ret
 
 #ifdef __ELF__
 // Mark the object as not requiring an executable stack.

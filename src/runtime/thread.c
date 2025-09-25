@@ -392,7 +392,7 @@ void create_main_lisp_thread(lispobj function) {
     if (!th || arch_os_thread_init(th)==0 || !init_shared_attr_object())
         lose("can't create initial thread");
     th->sprof_enable = make_fixnum(1);
-    th->stw = 0;
+    th->stw = 2;
 
 #if defined LISP_FEATURE_SB_THREAD && !defined LISP_FEATURE_GCC_TLS && !defined LISP_FEATURE_WIN32
     pthread_key_create(&current_thread, 0);
@@ -466,6 +466,7 @@ init_new_thread(struct thread *th,
                 int guardp)
 {
     pthread_threadid_np(NULL, &thread_extra_data(th)->tid);
+
     ASSIGN_CURRENT_THREAD(th);
     if(arch_os_thread_init(th)==0) {
         /* FIXME: handle error */
@@ -492,7 +493,9 @@ init_new_thread(struct thread *th,
 #ifdef LISP_FEATURE_SB_SAFEPOINT
     csp_around_foreign_call(th) = (lispobj)scribble;
 #endif
-    th->stw = 0;
+
+    th->stw = 2;
+    /* printf("new  %llx\n", thread_extra_data(th)->tid); */
     __attribute__((unused)) int lock_ret = mutex_acquire(&all_threads_lock);
     gc_assert(lock_ret);
     link_thread(th);
@@ -508,7 +511,8 @@ init_new_thread(struct thread *th,
     push_gcing_safety(&scribble->safety);
 #endif
 }
-
+void wait_for_lisp_mode(struct thread *th);
+void wait_for_foreign_mode(struct thread *th);
 static void
 unregister_thread(struct thread *th,
                   init_thread_data __attribute__((unused)) *scribble)
@@ -528,6 +532,12 @@ unregister_thread(struct thread *th,
         th->remset = 0;
     }
 #endif
+    unblock_gc_stop_signal();
+    wait_for_lisp_mode(th);
+    block_blockable_signals(0);
+
+
+
     /* Here's a thought: if this structure was for a native thread doing call-in
      * and so we're about to toss this into the recycle bin, what if we didn't
      * consume the remainder of all open regions but instead just kept them?
@@ -535,10 +545,14 @@ unregister_thread(struct thread *th,
      * regions if no GC ran in the meantime. If GC does need to run,
      * it should close TLABs of all thread structures in the recycle bin */
     gc_close_thread_regions(th, LOCK_PAGE_TABLE|CONSUME_REMAINDER);
+    unblock_gc_stop_signal();    
+    wait_for_foreign_mode(th);
+    block_blockable_signals(0);
+
 
 #ifdef LISP_FEATURE_SB_SAFEPOINT
     if (scribble)
-      pop_gcing_safety(&scribble->safety);
+        pop_gcing_safety(&scribble->safety);
 #else
     /* This state change serves to "acknowledge" any stop-the-world
      * signal received while the STOP_FOR_GC signal is blocked */
@@ -1006,7 +1020,7 @@ long write_stw32(int old, int new, void * stw);
 static __attribute__((unused)) struct timespec stw_begin_realtime, stw_begin_cputime;
 void gc_stop_the_world()
 {
-    printf("stop\n");
+     /* printf("stop\n"); */
 #ifdef MEASURE_STOP_THE_WORLD_PAUSE
     /* The thread performing stop-the-world does not use sig_stop_for_gc_handler on itself,
      * so it would not accrue time spent stopped. Force it to, by considering it "paused"
@@ -1030,15 +1044,20 @@ void gc_stop_the_world()
             struct extra_thread_data *semaphores = thread_extra_data(th);
             os_sem_wait(&semaphores->state_sem);
             int state = get_thread_state(th);
-            int tid;
-            pthread_threadid_np(th, &tid);
             long st;
+            long sw = (write_stw32(0, 1, ((int*)&th->stw) + 1));
+            if(sw !=  0) {
+                lose("%llx %ld %ld\n", thread_extra_data(th)->tid, sw, th->stw);
+            }
             if (state == STATE_RUNNING) {
 
-                ((int*)&th->stw)[1] = 1;
+                /* ((int*)&th->stw)[1] = 1; */
+
+
                 if ((st = write_stw32(0, 1, &th->stw)) == 0) {
                     semaphores->stw_ffi = 0;
-                    printf("got %p\n", thread_extra_data(th)->tid);
+                    //printf("kill  %llx %ld\n", thread_extra_data(th)->tid, th->stw);
+                    /* printf("got %p\n", thread_extra_data(th)->tid); */
                     rc = pthread_kill(th->os_thread,SIG_STOP_FOR_GC);
                     /* This used to bogusly check for ESRCH.
                      * I changed the ESRCH case to just fall into lose() */
@@ -1048,9 +1067,10 @@ void gc_stop_the_world()
                                  (void*)th->os_thread, rc, strerror(rc));
                 } else {
 
-                    printf("skip %p %ld\n", thread_extra_data(th)->tid, st);
+                    /* printf("skip %p %ld\n", thread_extra_data(th)->tid, st); */
 
                     semaphores->stw_ffi = 1;
+                    //printf("skip  %llx %ld\n", thread_extra_data(th)->tid, th->stw);
                     scrub_thread_control_stack(th);
                 }
             }
@@ -1058,19 +1078,15 @@ void gc_stop_the_world()
         }
     }
     for_each_thread(th) {
-        struct extra_thread_data *semaphores = thread_extra_data(th);
-        if (th != me && !semaphores->stw_ffi) {
-            int tid;
-            pthread_threadid_np(th, &tid);
+        if (th != me && !thread_extra_data(th)->stw_ffi) {
 
-
-            printf("waiting for %p\n", thread_extra_data(th)->tid);
+            //printf("waiting for %llx\n", thread_extra_data(th)->tid);
             __attribute__((unused)) int state = thread_wait_until_not(STATE_RUNNING, th);
             gc_assert(state != STATE_RUNNING);
         }
     }
     event0("/gc_stop_the_world:end");
-    printf("stopped\n");
+    /* printf("stopped\n"); */
 }
 
 void gc_start_the_world()
@@ -1109,7 +1125,11 @@ void gc_start_the_world()
             int state = get_thread_state(th);
             struct extra_thread_data *semaphores = thread_extra_data(th);
             if (semaphores->stw_ffi) {
-                gc_assert(write_stw32(1, 0, ((int*)&th->stw) + 1) == 1);
+                //int sw = write_stw32(1, 0, ((int*)&th->stw) + 1);
+                long sw = write_stw((1L<<32)+2, 2, &th->stw);
+                if(sw !=  (1L<<32)+2) {
+                    lose("%llx %ld %ld\n", thread_extra_data(th)->tid, sw, th->stw);
+                }
             }
             else if (state != STATE_DEAD) {
                 gc_assert(write_stw((1L<<32)+1, 0, &th->stw) == (1L<<32)+1);

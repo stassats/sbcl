@@ -1032,7 +1032,7 @@ interrupt_handle_pending(os_context_t *context)
 
     struct thread *thread = get_sb_vm_thread();
     struct interrupt_data *data = &thread_interrupt_data(thread);
-    printf(" interrupt_handle_pending %p\n", thread_extra_data(thread)->tid);
+    /* printf(" interrupt_handle_pending %p\n", thread_extra_data(thread)->tid); */
 
     if (arch_pseudo_atomic_atomic(thread)) {
         lose("Handling pending interrupt in pseudo atomic.");
@@ -1085,8 +1085,8 @@ interrupt_handle_pending(os_context_t *context)
             /* STOP_FOR_GC_PENDING and GC_PENDING are cleared by
              * the signal handler if it actually stops us. */
             arch_clear_pseudo_atomic_interrupted(thread);
-            printf("stop for pending\n");
-            if (thread->stw & 0xF == 2)
+            /* printf("stop for pending\n"); */
+            if ((thread->stw & 0xF) == 2)
                 ((int*)&thread->stw)[1] = 1;
             else
                 thread->stw = (1L<<32)+1;
@@ -1199,13 +1199,13 @@ interrupt_handle_now(int signal, siginfo_t *info, os_context_t *context)
 {
     bool were_in_lisp;
     lispobj handler = lisp_sig_handlers[signal];
-    
+
     if (!functionp(handler)) return;
 
     assert_blockables_blocked();
 
     struct thread* thread = get_sb_vm_thread();
-    printf("stw %d\n", thread->stw);
+    /* printf("stw %d\n", thread->stw); */
     if (sigismember(&deferrable_sigset,signal)) {
         if (read_TLS(INTERRUPTS_ENABLED,thread) == NIL) lose("interrupts not enabled");
         if (arch_pseudo_atomic_atomic(thread)) lose ("in pseudo atomic section");
@@ -1385,21 +1385,21 @@ sig_stop_for_gc_handler(int __attribute__((unused)) signal,
 {
     struct thread *thread = get_sb_vm_thread();
     bool was_in_lisp;
-    printf(" sig_stop_for_gc_handler %p\n", thread_extra_data(thread)->tid);
+    /* printf(" sig_stop_for_gc_handler %p %ld\n", thread_extra_data(thread)->tid, thread->stw); */
     /* Test for GC_INHIBIT _first_, else we'd trap on every single
      * pseudo atomic until gc is finally allowed. */
     if (read_TLS(GC_INHIBIT,thread) != NIL) {
         event0("stop_for_gc deferred for *GC-INHIBIT*");
         printf(" inhibit %p\n", thread_extra_data(thread)->tid);
         write_TLS(STOP_FOR_GC_PENDING, LISP_T, thread);
-        if (thread->stw & 0xF == 2)
+        if ((thread->stw & 0xF) == 2)
             thread->stw = 2;
         else
             thread->stw = 0;
         return;
     } else if (arch_pseudo_atomic_atomic(thread)) {
         event0("stop_for_gc deferred for PA");
-        printf("deferred %p\n", thread_extra_data(thread)->tid);
+        /* printf("deferred %p\n", thread_extra_data(thread)->tid); */
         write_TLS(STOP_FOR_GC_PENDING, LISP_T, thread);
         arch_set_pseudo_atomic_interrupted(thread);
         maybe_save_gc_mask_and_block_deferrables(context);
@@ -1457,7 +1457,7 @@ sig_stop_for_gc_handler(int __attribute__((unused)) signal,
     /* We say that the thread is "stopped" as of now, but the blocking operation
      * occurs below at thread_wait_until_not(STATE_STOPPED). Note that sem_post()
      * is expressly permitted in signal handlers, and set_thread_state uses it */
-    printf("stopping1 %p\n", thread_extra_data(thread)->tid);
+    /* printf("stopping1 %p\n", thread_extra_data(thread)->tid); */
     set_thread_state(thread, STATE_STOPPED, 0);
     event0("suspended");
 
@@ -1471,7 +1471,8 @@ sig_stop_for_gc_handler(int __attribute__((unused)) signal,
      * Normally the way to implement a "suspend" operation is to issue any blocking
      * syscall such as sigsuspend() or select(). Apparently every OS + C runtime that
      * we wish to support has no problem with sem_wait() here in the signal handler. */
-    printf("stopping %p\n", thread_extra_data(thread)->tid);
+    /* printf("stopping %p\n", thread_extra_data(thread)->tid); */
+    /* printf(" resuming %p %ld\n", thread_extra_data(thread)->tid, thread->stw); */
     int my_state = thread_wait_until_not(STATE_STOPPED, thread);
     thread_accrue_stw_time(thread, &t_beginpause, 0);
 
