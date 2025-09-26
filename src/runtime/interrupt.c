@@ -1088,7 +1088,8 @@ interrupt_handle_pending(os_context_t *context)
              * the signal handler if it actually stops us. */
             arch_clear_pseudo_atomic_interrupted(thread);
             /* printf("stop for pending\n"); */
-            if ((thread->stw & 0xF) == 2)
+            /* gc_assert(((int*)&thread->stw)[1] == 0); */
+            if ((int)thread->stw == 2)
                 store_stw32(1, ((int*)&thread->stw)+1);
             else
                 store_stw((1L<<32)+1, thread);
@@ -1399,7 +1400,7 @@ sig_stop_for_gc_handler(int __attribute__((unused)) signal,
         event0("stop_for_gc deferred for *GC-INHIBIT*");
         printf(" inhibit %p\n", thread_extra_data(thread)->tid);
         write_TLS(STOP_FOR_GC_PENDING, LISP_T, thread);
-        if ((thread->stw & 0xF) == 2)
+        if ((int)thread->stw == 2)
             store_stw(2, thread);
         else
             store_stw(0, thread);
@@ -1412,7 +1413,7 @@ sig_stop_for_gc_handler(int __attribute__((unused)) signal,
         maybe_save_gc_mask_and_block_deferrables(context);
         return;
     }
-
+    gc_assert(thread->stw == (1L<<32)+1);
     event0("stop_for_gc");
 
     if (!thread->state_word.control_stack_guard_page_protected) {

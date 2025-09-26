@@ -547,7 +547,7 @@ unregister_thread(struct thread *th,
      * regions if no GC ran in the meantime. If GC does need to run,
      * it should close TLABs of all thread structures in the recycle bin */
     gc_close_thread_regions(th, LOCK_PAGE_TABLE|CONSUME_REMAINDER);
-    unblock_gc_stop_signal();    
+    unblock_gc_stop_signal();
     wait_for_foreign_mode(th);
     block_blockable_signals(0);
 
@@ -1121,9 +1121,9 @@ void gc_start_the_world()
     for_each_thread(th) {
         gc_assert(th->os_thread);
         if (th != me) {
-          /* I don't know if a normal load is fine here. I think we can't read
-           * any value other than what was already observed?
-           * No harm in being cautious though with regard to compiler reordering */
+            /* I don't know if a normal load is fine here. I think we can't read
+             * any value other than what was already observed?
+             * No harm in being cautious though with regard to compiler reordering */
             int state = get_thread_state(th);
             struct extra_thread_data *semaphores = thread_extra_data(th);
             if (semaphores->stw_ffi) {
@@ -1134,11 +1134,16 @@ void gc_start_the_world()
                 }
             }
             else if (state != STATE_DEAD) {
-                gc_assert(write_stw((1L<<32)+1, 0, &th->stw) == (1L<<32)+1);
+                gc_assert(write_stw((1L<<32)+1, 0, &th->stw) == (1L<<32)+1); 
+
                 if(state != STATE_STOPPED)
                     lose("gc_start_the_world: bad thread state %x", state);
                 set_thread_state(th, STATE_RUNNING, 0);
+            } else {
+                gc_assert(write_stw((1L<<32)+2, 2, &th->stw) == (1L<<32)+2);
+                /* gc_assert(write_stw32(1, 0, ((int*)&th->stw) + 1) == 1); */
             }
+            
         }
     }
 

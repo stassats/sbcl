@@ -22,11 +22,13 @@
     ;; check that WITHOUT-GCING defers SIG_STOP_FOR_GC
     #+sb-thread
     (let ((in-without-gcing nil))
-      (setq initial-gc-count n-lisp-gcs)
       (sb-thread:make-thread (lambda ()
                                (loop while (not in-without-gcing))
+                               (sb-thread:barrier (:write))
                                (sb-ext:gc)))
       (sb-sys:without-gcing
+        (setq initial-gc-count n-lisp-gcs)
+        (sb-thread:barrier (:write))
         (setq in-without-gcing t)
         (sleep 3)
         (assert (= n-lisp-gcs initial-gc-count)))

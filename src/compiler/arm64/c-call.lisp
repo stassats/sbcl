@@ -285,9 +285,7 @@
         (inst cmp temp2 2)
         (inst b :ne LOOP2)
         OK2)
-
       (storew zr-tn thread-tn thread-control-stack-pointer-slot)
-
 
       return
       #-sb-thread

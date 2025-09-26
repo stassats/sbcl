@@ -3437,7 +3437,7 @@ garbage_collect_generation(generation_index_t generation, int raise,
         lispobj fun = lisp_sig_handlers[i];
         if(functionp(fun))
             pin_exact_root(fun);
-    
+
     }
     // Thread creation optionally no longer synchronizes the creating and
     // created thread. When synchronized, the parent thread is responsible
