@@ -452,6 +452,23 @@ GNAME(do_pending_interrupt):
 	ret
 
         .align 2
+	.global	GNAME(store_stw)
+	TYPE(store_stw)
+
+GNAME(store_stw):
+        stlur x0, [x1, #THREAD_STW_OFFSET]
+	ret
+
+        .align 2
+	.global	GNAME(store_stw32)
+	TYPE(store_stw32)
+
+GNAME(store_stw32):
+        stlur w0, [x1]
+	ret
+
+
+        .align 2
 	.global	GNAME(write_stw)
 	TYPE(write_stw)
 

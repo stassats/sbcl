@@ -279,7 +279,6 @@
         #+sb-safepoint
         (storew zr-tn thread-tn thread-saved-csp-slot)
 
-        (inst add temp thread-tn (* thread-stw-slot n-word-bytes))
         LOOP2
         (inst mov temp2 2)
         (inst casal temp2 zr-tn temp)

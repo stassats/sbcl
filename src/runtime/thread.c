@@ -458,6 +458,8 @@ void sb_posix_after_fork() { // for use by sb-posix:fork
 #endif
 }
 
+void store_stw(long x, struct thread *th);
+
 #ifdef LISP_FEATURE_SB_THREAD
 /* Note: scribble must be stack-allocated */
 static void
@@ -494,7 +496,7 @@ init_new_thread(struct thread *th,
     csp_around_foreign_call(th) = (lispobj)scribble;
 #endif
 
-    th->stw = 2;
+    store_stw(2, th);
     /* printf("new  %llx\n", thread_extra_data(th)->tid); */
     __attribute__((unused)) int lock_ret = mutex_acquire(&all_threads_lock);
     gc_assert(lock_ret);

@@ -1007,6 +1007,8 @@ bool interrupt_handler_pending_p(void)
     struct interrupt_data *data = &thread_interrupt_data(get_sb_vm_thread());
     return (data->pending_handler != 0);
 }
+void store_stw(long x, struct thread *th);
+void store_stw32(int x, int *stw);
 
 void
 interrupt_handle_pending(os_context_t *context)
@@ -1087,9 +1089,9 @@ interrupt_handle_pending(os_context_t *context)
             arch_clear_pseudo_atomic_interrupted(thread);
             /* printf("stop for pending\n"); */
             if ((thread->stw & 0xF) == 2)
-                ((int*)&thread->stw)[1] = 1;
+                store_stw32(1, ((int*)&thread->stw)+1);
             else
-                thread->stw = (1L<<32)+1;
+                store_stw((1L<<32)+1, thread);
 
             sig_stop_for_gc_handler(SIG_STOP_FOR_GC,NULL,context);
         } else
@@ -1194,18 +1196,24 @@ interrupt_handle_pending(os_context_t *context)
 }
 
 
+void wait_for_lisp_mode(struct thread *th);
+void wait_for_foreign_mode(struct thread *th);
+
 void
 interrupt_handle_now(int signal, siginfo_t *info, os_context_t *context)
 {
     bool were_in_lisp;
+
+    struct thread* thread = get_sb_vm_thread();
+
     lispobj handler = lisp_sig_handlers[signal];
 
     if (!functionp(handler)) return;
 
     assert_blockables_blocked();
 
-    struct thread* thread = get_sb_vm_thread();
-    /* printf("stw %d\n", thread->stw); */
+
+    /* printf("%d stw %d %p\n", signal, thread->stw, handler); */
     if (sigismember(&deferrable_sigset,signal)) {
         if (read_TLS(INTERRUPTS_ENABLED,thread) == NIL) lose("interrupts not enabled");
         if (arch_pseudo_atomic_atomic(thread)) lose ("in pseudo atomic section");
@@ -1242,7 +1250,6 @@ interrupt_handle_now(int signal, siginfo_t *info, os_context_t *context)
                      info_sap,
                      context_sap);
         }
-
     if (were_in_lisp)
     {
         undo_fake_foreign_function_call(context); /* block signals again */
@@ -1393,9 +1400,9 @@ sig_stop_for_gc_handler(int __attribute__((unused)) signal,
         printf(" inhibit %p\n", thread_extra_data(thread)->tid);
         write_TLS(STOP_FOR_GC_PENDING, LISP_T, thread);
         if ((thread->stw & 0xF) == 2)
-            thread->stw = 2;
+            store_stw(2, thread);
         else
-            thread->stw = 0;
+            store_stw(0, thread);
         return;
     } else if (arch_pseudo_atomic_atomic(thread)) {
         event0("stop_for_gc deferred for PA");
