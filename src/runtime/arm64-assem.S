@@ -510,6 +510,28 @@ Lloop4:
         cbnz w6, Lloop4
         ret
 
+        .align 2
+	.global	GNAME(grab_without_gcing_lock)
+	TYPE(grab_without_gcing_lock)
+
+GNAME(grab_without_gcing_lock):
+        add x3, x0, THREAD_WITHOUT_GCING_LOCK_OFFSET
+        mov w5,#1
+1:
+        mov w6, #0
+        casal w6,w5,[x3]
+        cbnz w6, 1b
+        ret
+
+        .align 2
+	.global	GNAME(release_without_gcing_lock)
+	TYPE(release_without_gcing_lock)
+
+GNAME(release_without_gcing_lock):
+        add x3, x0, THREAD_WITHOUT_GCING_LOCK_OFFSET
+        stlr xzr, [x3]
+        ret
+
 #ifdef __ELF__
 // Mark the object as not requiring an executable stack.
 .section .note.GNU-stack,"",%progbits

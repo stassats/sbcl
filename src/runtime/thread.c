@@ -1018,6 +1018,8 @@ int sb_thread_kill (pthread_t thread, int sig) {
 
 long write_stw(long old, long new, void * stw);
 long write_stw32(int old, int new, void * stw);
+void grab_without_gcing_lock(struct thread *th);
+void release_without_gcing_lock(struct thread *th);
 
 static __attribute__((unused)) struct timespec stw_begin_realtime, stw_begin_cputime;
 void gc_stop_the_world()
@@ -1043,6 +1045,7 @@ void gc_stop_the_world()
     for_each_thread(th) {
         if (th != me) {
             gc_assert(th->os_thread != 0);
+            grab_without_gcing_lock(th);
             struct extra_thread_data *semaphores = thread_extra_data(th);
             os_sem_wait(&semaphores->state_sem);
             int state = get_thread_state(th);
@@ -1121,6 +1124,7 @@ void gc_start_the_world()
     for_each_thread(th) {
         gc_assert(th->os_thread);
         if (th != me) {
+            release_without_gcing_lock(th);
             /* I don't know if a normal load is fine here. I think we can't read
              * any value other than what was already observed?
              * No harm in being cautious though with regard to compiler reordering */
@@ -1134,7 +1138,7 @@ void gc_start_the_world()
                 }
             }
             else if (state != STATE_DEAD) {
-                gc_assert(write_stw((1L<<32)+1, 0, &th->stw) == (1L<<32)+1); 
+                gc_assert(write_stw((1L<<32)+1, 0, &th->stw) == (1L<<32)+1);
 
                 if(state != STATE_STOPPED)
                     lose("gc_start_the_world: bad thread state %x", state);
@@ -1143,7 +1147,7 @@ void gc_start_the_world()
                 gc_assert(write_stw((1L<<32)+2, 2, &th->stw) == (1L<<32)+2);
                 /* gc_assert(write_stw32(1, 0, ((int*)&th->stw) + 1) == 1); */
             }
-            
+
         }
     }
 
