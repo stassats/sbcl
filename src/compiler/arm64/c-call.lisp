@@ -231,10 +231,12 @@
   (loop for i from 0 to 18 collect i)
   #'equal)
 
-(defun emit-c-call (vop nfp-save temp temp2 cfunc function)
-  (let ((cur-nfp (current-nfp-tn vop)))
-    (when cur-nfp
-      (store-stack-tn nfp-save cur-nfp))
+(defun emit-c-call (vop ;; nfp-save
+                    temp temp2 cfunc function)
+  (let (;; (cur-nfp (current-nfp-tn vop))
+        )
+    ;; (when cur-nfp
+    ;;   (store-stack-tn nfp-save cur-nfp))
     (assemble ()
       #+sb-thread
       (progn
@@ -254,7 +256,7 @@
                (sc-case function
                  (sap-reg (move cfunc function))
                  (sap-stack
-                  (load-stack-offset cfunc cur-nfp function)))
+                  (load-stack-offset cfunc (current-nfp-tn vop) function)))
                (inst blr cfunc)))
         ;; Blank all boxed registers that potentially contain Lisp
         ;; pointers, not just volatile ones, since GC could
@@ -281,8 +283,9 @@
               (sap-stack
               (load-stack-offset cfunc cur-nfp function))))
         (invoke-foreign-routine "call_into_c" temp))
-      (when cur-nfp
-        (load-stack-tn cur-nfp nfp-save)))))
+      ;; (when cur-nfp
+      ;;   (load-stack-tn cur-nfp nfp-save))
+      )))
 
 (eval-when (#-sb-xc :compile-toplevel :load-toplevel :execute)
   (defun destroyed-c-registers ()
@@ -305,12 +308,13 @@
   (:temporary (:sc non-descriptor-reg :offset lr-offset) lr)
   (:temporary (:sc any-reg :offset r9-offset
                :from (:argument 0) :to (:result 0)) cfunc)
-  (:temporary (:sc control-stack :offset nfp-save-offset) nfp-save)
+  ;; (:temporary (:sc control-stack :offset nfp-save-offset) nfp-save)
   (:temporary (:sc any-reg :offset r10-offset) temp)
   (:temporary (:sc any-reg :offset lexenv-offset) temp2)
   (:vop-var vop)
   (:generator 0
-    (emit-c-call vop nfp-save temp temp2 cfunc function))
+    (emit-c-call vop ;; nfp-save
+      temp temp2 cfunc function))
   .
   #. (destroyed-c-registers))
 
