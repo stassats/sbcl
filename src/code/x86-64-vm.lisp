@@ -28,9 +28,7 @@
 (defun context-float-register (context index format &optional integer)
   (declare (ignorable context index integer))
   #-(or darwin linux openbsd win32 sunos (and freebsd x86-64))
-  (progn
-    (warn "stub CONTEXT-FLOAT-REGISTER")
-    (coerce 0 format))
+  (coerce 0 format)
   #+(or darwin linux openbsd win32 sunos (and freebsd x86-64))
   (let ((sap (alien-sap (context-float-register-addr context index))))
     (ecase format

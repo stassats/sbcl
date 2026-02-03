@@ -41,7 +41,6 @@
            (ignorable context index))
   #-(or linux win32)
   (progn
-    (warn "stub CONTEXT-FLOAT-REGISTER")
     (coerce 0 format))
   #+(or linux win32)
   (let ((sap (alien-sap (context-float-register-addr context index))))
