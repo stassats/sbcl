@@ -855,7 +855,6 @@ wake_thread_io(struct thread * thread)
 static void wake_thread_impl(struct thread_instance *lispthread)
 {
     struct thread* thread = (void*)lispthread->uw_primitive_thread;
-    wake_thread_io(thread);
 
     if (read_TLS(THRUPTION_PENDING,thread)==LISP_T)
         return;
