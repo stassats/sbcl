@@ -676,6 +676,12 @@ static void compute_allocations(void *address) {
   } else {
     /* Walk the span to find object starts. */
     lispobj *where = (lispobj*)line_address(start), *limit = (lispobj*)line_address(end);
+
+    if (unfreshen)
+      limit = (lispobj*)line_address(end);
+    else
+      limit = (lispobj*)address+1;
+
     while (where < limit) {
       /* The first word can only be zero if we are looking at a cons
        * cell, and we don't have cons cells on non-cons pages, so just
