@@ -1060,13 +1060,7 @@
             (emit-dp-instruction segment cond-bits #b01 1
                                  (compute-opcode direction mode)
                                  (tn-offset base) (tn-offset data)
-                                 (encode-shifter-operand offset))))))
-
-      #+(or)
-      (tn
-       ;; FIXME: This is for stack TN references, and needs must be
-       ;; implemented.
-       ))))
+                                 (encode-shifter-operand offset)))))))))
 
 (macrolet
     ((define-load/store-instruction (name kind width)
@@ -1193,6 +1187,46 @@
   (define-misc-load/store-instruction ldrsb 1 #b1101 nil)
   (define-misc-load/store-instruction ldrsh 1 #b1111 nil))
 
+
+(define-instruction load-constant (segment dest index)
+  (:vop-var vop)
+  (:emitter
+   (labels ((compute-delta (position &optional magic-value)
+              (- (+ (- (label-position (segment-origin segment)
+                                       (when magic-value position)
+                                       magic-value)
+                       (component-header-length)
+                       position
+                       )
+                    index)
+                 8))
+            (multi-instruction-emitter (segment position)
+              (let* ((delta (compute-delta position))
+                     (abs-delta (abs delta))
+                     (high (mask-field (byte 8 12) abs-delta))
+                     (low (ldb (byte 12 0) abs-delta)))
+                (assemble (segment vop)
+                  (if (minusp delta)
+                      (inst sub dest pc-tn high)
+                      (inst add dest pc-tn high))
+                  (inst ldr dest (@ dest (if (minusp delta)
+                                             (- low)
+                                             low))))))
+            (one-instruction-emitter (segment position)
+              (assemble (segment vop)
+                (inst ldr dest (@ pc-tn (compute-delta position)))))
+            (multi-instruction-maybe-shrink (segment chooser posn magic-value)
+              (declare (ignore chooser))
+              (let ((delta (compute-delta posn magic-value)))
+                (when (typep (abs delta) '(unsigned-byte 12))
+                  (emit-back-patch segment 4
+                                   #'one-instruction-emitter)
+                  t))))
+     (emit-chooser
+      segment 8 2
+      #'multi-instruction-maybe-shrink
+      #'multi-instruction-emitter))))
+
 (define-instruction compute-code (segment dest lip)
   (:vop-var vop)
   (:emitter
