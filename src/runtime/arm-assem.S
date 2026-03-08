@@ -41,7 +41,6 @@ call_into_lisp:
 
 	@@ Clear the boxed registers that don't already have something
 	@@ in them.
-	mov	reg_CODE, #0
 	mov     reg_R2, #0
 
 	@@ Find the lisp stack and frame pointers.  We're allocating a
@@ -88,10 +87,10 @@ call_into_lisp:
 
         @@ Load the closure-fun (or simple-fun-self), in case we're
 	@@ trying to call a closure.
-        ldr     reg_CODE, [reg_LEXENV, #CLOSURE_FUN_OFFSET]
+        ldr     reg_R8, [reg_LEXENV, #CLOSURE_FUN_OFFSET]
 
 	@@ And, finally, call into Lisp!
-	add	reg_LR, reg_CODE, #SIMPLE_FUN_INSTS_OFFSET
+	add	reg_LR, reg_R8, #SIMPLE_FUN_INSTS_OFFSET
         blx     reg_LR    
 
 	@@ Correct stack pointer for return processing.
@@ -142,18 +141,17 @@ call_into_c:
         @@ All other C arguments are already stashed on the C stack.
 
         @@ Build a Lisp stack frame.  We need to stash our frame link,
-        @@ the code component, and our return offset.  Frame link goes
+        @@ and our return offset.  Frame link goes
 	@@ in slot 0 (OCFP-SAVE-OFFSET), the offset (a FIXNUM) goes in
-        @@ slot 1 (LRA-SAVE-OFFSET), and reg_CODE goes in slot 2.  The
+        @@ slot 1 (LRA-SAVE-OFFSET).  The
         @@ debugger knows about this layout (see COMPUTE-CALLING-FRAME
         @@ in SYS:SRC;CODE;DEBUG-INT.LISP).  The stack is aligned, so
         @@ we can use R0 (a boxed register) as our temporary.
         ldr     reg_R0, STATIC_SYMBOL_VALUE(CONTROL_STACK_POINTER)
-        add     reg_R0, reg_R0, #12
+        add     reg_R0, reg_R0, #8
         str     reg_R0, STATIC_SYMBOL_VALUE(CONTROL_STACK_POINTER)
-        str     reg_CFP, [reg_R0, #-12]
-        str     reg_LR, [reg_R0, #-8]
-        str     reg_CODE, [reg_R0, #-4]
+        str     reg_CFP, [reg_R0, #-8]
+        str     reg_LR, [reg_R0, #-4]
 
         @@ Enter PSEUDO-ATOMIC.
 	str     pc, STATIC_SYMBOL_VALUE(PSEUDO_ATOMIC_ATOMIC)
@@ -161,7 +159,7 @@ call_into_c:
         @@ Save the lisp stack and frame pointers.
 	ldr	reg_NFP, .stack_pointer_address
 	str	reg_R0, [reg_NFP]
-        sub     reg_R0, reg_R0, #12
+        sub     reg_R0, reg_R0, #8
 	ldr	reg_NFP, .frame_pointer_address
 	str	reg_R0, [reg_NFP]
 
@@ -212,7 +210,6 @@ call_into_c:
         mov     reg_R2, #0
         mov     reg_LEXENV, #0
         mov     reg_R8, #0
-        mov     reg_CODE, #0
 
         @@ Enter PSEUDO-ATOMIC.
 	str     pc, STATIC_SYMBOL_VALUE(PSEUDO_ATOMIC_ATOMIC)
@@ -237,7 +234,6 @@ call_into_c:
 	blxne   reg_OCFP
 
         @@ Restore our caller state from our stack frame.
-        ldr     reg_CODE, [reg_NFP, #8]
         ldr     reg_LR, [reg_NFP, #4]
         ldr     reg_CFP, [reg_NFP]
         str     reg_NFP, STATIC_SYMBOL_VALUE(CONTROL_STACK_POINTER)
@@ -284,7 +280,6 @@ name: \
 	@@ for the GC to see. */ \
         str     reg_CFP, [r4, #0] ;\
         str     reg_NULL, [r4, #4] ;\
-        str     reg_CODE, [r4, #8] ;\
         add     r4, r4, #3*4 ;\
         stmea   r4, {r0-reg_LEXENV, r8} ;\
 \

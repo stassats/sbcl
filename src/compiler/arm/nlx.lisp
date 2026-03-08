@@ -87,7 +87,6 @@
     (load-symbol-value temp *current-unwind-protect-block*)
     (storew temp block unwind-block-uwp-slot)
     (storew cfp-tn block unwind-block-cfp-slot)
-    (storew code-tn block unwind-block-code-slot)
     (inst compute-lra lip lip entry-label)
     (storew lip block catch-block-entry-pc-slot)))
 
@@ -107,7 +106,6 @@
     (load-symbol-value temp *current-unwind-protect-block*)
     (storew temp result catch-block-uwp-slot)
     (storew cfp-tn result catch-block-cfp-slot)
-    (storew code-tn result catch-block-code-slot)
     (inst compute-lra lip lip entry-label)
     (storew lip result catch-block-entry-pc-slot)
 

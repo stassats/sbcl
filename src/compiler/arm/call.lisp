@@ -93,7 +93,6 @@
 
 (define-vop (xep-allocate-frame)
   (:info start-lab)
-  (:temporary (:scs (non-descriptor-reg) :offset nl2-offset) temp)
   (:temporary (:sc any-reg :offset lr-offset) lip)
   (:generator 1
     ;; Make sure the function is aligned, and drop a label pointing to this
@@ -103,7 +102,6 @@
     ;; Allocate function header.
     (inst simple-fun-header-word)
     (inst .skip (* (1- simple-fun-insts-offset) n-word-bytes))
-    (inst compute-code code-tn temp)
     (storew lip cfp-tn lra-save-offset)))
 
 (define-vop (xep-setup-sp)
@@ -182,7 +180,7 @@
 ;;;  -- Reset SP.  This must be done whenever other than 1 value is returned,
 ;;;     regardless of the number of values desired.
 
-(defun default-unknown-values (vop values nvals move-temp temp lip)
+(defun default-unknown-values (vop values nvals move-temp temp)
   (declare (type (or tn-ref null) values)
            (type unsigned-byte nvals) (type tn move-temp temp))
   (let ((expecting-values-on-stack (> nvals register-arg-count))
@@ -190,7 +188,6 @@
     (note-this-location vop (if (<= nvals 1)
                                 :single-value-return
                                 :unknown-return))
-    (inst compute-code code-tn lip)
     ;; Pick off the single-value case first.
     (sb-assem:without-scheduling ()
 
@@ -261,9 +258,8 @@
 ;;;    Args and Nargs are TNs wired to the named locations.  We must
 ;;; explicitly allocate these TNs, since their lifetimes overlap with the
 ;;; results Start and Count (also, it's nice to be able to target them).
-(defun receive-unknown-values (args nargs start count temp lip)
+(defun receive-unknown-values (args nargs start count temp)
   (declare (type tn args nargs start count temp))
-  (inst compute-code code-tn lip)
   (load-csp nargs :ne)
   (inst add :ne temp nargs n-word-bytes)
   (store-csp temp :ne)
@@ -614,7 +610,6 @@
   (:temporary (:scs (non-descriptor-reg)) temp)
   (:temporary (:sc control-stack :offset nfp-save-offset) nfp-save)
   (:temporary (:sc any-reg :offset ocfp-offset :from (:eval 0)) ocfp)
-  (:temporary (:sc any-reg :offset lr-offset) lip)
   (:ignore arg-locs args ocfp)
   (:generator 5
     (let ((cur-nfp (current-nfp-tn vop)))
@@ -626,7 +621,7 @@
       (maybe-load-stack-tn cfp-tn fp)
       (note-this-location vop :call-site)
       (inst bl target)
-      (default-unknown-values vop values nvals move-temp temp lip)
+      (default-unknown-values vop values nvals move-temp temp)
       (when cur-nfp
         (load-stack-tn cur-nfp nfp-save)))))
 
@@ -649,7 +644,6 @@
   (:vop-var vop)
   (:temporary (:sc control-stack :offset nfp-save-offset) nfp-save)
   (:temporary (:scs (non-descriptor-reg)) temp)
-  (:temporary (:sc any-reg :offset lr-offset) lip)
   (:generator 20
     (let ((cur-nfp (current-nfp-tn vop)))
       (when cur-nfp
@@ -661,7 +655,7 @@
       (note-this-location vop :call-site)
       (inst bl target)
       (note-this-location vop :unknown-return)
-      (receive-unknown-values values-start nvals start count temp lip)
+      (receive-unknown-values values-start nvals start count temp)
       (when cur-nfp
         (load-stack-tn cur-nfp nfp-save)))))
 
@@ -958,12 +952,12 @@
 
          ,@(ecase return
              (:fixed
-              '((default-unknown-values vop values nvals move-temp temp lip)
+              '((default-unknown-values vop values nvals move-temp temp)
                 (when cur-nfp
                   (load-stack-tn cur-nfp nfp-save))))
              (:unknown
               '((note-this-location vop :unknown-return)
-                (receive-unknown-values values-start nvals start count temp lip)
+                (receive-unknown-values values-start nvals start count temp)
                 (when cur-nfp
                   (load-stack-tn cur-nfp nfp-save))))
              (:tail))))))

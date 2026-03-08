@@ -32,8 +32,8 @@
            (case op
              (89 ;; LDR
               (case rn
-                (#.code-offset
-                 (note-code-constant offset dstate))
+                ;; (#.code-offset
+                ;;  (note-code-constant offset dstate))
                 (#.pc-offset
                  (let ((value (sap-ref-int (dstate-segment-sap dstate)
                                            (+ (dstate-cur-offs dstate) offset 8)

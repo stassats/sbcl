@@ -19,7 +19,7 @@
             lsl lsr asr ror cpsr @) "SB-VM")
   ;; Imports from SB-VM into this package
   (import '(sb-vm:nil-value sb-vm::registers sb-vm::null-tn sb-vm::null-offset
-            sb-vm::pc-tn sb-vm::pc-offset sb-vm::code-offset)))
+            sb-vm::pc-tn sb-vm::pc-offset)))
 
 
 
@@ -1196,8 +1196,7 @@
                                        (when magic-value position)
                                        magic-value)
                        (component-header-length)
-                       position
-                       )
+                       position)
                     index)
                  8))
             (multi-instruction-emitter (segment position)
@@ -1855,21 +1854,23 @@
 
 (define-instruction store-coverage-mark (segment mark-index temp)
   (:emitter
-   ;; No backpatch is needed to compute the offset into the code header
-   ;; because COMPONENT-HEADER-LENGTH is known at this point.
-   (let* ((offset (+ (component-header-length)
-                     ;; skip over jump table word and entries
-                     (* (1+ (component-n-jump-table-entries))
-                        n-word-bytes)
-                     mark-index
-                     (- other-pointer-lowtag)))
-          (addr
-           (@ sb-vm::code-tn
-              (etypecase offset
-                ((integer 0 4095) offset)
-                ((unsigned-byte 31)
-                 (inst* segment 'movw temp (logand offset #xffff))
-                 (when (ldb-test (byte 16 16) offset)
-                   (inst* segment 'movt temp (ldb (byte 16 16) offset)))
-                 temp)))))
-     (inst* segment 'strb sb-vm::null-tn addr))))
+   (progn segment mark-index temp)
+   ;; ;; No backpatch is needed to compute the offset into the code header
+   ;; ;; because COMPONENT-HEADER-LENGTH is known at this point.
+   ;; (let* ((offset (+ (component-header-length)
+   ;;                   ;; skip over jump table word and entries
+   ;;                   (* (1+ (component-n-jump-table-entries))
+   ;;                      n-word-bytes)
+   ;;                   mark-index
+   ;;                   (- other-pointer-lowtag)))
+   ;;        (addr
+   ;;         (@ sb-vm::code-tn
+   ;;            (etypecase offset
+   ;;              ((integer 0 4095) offset)
+   ;;              ((unsigned-byte 31)
+   ;;               (inst* segment 'movw temp (logand offset #xffff))
+   ;;               (when (ldb-test (byte 16 16) offset)
+   ;;                 (inst* segment 'movt temp (ldb (byte 16 16) offset)))
+   ;;               temp)))))
+   ;;   (inst* segment 'strb sb-vm::null-tn addr))
+   ))

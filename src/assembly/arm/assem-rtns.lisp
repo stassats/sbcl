@@ -15,7 +15,7 @@
 
      ;; These are just needed to facilitate the transfer
      (:temp count any-reg nfp-offset)
-     (:temp src any-reg code-offset)
+     (:temp src any-reg nl3-offset)
      (:temp dst descriptor-reg r8-offset)
 
      ;; These are needed so we can get at the register args.
@@ -163,8 +163,7 @@
   ;; The call frame is all set up, so all that remains is to jump to
   ;; the new function.  We need a boxed register to hold the actual
   ;; function object (in case of closure functions or funcallable
-  ;; instances), and R8 (known as TEMP) and, technically, CODE happen
-  ;; to be the only ones available.
+  ;; instances), and R8 (known as TEMP) happens to be the only one available.
   (loadw temp lexenv closure-fun-slot fun-pointer-lowtag)
   (loadw lr-tn cfp-tn lra-save-offset)
   (lisp-jump temp))
@@ -226,6 +225,5 @@
   (move cur-uwp block :eq)
 
   (loadw cfp-tn cur-uwp unwind-block-cfp-slot)
-  (loadw code-tn cur-uwp unwind-block-code-slot)
   (loadw lra cur-uwp unwind-block-entry-pc-slot)
   (lisp-return lra :known))
