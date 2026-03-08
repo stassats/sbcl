@@ -782,11 +782,7 @@ build_fake_control_stack_frames(struct thread *th, os_context_t *context)
 {
 
     /* Ignore the two words above CSP, which can be used without adjusting CSP */
-#ifdef LISP_FEATURE_ARM
-    lispobj* csp = (lispobj*)SymbolValue(CONTROL_STACK_POINTER, th);
-#else
     lispobj* csp = (lispobj *)(*os_context_register_addr(context, reg_CSP)) + CONTRL_STACK_RED_ZONE;
-#endif
     lispobj cfp = (lispobj)(*os_context_register_addr(context, reg_CFP));
     access_control_frame_pointer(th) = csp;
 
@@ -838,13 +834,6 @@ void fake_foreign_function_call_noassert(os_context_t *context)
        (uword_t)*os_context_register_addr(context, reg_BSP));
 #endif
 
-#if defined(LISP_FEATURE_ARM)
-    /* Stash our control stack pointer */
-    bind_variable(INTERRUPTED_CONTROL_STACK_POINTER,
-                  SymbolValue(CONTROL_STACK_POINTER, thread),
-                  thread);
-#endif
-
     save_interrupt_context(thread, context);
 
 #ifndef LISP_FEATURE_C_STACK_IS_CONTROL_STACK
@@ -883,15 +872,6 @@ undo_fake_foreign_function_call(os_context_t __attribute__((unused)) *context)
     foreign_function_call_active_p(thread) = 0;
 
     drop_interrupt_context(thread);
-
-#if defined(LISP_FEATURE_ARM)
-    /* Restore our saved control stack pointer */
-    SetSymbolValue(CONTROL_STACK_POINTER,
-                   SymbolValue(INTERRUPTED_CONTROL_STACK_POINTER,
-                               thread),
-                   thread);
-    unbind(thread);
-#endif
 }
 
 void save_context_for_ldb(os_context_t *context) {

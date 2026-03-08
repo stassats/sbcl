@@ -1,5 +1,5 @@
 SBCL=src/runtime/sbcl
-ARGS=--core output/sbcl.core --noinform --disable-debugger --noprint --no-userinit --no-sysinit
+ARGS=--core output/sbcl.core --noinform --noprint --no-userinit --no-sysinit
 SCRIPT1=crossbuild-runner/pass-1.lisp
 SCRIPT2=crossbuild-runner/pass-2.lisp
 DEPS1=crossbuild-runner/pass-1.lisp src/cold/build-order.lisp-expr

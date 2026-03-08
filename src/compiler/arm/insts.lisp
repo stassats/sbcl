@@ -1226,72 +1226,6 @@
       #'multi-instruction-maybe-shrink
       #'multi-instruction-emitter))))
 
-(define-instruction compute-code (segment dest lip)
-  (:vop-var vop)
-  (:emitter
-   (labels ((compute-delta (position &optional magic-value)
-              (- (label-position (segment-origin segment)
-                                 (when magic-value position)
-                                 magic-value)
-                 (component-header-length)
-                 (+ position 8)
-                 (- other-pointer-lowtag)))
-
-            (load-chunk (segment delta dst src chunk)
-              (assemble (segment vop)
-                (if (< delta 0)
-                    (inst sub dst src chunk)
-                    (inst add dst src chunk))))
-
-            (three-instruction-emitter (segment position)
-              (let* ((delta (compute-delta position))
-                     (absolute-delta (abs delta)))
-                (load-chunk segment delta
-                            lip pc-tn (mask-field (byte 8 16) absolute-delta))
-                (load-chunk segment delta
-                            lip lip (mask-field (byte 8 8) absolute-delta))
-                (load-chunk segment delta
-                            dest lip (mask-field (byte 8 0) absolute-delta))))
-
-            (two-instruction-emitter (segment position)
-              (let* ((delta (compute-delta position))
-                     (absolute-delta (abs delta)))
-                (assemble (segment vop)
-                  (load-chunk segment delta
-                              lip pc-tn (mask-field (byte 8 8) absolute-delta))
-                  (load-chunk segment delta
-                              dest lip (mask-field (byte 8 0) absolute-delta)))))
-
-            (one-instruction-emitter (segment position)
-              (let* ((delta (compute-delta position))
-                     (absolute-delta (abs delta)))
-                (assemble (segment vop)
-                  (load-chunk segment delta
-                              dest pc-tn absolute-delta))))
-
-            (two-instruction-maybe-shrink (segment chooser posn magic-value)
-              (declare (ignore chooser))
-              (let ((delta (compute-delta posn magic-value)))
-                (when (<= (integer-length delta) 8)
-                  (emit-back-patch segment 4
-                                   #'one-instruction-emitter)
-                  t)))
-
-            (three-instruction-maybe-shrink (segment chooser posn magic-value)
-              (declare (ignore chooser))
-              (let ((delta (compute-delta posn magic-value)))
-                (when (<= (integer-length delta) 16)
-                  (emit-chooser segment 8 2
-                                #'two-instruction-maybe-shrink
-                                #'two-instruction-emitter)
-                  t))))
-     (emit-chooser
-      ;; We need to emit up to three instructions, which is 12 octets.
-      ;; This preserves a mere two bits of alignment.
-      segment 12 2
-      #'three-instruction-maybe-shrink
-      #'three-instruction-emitter))))
-
 ;;; Compute the address of a nearby LRA object by dead reckoning from
 ;;; the location of the current instruction.
 (define-instruction compute-lra (segment dest lip lra-label)
@@ -1853,24 +1787,42 @@
   nil)
 
 (define-instruction store-coverage-mark (segment mark-index temp)
+  (:vop-var vop)
   (:emitter
-   (progn segment mark-index temp)
-   ;; ;; No backpatch is needed to compute the offset into the code header
-   ;; ;; because COMPONENT-HEADER-LENGTH is known at this point.
-   ;; (let* ((offset (+ (component-header-length)
-   ;;                   ;; skip over jump table word and entries
-   ;;                   (* (1+ (component-n-jump-table-entries))
-   ;;                      n-word-bytes)
-   ;;                   mark-index
-   ;;                   (- other-pointer-lowtag)))
-   ;;        (addr
-   ;;         (@ sb-vm::code-tn
-   ;;            (etypecase offset
-   ;;              ((integer 0 4095) offset)
-   ;;              ((unsigned-byte 31)
-   ;;               (inst* segment 'movw temp (logand offset #xffff))
-   ;;               (when (ldb-test (byte 16 16) offset)
-   ;;                 (inst* segment 'movt temp (ldb (byte 16 16) offset)))
-   ;;               temp)))))
-   ;;   (inst* segment 'strb sb-vm::null-tn addr))
-   ))
+   (labels ((compute-delta (position &optional magic-value)
+              (- (+ (- (label-position (segment-origin segment)
+                                       (when magic-value position)
+                                       magic-value)
+                       (+ (component-header-length)
+                          ;; skip over jump table word and entries
+                          (* (1+ (component-n-jump-table-entries))
+                             n-word-bytes)
+                          mark-index)
+                       position))
+                 8))
+            (multi-instruction-emitter (segment position)
+              (let* ((delta (compute-delta position))
+                     (abs-delta (abs delta))
+                     (high (mask-field (byte 8 12) abs-delta))
+                     (low (ldb (byte 12 0) abs-delta)))
+                (assemble (segment vop)
+                  (if (minusp delta)
+                      (inst sub temp pc-tn high)
+                      (inst add temp pc-tn high))
+                  (inst strb sb-vm::null-tn (@ temp (if (minusp delta)
+                                                        (- low)
+                                                        low))))))
+            (one-instruction-emitter (segment position)
+              (assemble (segment vop)
+                (inst strb sb-vm::null-tn (@ pc-tn (compute-delta position)))))
+            (multi-instruction-maybe-shrink (segment chooser posn magic-value)
+              (declare (ignore chooser))
+              (let ((delta (compute-delta posn magic-value)))
+                (when (typep (abs delta) '(unsigned-byte 12))
+                  (emit-back-patch segment 4
+                                   #'one-instruction-emitter)
+                  t))))
+     (emit-chooser
+      segment 8 2
+      #'multi-instruction-maybe-shrink
+      #'multi-instruction-emitter))))

@@ -89,8 +89,7 @@
   ;; Deallocate the unused stack space.
   (move ocfp-tn cfp-tn)
   (move cfp-tn old-fp)
-  (inst add dst ocfp-tn nvals)
-  (store-csp dst)
+  (inst add csp-tn ocfp-tn nvals)
 
   ;; Return.
   (lisp-return lra :multiple-values))
@@ -113,7 +112,6 @@
      (:temp dest any-reg nl2-offset) ;; Not live concurrent with ARGS.
      (:temp count any-reg nl3-offset)
      (:temp temp descriptor-reg r8-offset)
-     (:temp stack-top non-descriptor-reg ocfp-offset)
 
      ;; These are needed so we can get at the register args.
      (:temp r0 descriptor-reg r0-offset)
@@ -129,8 +127,7 @@
   ;; exist), and the total arg count (NARGS).
 
   ;; Calculate NARGS (as a fixnum)
-  (load-csp nargs)
-  (inst sub nargs nargs args)
+  (inst sub nargs csp-tn args)
 
   ;; Load the argument regs (must do this now, 'cause the blt might
   ;; trash these locations, and we need ARGS to be dead for the blt)
@@ -149,12 +146,9 @@
   ;; Find where our shifted arguments ned to go.
   (inst add dest cfp-tn nargs)
 
-  ;; And come from.
-  (load-csp stack-top)
-
   LOOP
   ;; Copy one arg.
-  (inst ldr temp (@ stack-top (- count)))
+  (inst ldr temp (@ csp-tn (- count)))
   (inst str temp (@ dest (- count)))
   (inst subs count count n-word-bytes)
   (inst b :ne LOOP)
