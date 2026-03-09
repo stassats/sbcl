@@ -35,7 +35,19 @@
                 (#.pc-offset
                  (note-code-constant (sb-disassem::segment-offs-to-code-offs
                                       (- (dstate-cur-offs dstate) offset -8) (dstate-segment dstate))
-                                     dstate))))
+                                     dstate))
+                (t
+                 (let* ((prev-inst (current-instruction dstate -4))
+                        (prev-rd (ldb (byte 4 12) prev-inst))
+                        (prev-offset (decode-shifter-immediate (ldb (byte 12 0) prev-inst))))
+                   (when (= (logand prev-inst #x0FEF0000) #x024F0000) ;; sub rx, pc, #offset
+                     (case op
+                       (81
+                        (when (= prev-rd rn)
+                          (note-code-constant (sb-disassem::segment-offs-to-code-offs
+                                               (- (dstate-cur-offs dstate) (+ offset prev-offset) -4)
+                                               (dstate-segment dstate))
+                                              dstate)))))))))
              (89 ;; LDR
               (case rn
                 (#.pc-offset
@@ -118,54 +130,6 @@
   (declare (type (signed-byte 24) value)
            (type disassem-state dstate))
   (+ 8 (ash value 2) (dstate-cur-addr dstate)))
-
-
-
-(defun maybe-add-notes (dstate)
-  (let* ((inst (sap-ref-int (dstate-segment-sap dstate)
-                            (dstate-cur-offs dstate) n-word-bytes
-                            (dstate-byte-order dstate)))
-         (op (ldb (byte 8 20) inst))
-         (offset (ldb (byte 12 0) inst))
-         (rn (ldb (byte 4 16) inst)))
-    (cond ((= rn null-offset)
-           (let ((offset (+ nil-value offset)))
-             (case op
-               ((88 89) ;; LDR/STR
-                (maybe-note-assembler-routine offset nil dstate)
-                (maybe-note-static-symbol
-                 (logior offset other-pointer-lowtag) dstate))
-               (40 ;; ADD
-                (maybe-note-static-symbol offset dstate)))))
-          (t
-           (case op
-             (81 ;; LDR negative immediate
-
-              (case rn
-                (#.pc-offset
-                 (note-code-constant (sb-disassem::segment-offs-to-code-offs
-                                      (- (dstate-cur-offs dstate) offset -8) (dstate-segment dstate))
-                                     dstate))
-                (t
-                 (let* ((prev-inst (current-instruction dstate -4))
-                        (prev-rd (ldb (byte 4 12) prev-inst))
-                        (prev-offset (decode-shifter-immediate (ldb (byte 12 0) prev-inst))))
-                   (when (= (logand prev-inst #x0FEF0000) #x024F0000) ;; sub rx, pc, #offset
-                     (case op
-                       (81
-                        (when (= prev-rd rn)
-                          (note-code-constant (sb-disassem::segment-offs-to-code-offs
-                                               (- (dstate-cur-offs dstate) (+ offset prev-offset) -4)
-                                               (dstate-segment dstate))
-                                              dstate)))))))))
-             (89 ;; LDR
-              (case rn
-                (#.pc-offset
-                 (let ((value (sap-ref-int (dstate-segment-sap dstate)
-                                           (+ (dstate-cur-offs dstate) offset 8)
-                                           n-word-bytes
-                                           (dstate-byte-order dstate))))
-                   (maybe-note-assembler-routine value nil dstate))))))))))
 
 (defun print-load/store-immediate (value stream dstate)
   (declare (type stream stream))
