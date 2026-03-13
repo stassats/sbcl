@@ -1,7 +1,9 @@
 #define _GNU_SOURCE
+#ifndef LISP_FEATURE_WIN32
 #include <pthread.h>
-#include <unistd.h>
 #include <semaphore.h>
+#endif
+#include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdatomic.h>
@@ -86,9 +88,14 @@ void mr_print_meters() {
 void mr_reset_meters() { meters = (typeof(meters)){ 0 }; collection = 0; }
 
 static uword_t get_time() {
+#ifdef LISP_FEATURE_WIN32
+  uword_t get_monotonic_time();
+  return get_monotonic_time();
+#else
   struct timespec t;
   clock_gettime(CLOCK_MONOTONIC, &t);
   return t.tv_sec * 1000000 + t.tv_nsec/1000;
+#endif
 }
 
 static void allocate_bitmap(uword_t **bitmap, uword_t size,
@@ -716,7 +723,7 @@ static lispobj *find_object(uword_t address, uword_t start) {
         uword_t word = allocation_bitmap[i];
         /* Find the last object which is not after this pointer. */
         while (word) {
-          int last_bit_set = N_WORD_BITS - 1 - __builtin_clzl(word);
+          int last_bit_set = N_WORD_BITS - 1 - __builtin_clzg(word);
           lispobj *location = index_to_object(N_WORD_BITS * i + last_bit_set);
           if (location <= np) {
             /* Found a candidate - now check that the pointer is inside

@@ -2009,4 +2009,32 @@ int sigismember(const sigset_t *set, int signum)
   return (*set & (1 << signum)) != 0;
 }
 
-/* EOF */
+void
+os_sem_init(os_sem_t *sem, unsigned int value)
+{
+    *sem = CreateSemaphore(NULL, value, LONG_MAX, NULL);
+    if (*sem == NULL)
+        lose("os_sem_init(%p, %u): %lu", sem, value, GetLastError());
+}
+
+void
+os_sem_wait(os_sem_t *sem)
+{
+    DWORD ret = WaitForSingleObject(*sem, INFINITE);
+    if (ret == WAIT_FAILED)
+        lose("os_sem_wait(%p): %lu", sem, GetLastError());
+}
+
+void
+os_sem_post(os_sem_t *sem)
+{
+    if (!ReleaseSemaphore(*sem, 1, NULL))
+        lose("os_sem_post(%p): %lu", sem, GetLastError());
+}
+
+void
+os_sem_destroy(os_sem_t *sem)
+{
+    if (!CloseHandle(*sem))
+        lose("os_sem_destroy(%p): %lu", sem, GetLastError());
+}

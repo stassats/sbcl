@@ -31,9 +31,14 @@
   atomic_fetch_add(name, get_time() - before); }
 
 static uword_t get_time() {
+#ifdef LISP_FEATURE_WIN32
+  uword_t get_monotonic_time();
+  return get_monotonic_time();
+#else
   struct timespec t;
   clock_gettime(CLOCK_MONOTONIC, &t);
   return t.tv_sec * 1000000 + t.tv_nsec/1000;
+#endif
 }
 
 /* Maximum ratio between pages used and pages "needed" to compact. */

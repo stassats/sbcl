@@ -1,8 +1,11 @@
 #define _GNU_SOURCE
 #include <errno.h>
+#ifndef LISP_FEATURE_WIN32
 #include <pthread.h>
-#include <stdlib.h>
 #include <semaphore.h>
+#endif
+#include <stdlib.h>
+
 #include "interr.h"
 
 static unsigned int gc_threads;
@@ -47,10 +50,17 @@ void thread_pool_init() {
   }
 
   threads = checked_malloc(sizeof(pthread_t) * gc_threads);
-  for (uword_t i = 0; i < gc_threads; i++)
-    if (pthread_create(threads + i, NULL, worker, (void*)i))
+  for (uword_t i = 0; i < gc_threads; i++) {
+#ifdef LISP_FEATURE_WIN32
+    HANDLE thread =
+      (HANDLE)_beginthreadex(NULL, 0, (unsigned int (*)(void *))worker, (void *)i, CREATE_SUSPENDED, NULL);
+    if (thread == 0)
       lose("Failed to create GC thread #%ld", i);
-    else {
+    ResumeThread(thread);
+#else
+    if (!pthread_create(threads + i, NULL, worker, (void*)i))
+      lose("Failed to create GC thread #%ld", i);
+#endif
 #ifdef LISP_FEATURE_LINUX
       pthread_setname_np(threads[i], "Parallel GC");
 #endif

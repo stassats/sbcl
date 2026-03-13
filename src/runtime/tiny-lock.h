@@ -28,11 +28,13 @@ typedef struct lock lock_t;
 
 #ifdef LISP_FEATURE_SB_FUTEX
 // implement 'class mutex2' from "Futexes Are Tricky"
-extern int futex_wait(int*,int,long,unsigned long), futex_wake(int*, int);
+
 static inline int cmpxchg(lock_t *l, int old, int new) {
   atomic_compare_exchange_weak(&l->grabbed, &old, new);
   return old;
 }
+#ifndef LISP_FEATURE_WIN32
+extern int futex_wait(int*,int,long,unsigned long), futex_wake(int*, int);
 static void __attribute__((unused)) acquire_lock(lock_t *l) {
   int c;
   if ((c = cmpxchg(l, 0, 1)) != 0) {
@@ -71,6 +73,27 @@ static void __attribute__((unused)) release_lock(lock_t* l) {
     futex_wake((int*)&l->grabbed, 1);
   }
 }
+#else
+static void acquire_lock(lock_t *l) {
+    LONG c;
+    if ((c = cmpxchg(l, 0, 1)) != 0) {
+        do {
+            if (c == 2 || cmpxchg(l, 1, 2) != 0) {
+                LONG val = 2;
+                WaitOnAddress(&l->grabbed, &val, sizeof(LONG), INFINITE);
+            }
+        } while ((c = cmpxchg(l, 0, 2)) != 0);
+    }
+}
+
+static void release_lock(lock_t *l) {
+  if (atomic_fetch_sub(&l->grabbed, 1) != 1) {
+        l->grabbed = 0;
+        WakeByAddressSingle(&l->grabbed);
+    }
+}
+#endif
+
 #else
 #include <sched.h>
 static void __attribute__((unused)) acquire_lock(lock_t *l) {

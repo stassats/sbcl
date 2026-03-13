@@ -79,4 +79,6 @@ bool win32_maybe_interrupt_io(void* thread);
 
 int sb_pthread_sigmask(int how, const sigset_t *set, sigset_t *oldset);
 
+typedef HANDLE os_sem_t;
+
 #endif  /* SBCL_INCLUDED_WIN32_OS_H */
