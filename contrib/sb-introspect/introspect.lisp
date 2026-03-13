@@ -20,8 +20,6 @@
 ;;; application programmer, and are not.
 
 ;;; TODO
-;;; 1) structs don't have within-file location info.  problem for the
-;;;   structure itself, accessors, the copier and the predicate
 ;;; 3) error handling.  Signal random errors, or handle and resignal 'our'
 ;;;   error, or return NIL?
 ;;; 4) FIXMEs
@@ -205,38 +203,54 @@ constant pool."
                     source))))
 
 (defun find-definition-sources-by-name (name type)
-  "Returns a list of DEFINITION-SOURCEs for the objects of type TYPE
-defined with name NAME. NAME may be a symbol or a extended function
-name. Type can currently be one of the following:
+  "Returns a list of DEFINITION-SOURCEs for definitions of NAME with
+the given definition TYPE. TYPE can currently be one of the following.
 
-   (Public)
-   :CLASS
-   :COMPILER-MACRO
-   :CONDITION
-   :CONSTANT
-   :FUNCTION
-   :GENERIC-FUNCTION
-   :MACRO
-   :METHOD
-   :METHOD-COMBINATION
-   :PACKAGE
-   :SETF-EXPANDER
-   :STRUCTURE
-   :SYMBOL-MACRO
-   :TYPE
-   :ALIEN-TYPE
-   :VARIABLE
-   :DECLARATION
+Public definition TYPEs:
 
-   (Internal)
-   :OPTIMIZER
-   :SOURCE-TRANSFORM
-   :TRANSFORM
-   :VOP
-   :IR1-CONVERT
+    :CLASS
+    :COMPILER-MACRO
+    :CONDITION
+    :CONSTANT
+    :FUNCTION
+    :GENERIC-FUNCTION
+    :MACRO
+    :METHOD
+    :METHOD-COMBINATION
+    :PACKAGE
+    :SETF-EXPANDER
+    :STRUCTURE
+    :SYMBOL-MACRO
+    :TYPE
+    :ALIEN-TYPE
+    :VARIABLE
+    :DECLARATION
 
-If an unsupported TYPE is requested, the function will return NIL.
-"
+Internal definition TYPEs:
+
+    :OPTIMIZER
+    :SOURCE-TRANSFORM
+    :TRANSFORM
+    :VOP
+    :IR1-CONVERT
+
+Definition types are disjoint. For example, :TYPE refers to DEFTYPEs
+but not CLASSes or SB-ALIEN:DEFINE-ALIEN-TYPE, as those are of
+definition type :CLASS and :ALIEN-TYPE, respectively. :FUNCTION does
+not include :GENERIC-FUNCTION, :CLASS does not include :STRUCTURE,
+etc. :VARIABLE refers to non-constant dynamic variables (e.g. those
+defined with DEFVAR, DEFPARAMETER, SB-EXT:DEFGLOBAL or
+SB-ALIEN:DEFINE-ALIEN-VARIABLE but not with DEFCONSTANT).
+
+Valid NAMEs are generally SYMBOLs with the following exceptions:
+
+- For :COMPILER-MACRO, :FUNCTION, :GENERIC-FUNCTION and :METHOD,
+  anything that's VALID-FUNCTION-NAME-P is valid.
+
+- For :PACKAGE, string designators are valid.
+
+If an unsupported TYPE is requested or NAME is invalid, the function
+will return NIL."
   (flet ((get-class (name)
            (and (symbolp name)
                 (find-class name nil)))
@@ -267,25 +281,28 @@ If an unsupported TYPE is requested, the function will return NIL.
                    (macro-function name))
           (find-definition-source (macro-function name))))
        ((:compiler-macro)
-        (when (compiler-macro-function name)
+        (when (and (valid-function-name-p name)
+                   (compiler-macro-function name))
           (find-definition-source (compiler-macro-function name))))
        (:ir1-convert
         (let ((converter (info :function :ir1-convert name)))
           (and converter
-           (find-definition-source converter))))
+               (find-definition-source converter))))
        ((:function :generic-function)
-        (if (fboundp name)
-            (when (and (or (consp name)
-                           (and
-                            (not (macro-function name))
-                            (not (special-operator-p name)))))
-              (let ((fun (real-fdefinition name)))
-                (when (eq (not (typep fun 'generic-function))
-                          (not (eq type :generic-function)))
-                  (find-definition-source fun))))
-            (let ((dd (info :function :source-transform name)))
-              (when (typep dd '(cons defstruct-description))
-                (find-definition-sources-by-name (dd-name (car dd)) :structure)))))
+        (when (valid-function-name-p name)
+          (if (fboundp name)
+              (when (and (or (consp name)
+                             (and
+                              (not (macro-function name))
+                              (not (special-operator-p name)))))
+                (let ((fun (real-fdefinition name)))
+                  (when (eq (not (typep fun 'generic-function))
+                            (not (eq type :generic-function)))
+                    (find-definition-source fun))))
+              (let ((dd (info :function :source-transform name)))
+                (when (typep dd '(cons defstruct-description))
+                  (find-definition-sources-by-name (dd-name (car dd))
+                                                   :structure))))))
        ((:type)
         ;; Source locations for types are saved separately when the expander
         ;; is a closure without a good source-location.
@@ -296,7 +313,7 @@ If an unsupported TYPE is requested, the function will return NIL.
                 (when (functionp expander-fun)
                   (find-definition-source expander-fun))))))
        ((:method)
-        (when (fboundp name)
+        (when (and (valid-function-name-p name) (fboundp name))
           (let ((fun (real-fdefinition name)))
             (when (typep fun 'generic-function)
               (loop for method in (sb-mop::generic-function-methods
@@ -334,10 +351,9 @@ If an unsupported TYPE is requested, the function will return NIL.
             (translate-source-location
              (sb-pcl::method-combination-info-source-location info)))))
        ((:package)
-        (when (symbolp name)
-          (let ((package (find-package name)))
-            (when package
-              (find-definition-source package)))))
+        (let ((package (ignore-errors (find-package name))))
+          (when package
+            (find-definition-source package))))
        ;; TRANSFORM and OPTIMIZER handling from swank-sbcl
        ((:transform)
         (let ((fun-info (info :function :info name)))
@@ -379,11 +395,11 @@ If an unsupported TYPE is requested, the function will return NIL.
                             (sb-c::fun-info-flushable . sb-c::flushable))))
               (loop for (reader . name) in otypes
                     for fn = (funcall reader fun-info)
-                    when (functionp fn) collect
-                    (let ((source (find-definition-source fn)))
-                      (setf (definition-source-description source)
-                            (list name))
-                      source))))))
+                    when (functionp fn)
+                      collect (let ((source (find-definition-source fn)))
+                                (setf (definition-source-description source)
+                                      (list name))
+                                source))))))
        (:vop
         (find-vop-source name))
        (:alien-type
@@ -392,10 +408,10 @@ If an unsupported TYPE is requested, the function will return NIL.
                (translate-source-location loc))))
        ((:source-transform)
         (let* ((transform-fun
-                (or (info :function :source-transform name)
-                    (and (typep name '(cons (eql setf) (cons symbol null)))
-                         (info :function :source-transform
-                                      (second name)))))
+                 (or (info :function :source-transform name)
+                     (and (typep name '(cons (eql setf) (cons symbol null)))
+                          (info :function :source-transform
+                                (second name)))))
                ;; A cons for the :source-transform is essentially the same
                ;; info that was formerly in :structure-accessor.
                (accessor (and (consp transform-fun) (cdr transform-fun))))
@@ -409,12 +425,12 @@ If an unsupported TYPE is requested, the function will return NIL.
         (let ((locations (info :source-location :declaration name)))
           (loop for (kind loc) on locations by #'cddr
                 when loc
-                collect (let ((loc (translate-source-location loc)))
-                          (setf (definition-source-description loc)
-                                ;; Copy list to ensure that user code
-                                ;; cannot mutate the original.
-                                (copy-list (ensure-list kind)))
-                          loc))))
+                  collect (let ((loc (translate-source-location loc)))
+                            (setf (definition-source-description loc)
+                                  ;; Copy list to ensure that user code
+                                  ;; cannot mutate the original.
+                                  (copy-list (ensure-list kind)))
+                            loc))))
        (t
         nil)))))
 

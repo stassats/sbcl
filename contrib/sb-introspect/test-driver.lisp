@@ -8,7 +8,7 @@
 ;;;; files for more information.
 
 (defpackage :sb-introspect-test
-  (:import-from #:test-util #:deftest)
+  (:import-from #:test-util #:deftest #:with-test)
   (:use "SB-INTROSPECT" "CL"))
 
 (in-package :sb-introspect-test)
@@ -75,7 +75,7 @@
            '(x &key (b "abc")))
   t)
 
-(test-util:with-test (:name definition-source.1 :skipped-on :no-source-locs)
+(with-test (:name definition-source.1 :skipped-on :no-source-locs)
   #+sb-devel
   (assert (consp (find-definition-sources-by-name 'vectorp :vop)))
   (assert (consp (find-definition-sources-by-name 'check-type :macro))))
@@ -97,7 +97,7 @@
 
 ;;; The behavior of :SOURCE-PLIST on nested WITH-COMPILATION-UNIT
 ;;; is to append. This is documented in source/compiler/main
-(test-util:with-test (:name :definition-source-plist.2)
+(with-test (:name :definition-source-plist.2)
     (let ((plist (definition-source-plist
                      (find-definition-source #'cl-user::four))))
       (assert (equal (getf plist :test-outer) "OUT"))
@@ -127,25 +127,25 @@
     (matchp #'cl-user::one 2)
   t)
 
-(test-util:with-test (:name find-source-stuff.3 :skipped-on :no-source-locs)
+(with-test (:name find-source-stuff.3 :skipped-on :no-source-locs)
   (assert (matchp-name :generic-function 'cl-user::two 3)))
 
-(test-util:with-test (:name find-source-stuff.4 :skipped-on :no-source-locs)
+(with-test (:name find-source-stuff.4 :skipped-on :no-source-locs)
   (assert (matchp (car (sb-mop:generic-function-methods #'cl-user::two)) 4)))
 
-(test-util:with-test (:name find-source-stuff.5 :skipped-on :no-source-locs)
+(with-test (:name find-source-stuff.5 :skipped-on :no-source-locs)
   (assert (matchp-name :variable 'cl-user::*a* 8)))
 
-(test-util:with-test (:name find-source-stuff.6 :skipped-on :no-source-locs)
+(with-test (:name find-source-stuff.6 :skipped-on :no-source-locs)
   (assert (matchp-name :variable 'cl-user::*b* 9)))
 
-(test-util:with-test (:name find-source-stuff.7 :skipped-on :no-source-locs)
+(with-test (:name find-source-stuff.7 :skipped-on :no-source-locs)
   (assert (matchp-name :class 'cl-user::a 10)))
 
-(test-util:with-test (:name find-source-stuff.8 :skipped-on :no-source-locs)
+(with-test (:name find-source-stuff.8 :skipped-on :no-source-locs)
   (assert (matchp-name :condition 'cl-user::b 11)))
 
-(test-util:with-test (:name find-source-stuff.9 :skipped-on :no-source-locs)
+(with-test (:name find-source-stuff.9 :skipped-on :no-source-locs)
   (assert (matchp-name :structure 'cl-user::c 12)))
 
 (deftest find-source-stuff.10
@@ -156,7 +156,7 @@
     (matchp-name :function 'cl-user::c-e 12)
   t)
 
-(test-util:with-test (:name find-source-stuff.12 :skipped-on :no-source-locs)
+(with-test (:name find-source-stuff.12 :skipped-on :no-source-locs)
   (assert (matchp-name :structure 'cl-user::d 13)))
 
 (deftest find-source-stuff.13
@@ -167,16 +167,16 @@
     (matchp-name :function 'cl-user::d-e 13)
   t)
 
-(test-util:with-test (:name find-source-stuff.15 :skipped-on :no-source-locs)
+(with-test (:name find-source-stuff.15 :skipped-on :no-source-locs)
   (assert (matchp-name :package 'cl-user::e 14)))
 
-(test-util:with-test (:name find-source-stuff.16 :skipped-on :no-source-locs)
+(with-test (:name find-source-stuff.16 :skipped-on :no-source-locs)
   (assert (matchp-name :symbol-macro 'cl-user::f 15)))
 
-(test-util:with-test (:name find-source-stuff.17 :skipped-on :no-source-locs)
+(with-test (:name find-source-stuff.17 :skipped-on :no-source-locs)
   (assert (matchp-name :type 'cl-user::g 16)))
 
-(test-util:with-test (:name find-source-stuff.18 :skipped-on :no-source-locs)
+(with-test (:name find-source-stuff.18 :skipped-on :no-source-locs)
   (assert (matchp-name :constant 'cl-user::+h+ 17)))
 
 (deftest find-source-stuff.19
@@ -199,7 +199,7 @@
     (matchp-name :function '(setf cl-user::o) 23)
   t)
 
-(test-util:with-test (:name find-source-stuff.24 :skipped-on :no-source-locs)
+(with-test (:name find-source-stuff.24 :skipped-on :no-source-locs)
   (assert (matchp-name :method '(setf cl-user::p) 24)))
 
 (deftest find-source-stuff.25
@@ -207,7 +207,7 @@
   t)
 
 
-(test-util:with-test (:name find-source-stuff.26 :skipped-on :no-source-locs)
+(with-test (:name find-source-stuff.26 :skipped-on :no-source-locs)
   (assert (matchp-name :method-combination 'cl-user::r 26)))
 
 
@@ -243,7 +243,7 @@
     (matchp-name :function 'cl-user::loaded-as-source-fun 3)
   t)
 
-(test-util:with-test (:name find-source-stuff.33 :skipped-on :no-source-locs)
+(with-test (:name find-source-stuff.33 :skipped-on :no-source-locs)
   (assert (matchp-name :variable 'cl-user::**global** 29)))
 
 ;;; Check wrt. interplay of generic functions and their methods.
@@ -371,7 +371,7 @@
     (tai 42s0 :immediate nil)
   t)
 
-(test-util:with-test (:name :allocation-information.4
+(with-test (:name :allocation-information.4
            ;; Ignored as per the comment above, even though it seems
            ;; unlikely that this is the right condition.
            :fails-on (or :ppc64 (and :sparc :gencgc)))
@@ -388,7 +388,7 @@
   (setq *large-obj* (make-array (* sb-vm:gencgc-page-bytes 4)
                                 :element-type '(unsigned-byte 8)))
   (sb-ext:gc :gen 1) ; Array won't move to a large unboxed page until GC'd
-  (test-util:with-test (:name allocation-information.5
+  (with-test (:name allocation-information.5
                         :skipped-on :mark-region-gc) ; doesn't move to an unboxed page
           (tai *large-obj* :heap
                `(:space :dynamic :generation 1 :boxed nil :pinned nil :large t)
@@ -736,19 +736,19 @@
   t
   t)
 
-(test-util:with-test (:name alien-type.1 :skipped-on :no-source-locs)
+(with-test (:name alien-type.1 :skipped-on :no-source-locs)
   (assert (matchp-name :alien-type 'cl-user::test-alien-type 30)))
 
-(test-util:with-test (:name alien-type.2 :skipped-on :no-source-locs)
+(with-test (:name alien-type.2 :skipped-on :no-source-locs)
   (assert (matchp-name :alien-type 'cl-user::test-alien-struct 31)))
 
-(test-util:with-test (:name alien-variable :skipped-on :no-source-locs)
+(with-test (:name alien-variable :skipped-on :no-source-locs)
   (assert (matchp-name :variable 'cl-user::test-alien-var 32)))
 
-(test-util:with-test (:name condition-slot-reader :skipped-on :no-source-locs)
+(with-test (:name condition-slot-reader :skipped-on :no-source-locs)
   (matchp-name :method 'cl-user::condition-slot-reader 33))
 
-(test-util:with-test (:name condition-slot-writer :skipped-on :no-source-locs)
+(with-test (:name condition-slot-writer :skipped-on :no-source-locs)
   (matchp-name :method 'cl-user::condition-slot-writer 33))
 
 (deftest function-with-a-local-function
@@ -808,3 +808,42 @@
       (and (>= (length callers) 5)
            (not (null (member #'sb-c::find-dominators callers)))))
   t)
+
+(defparameter *definition-types*
+  '(:class
+    :compiler-macro
+    :condition
+    :constant
+    :function
+    :generic-function
+    :macro
+    :method
+    :method-combination
+    :package
+    :setf-expander
+    :structure
+    :symbol-macro
+    :type
+    :alien-type
+    :variable
+    :declaration
+    :optimizer
+    :source-transform
+    :transform
+    :vop
+    :ir1-convert))
+
+(with-test (:name :find-definition-sources-by-name-error-handling)
+  (dolist (definition-type *definition-types*)
+    (assert (null (sb-introspect:find-definition-sources-by-name
+                   7 definition-type)))
+    (assert (null (sb-introspect:find-definition-sources-by-name
+                   "xxx" definition-type)))
+    (assert (null (sb-introspect:find-definition-sources-by-name
+                   '(setf (setf xxx)) definition-type))))
+  (assert (null (sb-introspect:find-definition-sources-by-name 'print :junk))))
+
+(with-test (:name (:find-definition-sources-by-name :package))
+  (assert (sb-introspect:find-definition-sources-by-name "CL" :package))
+  (assert (sb-introspect:find-definition-sources-by-name :cl :package))
+  (assert (null (sb-introspect:find-definition-sources-by-name #\a :package))))
