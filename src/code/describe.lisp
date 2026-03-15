@@ -247,11 +247,11 @@
 
 (defmethod describe-object ((object pathname) stream)
   (print-standard-describe-header object stream)
-  (loop for name across #(host device directory name type version)
-        for i from (get-dsd-index pathname host)
-        do (awhen (%instance-ref object i)
-             (format stream "~%  ~10A = ~A" name
-                     (prin1-to-line (if (eq name 'directory) (car it) it)))))
+  (dovector (slot #(%pathname-host %pathname-device %pathname-directory
+                    %pathname-name %pathname-type %pathname-version))
+    (awhen (funcall slot object)
+      (let ((name (subseq (string slot) (1+ (position #\- (string slot))))))
+        (format stream "~%  ~10A = ~A" name (prin1-to-line it)))))
   (terpri stream))
 
 (defmethod describe-object ((object character) stream)
