@@ -166,7 +166,7 @@
 
 ;;; Make a TN to hold the number-stack frame pointer.  This is allocated
 ;;; once per component, and is component-live.
-  #-c-stack-is-control-stack
+#-c-stack-is-control-stack
 (defun make-nfp-tn ()
   (component-live-tn
    (make-wired-tn *fixnum-primitive-type* any-reg-sc-number nfp-offset)))

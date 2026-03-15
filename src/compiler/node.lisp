@@ -710,7 +710,7 @@
   ;; into this environment
   (nlx-info nil :type list)
   ;; some kind of info used by the back end
-  (info nil))
+  (info nil :type (or ir2-environment null)))
 (defprinter (environment :identity t)
   lambda
   (closure :test closure)
