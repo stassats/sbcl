@@ -42,11 +42,6 @@
 
 ;;;; PATHNAME structures
 
-;;; the various magic tokens that are allowed to appear in pretty much
-;;; all pathname components
-(deftype pathname-component-tokens ()
-  '(member nil :unspecific :wild :unc))
-
 ;;; This definition relies on compiler magic to turn the metclass
 ;;; into BUILT-IN-CLASSOID. Same for LOGICAL-PATHNAME.
 (defstruct (pathname (:conc-name %pathname-)
@@ -60,15 +55,15 @@
   ;; by keeping tables of the observed values.
   (host nil :type %pathname-host :read-only t)
   ;; the name of a logical or physical device holding files
-  (device nil :type (or simple-string pathname-component-tokens) :read-only t)
+  (device nil :type %pathname-device :read-only t)
   ;; an interned list of strings headed by :ABSOLUTE or :RELATIVE
   ;; comprising the path, or NIL.
   ;; if the list is non-NIL, it's a cons of the list and a numeric hash.
   (dir+hash nil :type list :read-only t)
   ;; the filename
-  (name nil :type (or simple-string pattern pathname-component-tokens) :read-only t)
+  (name nil :type %pathname-name :read-only t)
   ;; the type extension of the file
-  (type nil :type (or simple-string pattern pathname-component-tokens) :read-only t)
+  (type nil :type %pathname-name :read-only t)
   ;; the version number of the file, a positive integer (not supported
   ;; on standard Unix filesystems)
   (version nil :type %pathname-version :read-only t))

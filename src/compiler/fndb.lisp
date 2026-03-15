@@ -1884,12 +1884,14 @@
   ())
 
 (defknown make-pathname
- (&key (:defaults pathname-designator)
+ (&key (:defaults pathname-designator) ; this argument does _not_ allow NIL
        (:host (or string sb-impl::%pathname-host))
+       ;; OR STRING is in some of the following specifiers due to a more
+       ;; restrictive SIMPLE-STRING in the related slot constraint.
        (:device (or string sb-impl::%pathname-device))
        (:directory (or sb-impl::%pathname-directory string (member :wild)))
-       (:name (or sb-impl::%pathname-name string (member :wild)))
-       (:type (or sb-impl::%pathname-type string (member :wild)))
+       (:name (or string sb-impl::%pathname-name))
+       (:type (or string sb-impl::%pathname-name))
        (:version sb-impl::%pathname-version) (:case pathname-component-case))
   pathname (unsafely-flushable))
 
@@ -1909,7 +1911,7 @@
   sb-impl::%pathname-name (flushable))
 (defknown pathname-type (pathname-designator
                          &key (:case pathname-component-case))
-  sb-impl::%pathname-type (flushable))
+  sb-impl::%pathname-name (flushable))
 (defknown pathname-version (pathname-designator)
   sb-impl::%pathname-version (flushable))
 

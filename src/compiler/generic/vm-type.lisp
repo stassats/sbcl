@@ -52,8 +52,6 @@
 (sb-xc:deftype sb-impl::%pathname-directory () 'list)
 (sb-xc:deftype sb-impl::%pathname-name ()
   '(or simple-string sb-impl::pattern (member nil :unspecific :wild)))
-(sb-xc:deftype sb-impl::%pathname-type ()
-  '(or simple-string sb-impl::pattern (member nil :unspecific :wild)))
 (sb-xc:deftype sb-impl::%pathname-version ()
   '(or integer (member nil :newest :wild :unspecific)))
 

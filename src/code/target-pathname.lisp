@@ -889,14 +889,6 @@ the operating system native pathname conventions."
                            (case :local))
   "Makes a new pathname from the component arguments. Note that host is
 a host-structure or string."
-  (declare (type (or string host pathname-component-tokens) host)
-           (type (or string pathname-component-tokens) device)
-           (type (or list string pattern pathname-component-tokens) directory)
-           (type (or string pattern pathname-component-tokens) name type)
-           (type (or integer pathname-component-tokens (member :newest))
-                 version)
-           (type (or pathname-designator null) defaults)
-           (type pathname-component-case case))
   (let* ((defaults (when defaults
                      (with-pathname (defaults defaults) defaults)))
          (default-host (if defaults
