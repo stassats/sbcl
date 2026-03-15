@@ -47,15 +47,13 @@
 (defstruct (pathname (:conc-name %pathname-)
                      (:copier nil)
                      (:constructor !allocate-pathname
-                         (host device dir+hash name type version))
+                         (host-or-device dir+hash name type version))
                      (:predicate pathnamep))
   (namestring nil) ; computed on demand
-  ;; the host (at present either a UNIX or logical host)
-  ;; Host and device could be reduced to small integers and packed in one slot
-  ;; by keeping tables of the observed values.
-  (host nil :type %pathname-host :read-only t)
-  ;; the name of a logical or physical device holding files
-  (device nil :type %pathname-device :read-only t)
+  ;; Either the host or the device can be stored, no both because:
+  ;; - logical pathnames always have :UNSPECIFIC as the device
+  ;; - physical pathnames always have *PHYSICAL-HOST* as the host
+  (host-or-device nil :type (or %pathname-host %pathname-device) :read-only t)
   ;; an interned list of strings headed by :ABSOLUTE or :RELATIVE
   ;; comprising the path, or NIL.
   ;; if the list is non-NIL, it's a cons of the list and a numeric hash.
@@ -66,10 +64,12 @@
   (type nil :type %pathname-name :read-only t)
   ;; the version number of the file, a positive integer (not supported
   ;; on standard Unix filesystems)
-  (version nil :type %pathname-version :read-only t))
-
-(declaim (inline %pathname-directory))
-(defun %pathname-directory (pathname) (car (%pathname-dir+hash pathname)))
+  (version nil :type %pathname-version :read-only t)
+  ;; INSTANCE-HASH must be last because it is designed to overlap a
+  ;; lazy-stable-hash slot which GC would allocate. The instance header word
+  ;; will have to be adjusted (not done yet) so INSTANCE-HASH reads this.
+  ;; The goal is to remove a special case of PATHNAME from %SXHASH
+  (instance-hash 0))
 
 (let ((to (find-layout 'logical-pathname))
       (from (find-layout 'pathname)))
@@ -77,3 +77,20 @@
         (layout-slot-table to) (layout-slot-table from)))
 (declaim (inline logical-pathname-p))
 (defun logical-pathname-p (x) (typep x 'logical-pathname))
+
+(declaim (inline %pathname-host %pathname-device %pathname-directory))
+
+(define-load-time-global *physical-host* nil) ; initialized in {unix|win32}-pathname.lisp
+(defun %pathname-host (pathname)
+  ;; Using layout-depthoid to test for logical-pathname avoids needing to
+  ;; compare to #<SB-KERNEL:LAYOUT LOGICAL-PATHNAME>
+  (if (> (layout-depthoid (%instance-layout pathname)) sb-kernel::pathname-layout-depthoid)
+      (%pathname-host-or-device pathname)
+      *physical-host*))
+
+(defun %pathname-device (pathname)
+  (if (> (layout-depthoid (%instance-layout pathname)) sb-kernel::pathname-layout-depthoid)
+      :unspecific
+      (%pathname-host-or-device pathname)))
+
+(defun %pathname-directory (pathname) (car (%pathname-dir+hash pathname)))

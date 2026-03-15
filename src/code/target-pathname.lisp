@@ -222,9 +222,6 @@
       (apply #'concatenate 'simple-string (strings)))))
 
 
-;;; To be initialized in unix/win32-pathname.lisp
-(define-load-time-global *physical-host* nil)
-
 ;;; Return a value suitable, e.g., for preinitializing
 ;;; *DEFAULT-PATHNAME-DEFAULTS* before *DEFAULT-PATHNAME-DEFAULTS* is
 ;;; initialized (at which time we can't safely call e.g. #'PATHNAME).
@@ -269,17 +266,14 @@
 ;;; Also, on case-sensitive-case-preserving filesystems it's not possible
 ;;; to know which pathnames are equivalent without asking the filesystem.
 ;;;
-;;: TODO: consider similarly interning the DEVICE and TYPE parts
 (define-load-time-global *pn-dir-table* nil)
 (define-load-time-global *pn-table* nil)
 (declaim (type robinhood-hashset *pn-dir-table* *pn-table*))
 
 (defmacro compare-pathname-host/dev/dir/name/type (a b)
-  `(and (eq (%pathname-host ,a) (%pathname-host ,b)) ; Interned
-        ;; dir+hash are EQ-comparable thanks to INTERN-PATHNAME
-        (eq (%pathname-dir+hash ,a) (%pathname-dir+hash ,b))
+  `(and (eq (%pathname-dir+hash ,a) (%pathname-dir+hash ,b)) ; EQ-comparable due to INTERN-PATHNAME
         ;; the pathname pieces which are strings aren't interned
-        (compare-component (%pathname-device ,a) (%pathname-device ,b))
+        (compare-component (%pathname-host-or-device ,a) (%pathname-host-or-device ,b))
         (compare-component (%pathname-name ,a) (%pathname-name ,b))
         (compare-component (%pathname-type ,a) (%pathname-type ,b))))
 
@@ -312,11 +306,17 @@
   ;; case, and uppercase is the ordinary way to do that.
   (declare (sb-c::tlab :system))
   (flet ((upcase-maybe (x) (typecase x (string (logical-word-or-lose x)) (t x))))
-    (when (typep host 'logical-host)
-        (setq device :unspecific
-              directory (mapcar #'upcase-maybe directory)
-              name (upcase-maybe name)
-              type (upcase-maybe type))))
+    (cond ((typep host 'logical-host)
+           (setq device :unspecific
+                 directory (mapcar #'upcase-maybe directory)
+                 name (upcase-maybe name)
+                 type (upcase-maybe type)))
+          (t
+           ;; We don't create instances of UNIX-HOST or WIN32-HOST that are not
+           ;; the physical host, nor do we ever store a string / list of strings
+           ;; or the symbol :UNSPECIFIC as the host.
+           (aver (eq host *physical-host*))
+           (setq host nil))))
   (dx-let ((dir-key (cons directory (pathname-sxhash directory))))
     (declare (inline !allocate-pathname)) ; for DX-allocation
     (flet ((ensure-heap-string (part) ; return any non-string as-is
@@ -340,18 +340,19 @@
                    *pn-dir-table* dir-key
                    (lambda (dir)
                      (cons (mapcar #'ensure-heap-string (car dir)) (cdr dir))))))
-             (pn-key (!allocate-pathname host device dir+hash name type version)))
+             (host-or-device (or host device))
+             (pn-key (!allocate-pathname host-or-device dir+hash name type version)))
         (declare (dynamic-extent pn-key))
         (hashset-insert-if-absent
          *pn-table* pn-key
-         (lambda (tmp &aux (host (%pathname-host tmp)))
+         (lambda (tmp)
            (let ((new (!allocate-pathname
-                       host (%pathname-device tmp)
+                       (%pathname-host-or-device tmp)
                        (%pathname-dir+hash tmp)
                        (ensure-heap-string (%pathname-name tmp))
                        (ensure-heap-string (%pathname-type tmp))
                        (%pathname-version tmp))))
-             (when (typep host 'logical-host)
+             (when (typep (%pathname-host-or-device tmp) 'logical-host)
                (setf (%instance-layout new) #.(find-layout 'logical-pathname)))
              new)))))))
 
@@ -557,6 +558,7 @@
               (compare-component (car this) (car that))
               (compare-component (cdr this) (cdr that))))
         (bignum
+         ;; can't we just disallow numeric versions that aren't FIXNUM ?
          (eql this that)))))
 
 ;;;; pathname functions
@@ -600,10 +602,10 @@
               (sxhash (second piece))))))
     (etypecase x
       (pathname
-       (let* ((host (%pathname-host x))
-              ;; NAME-HASH is based on SXHASH of a string
-              (hash (if (typep host 'logical-host) (logical-host-name-hash host) 0)))
-         (mixf hash (hash-piece (%pathname-device x))) ; surely stringlike, right?
+       (let* ((host-or-device (%pathname-host-or-device x))
+              (hash (if (typep host-or-device 'logical-host)
+                        (logical-host-name-hash host-or-device)
+                        (hash-piece host-or-device)))) ; surely stringlike, right?
          (awhen (%pathname-dir+hash x) (mixf hash (cdr it)))
          (mixf hash (hash-piece (%pathname-name x)))
          (mixf hash (hash-piece (%pathname-type x)))

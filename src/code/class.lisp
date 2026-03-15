@@ -980,6 +980,9 @@ between the ~A definition and the ~A definition"
 
 ;;;; built-in classes
 
+(defconstant pathname-layout-depthoid 1)
+(defconstant pathname-layout-length (+ 7 sb-vm:instance-data-start))
+
 ;;; The BUILT-IN-CLASSES list is a data structure which configures the
 ;;; creation of all the built-in classes. It contains all the info
 ;;; that we need to maintain the mapping between classes, compile-time
@@ -1244,13 +1247,13 @@ between the ~A definition and the ~A definition"
       :prototype-form (make-defstruct-description 'arbitrary 0))
 
      ;; KLUDGE: the length must match the subsequent defstruct.
-     (pathname :depth 1
+     (pathname :depth ,pathname-layout-depthoid
                :predicate pathnamep
-               :length ,(+ 7 sb-vm:instance-data-start)
+               :length ,pathname-layout-length
                :prototype-form (make-trivial-default-pathname))
-     (logical-pathname :depth 2
+     (logical-pathname :depth ,(1+ pathname-layout-depthoid)
                        :predicate logical-pathname-p
-                       :length ,(+ 7 sb-vm:instance-data-start)
+                       :length ,pathname-layout-length
                        :prototype-form (make-trivial-default-logical-pathname)
                        :inherits (pathname))
 
