@@ -169,9 +169,8 @@
               ;; proportional to list length.
               (setf hash (mix (recurse (car x)) hash)
                     x (cdr x))))
-      (symbol (sxhash x))
+      ((or symbol pathname) (sxhash x))
       (number (sb-impl::number-sxhash x))
-      (pathname (sb-impl::pathname-sxhash x))
       ((or instance simple-vector)
        (let ((idmap (fasl-output-instance-id-table *compile-object*)))
          (values (ensure-gethash x idmap

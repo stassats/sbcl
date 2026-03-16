@@ -47,7 +47,7 @@
 (defstruct (pathname (:conc-name %pathname-)
                      (:copier nil)
                      (:constructor !allocate-pathname
-                         (host-or-device dir+hash name type version))
+                         (host-or-device dir+hash name type version sxhash))
                      (:predicate pathnamep))
   (namestring nil) ; computed on demand
   ;; Either the host or the device can be stored, no both because:
@@ -65,11 +65,10 @@
   ;; the version number of the file, a positive integer (not supported
   ;; on standard Unix filesystems)
   (version nil :type %pathname-version :read-only t)
-  ;; INSTANCE-HASH must be last because it is designed to overlap a
-  ;; lazy-stable-hash slot which GC would allocate. The instance header word
-  ;; will have to be adjusted (not done yet) so INSTANCE-HASH reads this.
-  ;; The goal is to remove a special case of PATHNAME from %SXHASH
-  (instance-hash 0))
+  ;; SXHASH must be last because INSTANCE-SXHASH reads the slot whose index
+  ;; is %INSTANCE-LENGTH. The stored length will get decresed by 1 after
+  ;; allocation to make the access come out right.
+  (sxhash 0))
 
 (let ((to (find-layout 'logical-pathname))
       (from (find-layout 'pathname)))

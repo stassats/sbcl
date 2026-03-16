@@ -74,7 +74,13 @@
   ;; Specifically, hashes that depend on object identity (address) are impermissible.
   (dolist (piece pieces)
     (aver (typep piece '(or string symbol (cons (eql :character-set) string)))))
-  (%make-pattern (pathname-sxhash pieces) pieces))
+  ;; Hashes of PATTERN instances must be deterministic per the requirements of SXHASH on
+  ;; pathnames. Prior to implementing opaque instance hashes, all PATTERNs hashed to a
+  ;; constant, which was valid but suboptimal. After pseudorandom hashing of instances,
+  ;; we had to either forcibly hash patterns to the same thing, or compute a name-based
+  ;; hash. I don't know that storing the hash is more advantageous than computing
+  ;; just-in-time, but I don't really care one way or the other.
+  (%make-pattern (calc-pattern-hash pieces) pieces))
 
 (declaim (inline pathname-component-present-p))
 (defun pathname-component-present-p (component)
@@ -283,11 +289,13 @@
            (compare-component (car entry) (car key)))))
 (defun pn-table-hash (pathname)
   ;; The pathname table makes distinctions between pathnames that EQUAL does not.
-  (mix (sxhash (%pathname-version pathname))
-       (pathname-sxhash pathname)))
+  (mix (%pathname-sxhash pathname) (sxhash (%pathname-version pathname))))
 (defun pn-table-pn= (entry key)
-  (and (compare-pathname-host/dev/dir/name/type entry key)
-       (eql (%pathname-version entry) (%pathname-version key))))
+  (and (= (%pathname-sxhash entry) (%pathname-sxhash key))
+       ;; version was the only slot not mixed into the sxhash, so optimistically compare
+       ;; that first for a quick pass/fail, and hopefully the other slots match.
+       (eql (%pathname-version entry) (%pathname-version key))
+       (compare-pathname-host/dev/dir/name/type entry key)))
 
 (defun !pathname-cold-init ()
   (setq *pn-dir-table* (make-hashset 32 #'pn-table-dir= #'cdr
@@ -317,7 +325,7 @@
            ;; or the symbol :UNSPECIFIC as the host.
            (aver (eq host *physical-host*))
            (setq host nil))))
-  (dx-let ((dir-key (cons directory (pathname-sxhash directory))))
+  (dx-let ((dir-key (cons directory (calc-pattern-hash directory))))
     (declare (inline !allocate-pathname)) ; for DX-allocation
     (flet ((ensure-heap-string (part) ; return any non-string as-is
              ;; FIXME: what about pattern pieces and (:HOME "user") ?
@@ -341,17 +349,38 @@
                    (lambda (dir)
                      (cons (mapcar #'ensure-heap-string (car dir)) (cdr dir))))))
              (host-or-device (or host device))
-             (pn-key (!allocate-pathname host-or-device dir+hash name type version)))
+             (h
+              (let ((hash (if (typep host-or-device 'logical-host)
+                              (logical-host-name-hash host-or-device)
+                              (hash-pathname-piece host-or-device))))
+                (when dir+hash (mixf hash (cdr dir+hash)))
+                (mixf hash (hash-pathname-piece name))
+                (mixf hash (hash-pathname-piece type))
+                ;; We have:
+                ;;  (equal (make-pathname :version 1) (make-pathname :version 15)) => T
+                ;; therefore SXHASH must not distinguish between pathnames that differ
+                ;; by version but are EQUAL in all other pieces.
+                hash))
+             (pn-key (!allocate-pathname host-or-device dir+hash name type version h)))
         (declare (dynamic-extent pn-key))
         (hashset-insert-if-absent
          *pn-table* pn-key
          (lambda (tmp)
-           (let ((new (!allocate-pathname
-                       (%pathname-host-or-device tmp)
-                       (%pathname-dir+hash tmp)
-                       (ensure-heap-string (%pathname-name tmp))
-                       (ensure-heap-string (%pathname-type tmp))
-                       (%pathname-version tmp))))
+           (let ((new
+                  ;; COPY-STRUCTURE won't do because it's not STRUCTURE-OBJECT
+                  (!allocate-pathname (%pathname-host-or-device tmp)
+                                      (%pathname-dir+hash tmp)
+                                      (ensure-heap-string (%pathname-name tmp))
+                                      (ensure-heap-string (%pathname-type tmp))
+                                      (%pathname-version tmp)
+                                      (%pathname-sxhash tmp))))
+             ;; Shrink the apparent payload length by 1 and set the hash bits so
+             ;; that INSTANCE-SXHASH returns the contents of the hash slot.
+             (with-pinned-objects (new)
+               (setf (sap-ref-8 (int-sap (get-lisp-obj-address new))
+                                (- #+big-endian (- sb-vm:n-word-bytes 2) #+little-endian 1
+                                   sb-vm:instance-pointer-lowtag))
+                     (logior (ash (1- sb-kernel::pathname-layout-length) 2) #b11)))
              (when (typep (%pathname-host-or-device tmp) 'logical-host)
                (setf (%instance-layout new) #.(find-layout 'logical-pathname)))
              new)))))))
@@ -385,7 +414,7 @@
                                (return i))))))
                   (format t
                    "~16x [~A ~S ~A ~S ~S ~S]~%"
-                   (pathname-sxhash entry)
+                   (%pathname-sxhash entry) ; hmm, should this use pn-table-hash ?
                    (let ((host (%pathname-host entry)))
                      (cond ((logical-host-p host)
                             ;; display with string quotes around name
@@ -575,50 +604,25 @@
 (sb-kernel::assign-equalp-impl 'pathname #'pathname-equalp)
 (sb-kernel::assign-equalp-impl 'logical-pathname #'pathname-equalp)
 
-;;; Hash a PATHNAME or a PATHNAME-DIRECTORY or pieces of a PATTERN.
-;;; This is called by both SXHASH and by the interning of pathnames, which uses a
-;;; multi-step approaching to coalescing shared subparts.
-;;; If an EQUAL directory was used before, we share that.
-;;; Since a directory is stored with its hash precomputed, hashing a PATHNAME as a
-;;; whole entails at most 4 more MIX operations. So using pathnames as keys in
-;;; a hash-table pays a small up-front price for later speed improvement.
-(defun pathname-sxhash (x)
-  (labels
-      ((hash-piece (piece)
-           (etypecase piece
-             (string
-              (let ((res (length piece)))
-                (if (<= res 6) ; hash it more thoroughly than (SXHASH string)
-                    (dovector (ch piece res)
-                      (setf res (mix (murmur-hash-word/+fixnum (char-code ch)) res)))
-                    (sxhash piece))))
-             (symbol (symbol-name-hash piece))
-             (pattern (pattern-hash piece))
-             ;; next case is only for MAKE-PATTERN
-             ((cons (eql :character-set)) (hash-piece (the string (cdr piece))))
-             ((cons (eql :home) (cons string null))
-              ;; :HOME has two representations- one is just '(:absolute :home ...)
-              ;; and the other '(:absolute (:home "user") ...)
-              (sxhash (second piece))))))
-    (etypecase x
-      (pathname
-       (let* ((host-or-device (%pathname-host-or-device x))
-              (hash (if (typep host-or-device 'logical-host)
-                        (logical-host-name-hash host-or-device)
-                        (hash-piece host-or-device)))) ; surely stringlike, right?
-         (awhen (%pathname-dir+hash x) (mixf hash (cdr it)))
-         (mixf hash (hash-piece (%pathname-name x)))
-         (mixf hash (hash-piece (%pathname-type x)))
-         ;; The requirement NOT to mix the version into the resulting hash is mandated
-         ;; by bullet point 1 in the SXHASH specification:
-         ;;  (equal x y) implies (= (sxhash x) (sxhash y))
-         ;; and the observation that in this implementation of Lisp:
-         ;;  (equal (make-pathname :version 1) (make-pathname :version 15)) => T
-         hash))
-      (list ;; a directory, or the PIECES argument to MAKE-PATTERN
-       (let ((hash 0))
-         (dolist (piece x hash)
-           (mixf hash (hash-piece piece))))))))
+(defun hash-pathname-piece (piece)
+  (etypecase piece
+    (string
+     (let ((res (length piece)))
+       (if (<= res 6) ; hash it more thoroughly than (SXHASH string)
+           (dovector (ch piece res)
+             (setf res (mix (murmur-hash-word/+fixnum (char-code ch)) res)))
+           (sxhash piece))))
+    (symbol (symbol-name-hash piece))
+    (pattern (pattern-hash piece))
+    ;; next case is only for MAKE-PATTERN
+    ((cons (eql :character-set)) (hash-pathname-piece (the string (cdr piece))))
+    ((cons (eql :home) (cons string null))
+     ;; :HOME has two representations- one is just '(:absolute :home ...)
+     ;; and the other '(:absolute (:home "user") ...)
+     (sxhash (second piece)))))
+(defun calc-pattern-hash (list &aux (hash 0))
+  (dolist (piece list hash)
+    (mixf hash (hash-pathname-piece piece))))
 
 ;;; Convert PATHNAME-DESIGNATOR (a pathname, or string, or
 ;;; stream), into a pathname in PATHNAME.

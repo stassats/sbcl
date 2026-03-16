@@ -267,12 +267,6 @@
              ;; in hash.pure.lisp should be made more rigorous as well.
              (%sxhash-simple-bit-vector (copy-seq bit-vector))))))))
 
-;;; To avoid "note: Return type not fixed values ..."
-;;; PATHNAME-SXHASH can't easily be placed in pathname.lisp because that file
-;;; depends on LOGICAL-HOST but the definition of LOGICAL-HOST is complicated
-;;; and seems to belong where it is, in target-pathname.lisp, though maybe not.
-(declaim (ftype (sfunction (t) hash-code) pathname-sxhash))
-
 (defun sap-hash (x)
   ;; toss in a LOGNOT so that (the word a) and (int-sap a) hash differently
   (murmur-hash-word/+fixnum (logand (lognot (sap-int x)) most-positive-word)))
@@ -347,10 +341,7 @@
                         261835505)))
                 (symbol (sxhash x))     ; through DEFTRANSFORM
                 (fixnum (sxhash x))     ; through DEFTRANSFORM
-                (instance
-                 (if (pathnamep x)
-                     (pathname-sxhash x)
-                     (instance-sxhash x)))
+                (instance (instance-sxhash x))
                 (array
                  (typecase x
                    (string (%%sxhash-string x ,max-length ,on-truncate))
@@ -576,7 +567,7 @@
                    ;; vector would incorrectly take insertion order into account.
                    (mix (mix 103924836 (hash-table-%count key))
                         (sxhash (hash-table-test key))))
-                  ((pathnamep key) (pathname-sxhash key))
+                  ((pathnamep key) (instance-sxhash key))
                   (t
                    (structure-object-psxhash key depthoid))))
            (list

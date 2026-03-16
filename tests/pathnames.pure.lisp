@@ -998,14 +998,14 @@
                       sb-vm:other-pointer-lowtag))
            (original-word (sb-sys:sap-ref-word sap offset))
            (original-symbol-hash (sb-kernel:symbol-hash :absolute))
-           (known-pnhash (sb-impl::pathname-sxhash '(:absolute "mess")))
+           (known-pnhash (sb-impl::calc-pattern-hash '(:absolute "mess")))
            (n-matched 0))
       (unwind-protect
            (dotimes (i (ash 1 10)) ; exhaustive test
              (setf (ldb (byte 10 22) (sb-sys:sap-ref-word sap offset)) i)
              (when (= (sb-kernel:symbol-hash :absolute) original-symbol-hash)
                (incf n-matched))
-             (assert (= (sb-impl::pathname-sxhash '(:absolute "mess"))
+             (assert (= (sb-impl::calc-pattern-hash '(:absolute "mess"))
                         known-pnhash)))
         (setf (sb-sys:sap-ref-word sap offset) original-word))
       ;; Exactly one of the tested patterns is the unadulterated hash
