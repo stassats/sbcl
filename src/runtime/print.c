@@ -380,7 +380,7 @@ static bool tagged_slot_p(struct layout *layout, int slot_index)
 static void print_struct(lispobj obj, iochannel_t io)
 {
     struct instance *instance = INSTANCE(obj);
-    short int i;
+    unsigned int i;
     char buffer[16];
     lispobj layout = instance_layout(native_pointer(obj));
     print_obj("type: ", layout, io);

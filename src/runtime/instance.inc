@@ -15,7 +15,7 @@ static inline int instanceoid_widetag_p(unsigned char widetag) {
 /* This is NOT the same value that lisp's %INSTANCE-LENGTH returns.
  * Lisp always uses the logical length (as originally allocated),
  * except when heap-walking which requires exact physical sizes */
-static inline int instance_length(lispobj header)
+static inline unsigned int instance_length(lispobj header)
 {
     // * Byte 3 of an instance header word holds the immobile gen# and visited bit,
     //   so those have to be masked off.
