@@ -360,15 +360,6 @@
   (test-this-object 'equalp (constantly 5))
   (test-this-object 'equal (sb-sys:int-sap 0)))
 
-;;; I don't like that we call SXHASH on layouts, but there was a horrible
-;;; regression in which we returned (SXHASH (LAYOUT-OF X)) if X was a layout,
-;;; which essentially meant that all layouts hashed to LAYOUT's hash.
-;;; This affected the performance of TYPECASE.
-(with-test (:name :sxhash-on-layout)
-  (dolist (x '(pathname cons array))
-    (let ((l (sb-kernel:find-layout x)))
-      (assert (= (sxhash l) (sb-kernel:layout-clos-hash l))))))
-
 (with-test (:name :equalp-table-fixnum-equal-to-float)
   (let ((table (make-hash-table :test #'equalp)))
     (assert (eql (setf (gethash 3d0 table) 1)

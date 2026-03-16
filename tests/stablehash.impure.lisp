@@ -1,0 +1,7 @@
+(defclass foo () (a))
+(defvar *x* (make-instance 'foo))
+(assert (/= 0 (sxhash (sb-kernel:%instance-layout *x*))))
+(defclass foo () (a b c))
+(with-test (:name :obsolete-layout-sxhash-stability)
+  (assert (= 0 (sb-kernel:layout-clos-hash (sb-kernel:%instance-layout *x*))))
+  (assert (/= 0 (sxhash (sb-kernel:%instance-layout *x*)))))

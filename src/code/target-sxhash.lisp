@@ -81,14 +81,6 @@
 ;;;
 (declaim (inline %instance-sxhash))
 (defun %instance-sxhash (instance header-word)
-  ;; LAYOUT must not acquire an extra slot for the stable hash,
-  ;; because the bitmap length is derived from the instance length.
-  ;; It would probably be simple to eliminate this as a special case
-  ;; by ensuring that instances of LAYOUT commence life with a trailing
-  ;; hash slot and the SB-VM:HASH-SLOT-PRESENT-FLAG set.
-  (when (typep instance 'layout)
-    ;; This might be wrong if the clos-hash was clobbered to 0
-    (return-from %instance-sxhash (layout-clos-hash instance)))
   ;; Non-simple cases: no hash slot, and either unhashed or hashed-not-moved.
   (let* ((addr (sb-c::if-vop-existsp (:named sb-vm::set-instance-hashed-return-address)
                  (if (logbitp sb-vm:stable-hash-required-flag header-word)
