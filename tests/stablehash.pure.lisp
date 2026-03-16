@@ -12,7 +12,8 @@
 (defvar *primsize1* (primitive-object-size *obj1*))
 (defvar *primsize2* (primitive-object-size *obj2*))
 
-(with-test (:name :lazy-hash-slot-instance-length-invariant)
+(with-test (:name :lazy-hash-slot-instance-length-invariant
+                  :skipped-on :mark-region-gc) ; nothing to test really
   (gc)
   ;; both should have moved
   (assert (/= (sb-kernel:get-lisp-obj-address *obj1*) *addr1*))
