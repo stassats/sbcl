@@ -2559,7 +2559,6 @@ many elements are copied."
          (end (or end length))
          (whole (= end length))
          (hash (and (> (- end start) 20)
-                    (not key)
                     (not test-not)
                     (hash-table-test-p test)
                     (make-hash-table :test test :size (- end start))))
@@ -2578,11 +2577,13 @@ many elements are copied."
           ;; already in result to the cons cell *preceding* theirs
           ;; in the list.  That is, for each value v in the list,
           ;; v and (cadr (gethash v hash)) are equal under TEST.
-          (let ((prev (gethash (car current) hash)))
+          (let* ((raw-elt (pop current))
+                 (elt (apply-key key raw-elt))
+                 (prev (gethash elt hash)))
             (cond
               ((not prev)
-               (setf (gethash (car current) hash) splice)
-               (setq splice (cdr (rplacd splice (list (car current))))))
+               (setf (gethash elt hash) splice)
+               (setq splice (cdr (rplacd splice (list raw-elt)))))
               ((not from-end)
                (let* ((old (cdr prev))
                       (next (cdr old)))
@@ -2591,10 +2592,9 @@ many elements are copied."
                        ;; (assert (eq (gethash next-val hash) old))
                        (setf (cdr prev) next
                              (gethash next-val hash) prev
-                             (gethash (car current) hash) splice
-                             splice (cdr (rplacd splice (list (car current))))))
-                     (setf (car old) (car current)))))))
-          (setq current (cdr current)))
+                             (gethash elt hash) splice
+                             splice (cdr (rplacd splice (list raw-elt)))))
+                     (setf (car old) raw-elt)))))))
         (let ((testp test) ;; for with-member-test
               (notp test-not))
           (with-member-test (member-test
