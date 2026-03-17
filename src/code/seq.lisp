@@ -2588,7 +2588,7 @@ many elements are copied."
                (let* ((old (cdr prev))
                       (next (cdr old)))
                  (if next
-                     (let ((next-val (car next)))
+                     (let ((next-val (apply-key key (car next))))
                        ;; (assert (eq (gethash next-val hash) old))
                        (setf (cdr prev) next
                              (gethash next-val hash) prev
