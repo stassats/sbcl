@@ -2550,8 +2550,11 @@ many elements are copied."
 ;;; original list up to the :end marker (this we have to do by running a
 ;;; do loop down the list that far and using our test.
 (defun list-remove-duplicates (list test test-not start end key from-end)
-  (declare (fixnum start)
-           (list list))
+  (declare (index start)
+           ((or index null) end)
+           ((or null function) test test-not key)
+           (list list)
+           (inline nthcdr))
   (let* ((result (list ())) ; Put a marker on the beginning to splice with.
          (splice result)
          (current list)
@@ -2587,14 +2590,15 @@ many elements are copied."
               ((not from-end)
                (let* ((old (cdr prev))
                       (next (cdr old)))
-                 (if next
-                     (let ((next-val (apply-key key (car next))))
-                       ;; (assert (eq (gethash next-val hash) old))
-                       (setf (cdr prev) next
-                             (gethash next-val hash) prev
-                             (gethash elt hash) splice
-                             splice (cdr (rplacd splice (list raw-elt)))))
-                     (setf (car old) raw-elt)))))))
+                 (setf (car old) raw-elt)
+                 (when next
+                   (let ((next-val (apply-key key (car next))))
+                     ;(assert (eq (gethash next-val hash) old))
+                     (setf (cdr prev) next
+                           (gethash next-val hash) prev
+                           (gethash elt hash) splice
+                           (cdr old) nil
+                           splice (cdr (rplacd splice old))))))))))
         (let ((testp test) ;; for with-member-test
               (notp test-not))
           (with-member-test (member-test
