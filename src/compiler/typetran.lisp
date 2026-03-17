@@ -838,9 +838,32 @@
                (let ((remaining (type-difference intersect
                                                  (specifier-type 'real))))
                  (if (eq remaining *empty-type*)
-                     `(,predicate object)
-                     `(or (,predicate object)
+                     `(,predicate ,object)
+                     `(or (,predicate ,object)
                           (typep object ',(type-specifier remaining))))))))
+          (;; Handle (and real (not fixnum)) without comparisons
+           ;; by doing (and (not (fixnump x)) (realp x))
+           (when (or (numeric-union-type-p type)
+                     (find-if #'numeric-union-type-p (union-type-types type)))
+             (let ((numeric-type (if (numeric-union-type-p type)
+                                     type
+                                     (let ((numeric (remove-if-not #'numeric-union-type-p (union-type-types type))))
+                                       (when numeric
+                                         (sb-kernel::%type-union numeric))))))
+               (when numeric-type
+                 (flet ((add-missing (whole test)
+                          (when (csubtypep numeric-type whole)
+                            (let ((diff (type-difference whole numeric-type)))
+                              (when (numeric-type-p diff)
+                                `(and (not (typep ,object ',(type-specifier diff)))
+                                      (or (,test ,object)
+                                          ,@(when (union-type-p type)
+                                              (let ((left (remove-if #'numeric-union-type-p (union-type-types type))))
+                                                (and left
+                                                     `((typep ,object '(or ,@(mapcar #'type-specifier left))))))))))))))
+                   (or (add-missing (specifier-type 'real) 'realp)
+                       (add-missing (specifier-type 'number) 'numberp)
+                       (add-missing (specifier-type 'rational) 'rationalp)))))))
           (t
            (let* ((types (sb-kernel::flatten-numeric-union-types type))
                   (type-cons (specifier-type 'cons))
