@@ -15,6 +15,11 @@
 
 (sb-impl::!recompile-globaldb-checkfuns)
 
+;;; Don't inline INSTANCE-SXHASH everywhere, it's too bloaty.
+#-sb-devel
+(progn (sb-int:clear-info :function :inlinep 'sb-impl::instance-sxhash)
+       (unintern 'sb-impl::%instance-sxhash))
+
 ;;; Users don't want to know if there are multiple TLABs per se, but they do want
 ;;; to know if NEW-ARENA returns an arena, so give them a sensible feature name.
 #+system-tlabs (push :arena-allocator *features*)

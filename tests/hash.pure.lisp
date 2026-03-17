@@ -469,14 +469,15 @@
     (try 'sxhash)
     (try 'sb-int:murmur-hash-word/fixnum)))
 
-(with-test (:name :number-or-null-hash)
+(with-test (:name :instance-or-number-or-null-hash)
   (flet ((get-callees (x-type)
            (ctu:find-named-callees
             (compile nil `(lambda (x) (sxhash (the ,x-type x)))))))
     (sb-int:encapsulate 'sb-int:permanent-fname-p 'test-shim #'sb-int:constantly-nil)
     (unwind-protect
          (let ((transformed-cases '((integer sb-impl::integer-sxhash)
-                                    (number sb-impl::number-sxhash)))
+                                    (number sb-impl::number-sxhash)
+                                    (sb-kernel:instance sb-impl::instance-sxhash)))
                (inlined-cases '(single-float double-float fixnum)))
            (loop for (type . hasher) in transformed-cases
                  do (assert (equal (get-callees type) hasher))

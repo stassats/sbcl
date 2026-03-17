@@ -25,7 +25,8 @@
     ;; and also common to create custom hash calculations on structures with such slots.
     ;; So it makes sense for the compiler to try to pick off cases where the slot type
     ;; has a specialized hash computation via sxhash after picking off NIL.
-    (or (dolist (case '((simple-string . %sxhash-simple-string)
+    (or (dolist (case '((instance . sb-impl::instance-sxhash)
+                        (simple-string . %sxhash-simple-string)
                         (string . %sxhash-string)
                         (simple-bit-vector . %sxhash-simple-bit-vector)
                         (bit-vector . %sxhash-bit-vector)))

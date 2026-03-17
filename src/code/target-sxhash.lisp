@@ -92,7 +92,7 @@
 ;;;    set need-stable-hash        |
 ;;;    take address                |   (thread is not running user code here)
 ;;;  end W-P-O                     |
-;;;  ... leave this funtion        |
+;;;  ... leave this function       |
 ;;;  start GC                      |
 ;;;      ...                       |  -> respond to stop-for-gc signal
 ;;;  (*) copy and extend object    |
@@ -107,7 +107,7 @@
 ;;;                                |  end W-P-O
 ;;;
 ;;; With conservative stack scanning, the asterisked step can not occur
-;;; due to an impicit pin from thead B.
+;;; due to an impicit pin from thread B.
 
 (declaim (inline %instance-sxhash))
 
