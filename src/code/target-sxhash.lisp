@@ -116,11 +116,11 @@
 (sb-c::if-vop-existsp (:named sb-vm::set-instance-hashed-return-address)
  (defun %instance-sxhash (instance header-word)
   ;; Non-simple cases: no hash slot, and either unhashed or hashed-not-moved.
-  (let ((addr    (if (logbitp sb-vm:stable-hash-required-flag header-word)
-                     (get-lisp-obj-address instance)
-                     (%primitive sb-vm::set-instance-hashed-return-address instance))
+  (let ((addr (if (logbitp sb-vm:stable-hash-required-flag header-word)
+                  (get-lisp-obj-address instance)
+                  (%primitive sb-vm::set-instance-hashed-return-address instance))))
     ;; perturb the address
-    (murmur-hash-word/+fixnum addr)))))
+    (murmur-hash-word/+fixnum addr)))
 
  (defun %instance-sxhash (instance header-word)
    (with-pinned-objects (instance)
