@@ -63,7 +63,7 @@
 ;;; indicator as to whether there was a hash slot appended by GC. States:
 ;;;   #b00 = never hashed
 ;;;   #b01 = hashed and not moved a/k/a "need stable hash"
-;;;   #b11 = hashed and moved a/k/a "has stable hash"
+;;;   #b11 = hashed and moved a/k/a "has hash slot"
 ;;;
 ;;; When we need to take the address, there are a few ways to get a consistent
 ;;; view of the object's hash status bits and its address:
@@ -79,25 +79,65 @@
 ;;; Since WITH-PINNED-OBJECT costs nothing on conservative gencgc,
 ;;; that's what I'm going with.
 ;;;
+;;; There was still a very subtle data race on precise backends.
+;;; Conservative pinning prevents the bug, which would be as follows:
+;;;
+;;; Initial state: object address has never been hashed, so both bits are 0.
+;;;
+;;;          thread A                     thread B
+;;; -------------------------------+--------------------------------------
+;;;  read has-hash-slot bit        |  read has-hash-slot bit
+;;;  answer = no                   |  answer = no
+;;;  with-pinned-objects           |  -- descheduled, context switch --
+;;;    set need-stable-hash        |
+;;;    take address                |   (thread is not running user code here)
+;;;  end W-P-O                     |
+;;;  ... leave this funtion        |
+;;;  start GC                      |
+;;;      ...                       |  -> respond to stop-for-gc signal
+;;;  (*) copy and extend object    |
+;;;      set has-hash-slot         |
+;;;      ...                       |
+;;;  end GC                        |  -> return from stop-for-gc (user code resumes)
+;;;                                |
+;;;                                |  ; we think there is no hash slot, but there is
+;;;                                |  with-pinned-objects
+;;;                                |    observe need-stable-hash = 1
+;;;                                |    take address of object -> WRONG !
+;;;                                |  end W-P-O
+;;;
+;;; With conservative stack scanning, the asterisked step can not occur
+;;; due to an impicit pin from thead B.
+
 (declaim (inline %instance-sxhash))
-(defun %instance-sxhash (instance header-word)
+
+;;; Prevent IF-VOP-EXISTSP from being part of the inline expansion of this defun,
+;;; which might be useful after self-build
+(sb-c::if-vop-existsp (:named sb-vm::set-instance-hashed-return-address)
+ (defun %instance-sxhash (instance header-word)
   ;; Non-simple cases: no hash slot, and either unhashed or hashed-not-moved.
-  (let* ((addr (sb-c::if-vop-existsp (:named sb-vm::set-instance-hashed-return-address)
-                 (if (logbitp sb-vm:stable-hash-required-flag header-word)
+  (let ((addr    (if (logbitp sb-vm:stable-hash-required-flag header-word)
                      (get-lisp-obj-address instance)
                      (%primitive sb-vm::set-instance-hashed-return-address instance))
-                 (with-pinned-objects (instance)
-                   ;; First we have to indicate that a hash was taken from the address
-                   ;; if not already so marked.
-                   (unless (logbitp sb-vm:stable-hash-required-flag header-word)
-                     #-sb-thread (setf (sap-ref-word (int-sap (get-lisp-obj-address instance))
-                                                     (- sb-vm:instance-pointer-lowtag))
-                                       (logior (ash 1 sb-vm:stable-hash-required-flag)
-                                               header-word))
-                     #+sb-thread (%primitive sb-vm::set-instance-hashed instance))
-                   (get-lisp-obj-address instance)))))
     ;; perturb the address
-    (murmur-hash-word/+fixnum addr)))
+    (murmur-hash-word/+fixnum addr)))))
+
+ (defun %instance-sxhash (instance header-word)
+   (with-pinned-objects (instance)
+     ;; On precise GC platforms we have to check again inside W-P-O for a hash slot.
+     ;; However ppc64 pins context registers and surely everything is in registers,
+     ;; so I doubt it is needed there.
+     #+(and sb-thread (not (or x86 x86-64)))
+     (when (logbitp sb-vm:hash-slot-present-flag header-word)
+       (return-from %instance-sxhash
+         (truly-the hash-code (%instance-ref instance (%instance-length instance)))))
+     ;; Indicate that an addressed-based hash was taken unless already done.
+     (unless (logbitp sb-vm:stable-hash-required-flag header-word)
+       #-sb-thread (setf (sap-ref-word (int-sap (get-lisp-obj-address instance))
+                                       (- sb-vm:instance-pointer-lowtag))
+                         (logior (ash 1 sb-vm:stable-hash-required-flag) header-word))
+       #+sb-thread (%primitive sb-vm::set-instance-hashed instance))
+     (murmur-hash-word/+fixnum (get-lisp-obj-address instance)))))
 
 (declaim (inline instance-sxhash))
 (defun instance-sxhash (instance)
