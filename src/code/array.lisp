@@ -714,13 +714,6 @@
   "Allocate vector of LENGTH elements in static space. Only allocation
 of specialized arrays is supported."
   ;; STEP 1: check inputs fully
-  ;;
-  ;; This way of doing explicit checks before the vector is allocated
-  ;; is expensive, but probably worth the trouble as once we've allocated
-  ;; the vector we have no way to get rid of it anymore...
-  (when (eq t (upgraded-array-element-type element-type))
-    (error "Static arrays of type ~/sb-impl:print-type-specifier/ not supported."
-           element-type))
   (check-make-array-initargs nil) ; for effect
   (when contents-p
     (unless (= length (length initial-contents))
@@ -742,6 +735,9 @@ of specialized arrays is supported."
   ;; Allocate and possibly initialize the vector.
   (multiple-value-bind (type n-bits-shift)
       (%vector-widetag-and-n-bits-shift element-type)
+    (when (eq type simple-vector-widetag)
+      (error "Static arrays of type ~/sb-impl:print-type-specifier/ not supported."
+             element-type))
     (let* ((full-length
              ;; KLUDGE: add SAETP-N-PAD-ELEMENTS "by hand" since there is
              ;; but a single case involving it now.
