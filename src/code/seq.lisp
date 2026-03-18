@@ -2533,15 +2533,23 @@ many elements are copied."
 
 ;;;; REMOVE-DUPLICATES
 
-(defun hash-table-test-p (fun)
-  (or (eq fun #'eq)
-      (eq fun #'eql)
-      (eq fun #'equal)
-      (eq fun #'equalp)
-      (eq fun 'eq)
-      (eq fun 'eql)
-      (eq fun 'equal)
-      (eq fun 'equalp)))
+(defun string=-hash (string)
+  (sxhash (string string)))
+
+(defun string-equal-hash (string)
+  (psxhash (string string)))
+
+(declaim (inline make-hash-table-for-duplicates))
+(defun make-hash-table-for-duplicates (fun size)
+  (cond ((or (eq fun #'eq)
+             (eq fun #'eql)
+             (eq fun #'equal)
+             (eq fun #'equalp))
+         (values (make-hash-table :test fun :size size) nil))
+        ((eq fun #'string=)
+         (make-hash-table :test #'string= :hash-function #'string=-hash  :size size))
+        ((eq fun #'string-equal)
+         (make-hash-table :test #'string-equal :hash-function #'string-equal-hash :size size))))
 
 ;;; Remove duplicates from a list. If from-end, remove the later duplicates,
 ;;; not the earlier ones. Thus if we check from-end we don't copy an item
@@ -2561,10 +2569,10 @@ many elements are copied."
          (length (length list))
          (end (or end length))
          (whole (= end length))
-         (hash (and (> (- end start) 20)
+         (remove-size (- end start))
+         (hash (and (> remove-size 20)
                     (not test-not)
-                    (hash-table-test-p test)
-                    (make-hash-table :test test :size (- end start))))
+                    (make-hash-table-for-duplicates test remove-size)))
          (tail (and (not whole)
                     (nthcdr end list))))
     (declare (dynamic-extent result))
@@ -2690,10 +2698,11 @@ many elements are copied."
          (end (or end length))
          (whole (= end length))
          (hash (and hash
-                    (> (- end start) 20)
-                    (not test-not)
-                    (hash-table-test-p test)
-                    (make-hash-table :test test :size (- end start)))))
+                    (let ((remove-size (- end start)))
+                      (and
+                       (> remove-size 20)
+                       (not test-not)
+                       (make-hash-table-for-duplicates test remove-size))))))
     (declare (index count))
     (setf current (nthcdr start list))
     (if hash
