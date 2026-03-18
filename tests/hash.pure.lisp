@@ -477,6 +477,7 @@
     (unwind-protect
          (let ((transformed-cases '((integer sb-impl::integer-sxhash)
                                     (number sb-impl::number-sxhash)
+                                    #-sb-devel ;; where sb-impl::instance-sxhash is inlined
                                     (sb-kernel:instance sb-impl::instance-sxhash)))
                (inlined-cases '(single-float double-float fixnum)))
            (loop for (type . hasher) in transformed-cases

@@ -2549,7 +2549,9 @@ many elements are copied."
         ((eq fun #'string=)
          (make-hash-table :test #'string= :hash-function #'string=-hash  :size size))
         ((eq fun #'string-equal)
-         (make-hash-table :test #'string-equal :hash-function #'string-equal-hash :size size))))
+         (make-hash-table :test #'string-equal :hash-function #'string-equal-hash :size size))
+        ((eq fun #'=)
+         (make-hash-table :test #'= :hash-function #'psxhash :size size))))
 
 ;;; Remove duplicates from a list. If from-end, remove the later duplicates,
 ;;; not the earlier ones. Thus if we check from-end we don't copy an item

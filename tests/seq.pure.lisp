@@ -76,7 +76,7 @@
     (assert (equalp (remove-duplicates orig :start 3 :end 9) '(0 1 2 0 1 2 0 1 2)))
     (assert (equalp (delete-duplicates orig :start 3 :end 9) '(0 1 2 0 1 2 0 1 2)))))
 
-(with-test (:name (remove-duplicates delete-duplicates :key))
+(with-test (:name (remove-duplicates :key))
   (let* ((negative (loop :for i :from 1 :to 11 :collect (- i)))
          (positive (loop :for i :from 1 :to 11 :collect i))
          (combined (append negative positive))
@@ -85,6 +85,16 @@
     (assert (equal negative (remove-duplicates combined :key #'abs :from-end t)))
     (assert (equalp (coerce positive 'vector) (remove-duplicates vector :key #'abs)))
     (assert (equalp (coerce negative 'vector) (remove-duplicates vector :key #'abs :from-end t)))))
+
+(with-test (:name :remove-duplicates-test-=)
+  (let* ((negative (loop :for i :from 1 :to 11 :collect (- i)))
+         (positive (loop :for i :from 1 :to 11 :collect (float i)))
+         (combined (append negative positive))
+         (vector (coerce combined 'vector)))
+    (assert (equal positive (remove-duplicates combined :key #'abs :test #'=)))
+    (assert (equal negative (remove-duplicates combined :key #'abs :from-end t :test #'=)))
+    (assert (equalp (coerce positive 'vector) (remove-duplicates vector :key #'abs :test #'=)))
+    (assert (equalp (coerce negative 'vector) (remove-duplicates vector :key #'abs :from-end t :test #'=)))))
 
 ;;; tests of COUNT
 (with-test (:name (count))
