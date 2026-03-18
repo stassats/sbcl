@@ -1220,6 +1220,13 @@ of specialized arrays is supported."
   (truly-the (or list symbol)
              (widetag->element-type (array-underlying-widetag array))))
 
+(defun upgraded-array-element-type (spec &optional environment)
+  "Return the element type that will actually be used to implement an array
+   with the specifier :ELEMENT-TYPE Spec."
+  (declare (type lexenv-designator environment) (ignore environment))
+  (declare (explicit-check))
+  (widetag->element-type (%vector-widetag-and-n-bits-shift spec)))
+
 (defun array-rank (array)
   "Return the number of dimensions of ARRAY."
   (array-rank array))

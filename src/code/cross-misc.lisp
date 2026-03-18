@@ -355,6 +355,10 @@
 (defun %puthash (key table val) ; stemming from toplevel (SETF GETHASH)
   (setf (gethash key table) val))
 
+(defun upgraded-array-element-type (spec &optional environment)
+  (declare (ignore environment))
+  (type-specifier (sb-kernel::%upgraded-array-element-type (specifier-type spec))))
+
 ;;;; Variables which have meaning only to the cross-compiler, defined here
 ;;;; in lieu of #+sb-xc-host elsewere which messes up toplevel form numbers.
 (in-package "SB-C")

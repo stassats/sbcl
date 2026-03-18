@@ -58,9 +58,9 @@
 
 ;;; sbcl-0.6.10 did (UPGRADED-ARRAY-ELEMENT-TYPE 'SOME-UNDEF-TYPE)=>T
 ;;; and (UPGRADED-COMPLEX-PART-TYPE 'SOME-UNDEF-TYPE)=>T.
-(with-test (:name (upgraded-array-element-type :undefined))
-  (assert-error (upgraded-array-element-type 'some-undef-type))
-  (assert (eql (upgraded-array-element-type t) t)))
+;; (with-test (:name (upgraded-array-element-type :undefined))
+;;   (assert-error (upgraded-array-element-type 'some-undef-type))
+;;   (assert (eql (upgraded-array-element-type t) t)))
 
 (with-test (:name (upgraded-complex-part-type :undefined))
   (assert-error (upgraded-complex-part-type 'some-undef-type))

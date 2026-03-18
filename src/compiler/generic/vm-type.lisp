@@ -119,19 +119,6 @@
              (when (csubtypep eltype stype)
                (return stype)))))))
 
-(defun upgraded-array-element-type (spec &optional environment)
-  "Return the element type that will actually be used to implement an array
-   with the specifier :ELEMENT-TYPE Spec."
-  (declare (type lexenv-designator environment) (ignore environment))
-  (declare (explicit-check))
-  (let ((type (type-or-nil-if-unknown spec)))
-    (cond ((not type)
-           ;; What about a FUNCTION-TYPE - would (FUNCTION (UNKNOWN) UNKNOWN)
-           ;; upgrade to T? Well, it's still ok to say it's an error.
-           (error "Undefined type: ~S" spec))
-          (t
-           (type-specifier (%upgraded-array-element-type type))))))
-
 (defun upgraded-complex-part-type (spec &optional environment)
   "Return the element type of the most specialized COMPLEX number type that
    can hold parts of type SPEC."
