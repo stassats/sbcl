@@ -342,3 +342,23 @@
   (assert (eql (f) 3))
   (assert (not (compiled-function-p #'f)))
   (assert (compiled-function-p #'fancypkg:mystruct-x)))
+
+(defun try-an-undefined-function (x)
+  (funcall (cond ((vectorp x) #'copy-seq) (t #'this-is-not-defined)) x))
+
+(test-util:with-test (:name :right-error-message-for-non-function)
+  (assert (search "The function COMMON-LISP-USER::THIS-IS-NOT-DEFINED is undefined."
+                  (handler-case (try-an-undefined-function 3)
+                    (undefined-function (c) (write-to-string c :escape nil)))))
+  (defmacro this-is-not-defined (x) `(car ,x))
+  (assert (search "THIS-IS-NOT-DEFINED is a macro."
+                  (handler-case (try-an-undefined-function 3)
+                    ;; I don't know whether this should be UNDEFINED-FUNCTION
+                    ;; and I don't care.
+                    (sb-int:simple-program-error (c) (write-to-string c :escape nil)))))
+  ;; Make it undefined again (perhaps the fact that it was a macro was cached)
+  ;; and observe that the error message reverts to the "undefined" message.
+  (fmakunbound 'this-is-not-defined)
+  (assert (search "The function COMMON-LISP-USER::THIS-IS-NOT-DEFINED is undefined."
+                  (handler-case (try-an-undefined-function 3)
+                    (undefined-function (c) (write-to-string c :escape nil))))))

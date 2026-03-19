@@ -1143,28 +1143,27 @@
     (if (and (listp name) (memq (car name) '(named-lambda lambda)))
         (handler (if (must-freeze-p env) #'enclose-freeze #'enclose)
                  (make-proto-fn name))
-        (multiple-value-bind (kind definition frame-ptr)
-            (find-lexical-fun env name)
+        (binding* (((kind definition frame-ptr) (find-lexical-fun env name))
+                   (fdefn (unless definition (find-or-create-fdefn name))))
           (cond (definition ; lexical function
                  (if (eq kind :macro)
                      (not-a-function name)
                      (hlambda FUNCTION (frame-ptr) (env)
                        (local-fdefinition frame-ptr env))))
-              ;; Consider (DEFUN GET-THING () #'THING) - it shouldn't return
-              ;; THING's error trampoline if THING is redefined after
-              ;; GET-THING was called once.
                 ((symbolp name) ; could be a macro
-                     (hlambda FUNCTION (name) (env)
-                       (declare (ignore env))
-                       (let ((fun (%symbol-function name)))
-                         (if (or (not fun) (sb-impl::macro/special-guard-fun-p fun))
-                             (not-a-function name)
-                             fun))))
-                (t
-                  (let ((fdefn (find-or-create-fdefn name)))
-                    (hlambda FUNCTION (fdefn) (env) ; could not be a macro
-                      (declare (ignore env))
-                      (sb-c:safe-fdefn-fun fdefn)))))))))
+                 ;; Relying solely on SAFE-FDEFN-FUN here is not ideal
+                 ;; because it can produce an error-signaling closure.
+                 (hlambda FUNCTION (fdefn) (env)
+                   (declare (ignore env))
+                   (let ((fun (sb-c:safe-fdefn-fun fdefn)))
+                     (if (sb-impl::macro/special-guard-fun-p fun)
+                         (not-a-function #+linkage-space fdefn
+                                         #-linkage-space (fdefn-name fdefn))
+                         fun))))
+                (t ; could not be a macro
+                 (hlambda FUNCTION (fdefn) (env)
+                   (declare (ignore env))
+                   (sb-c:safe-fdefn-fun fdefn))))))))
 
 ;;;; some extra handlers
 
