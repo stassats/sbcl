@@ -931,7 +931,9 @@
                                                    do (setf types (remove type types :test #'eq :count 1))
                                                    collect `(typep ,object ',(type-specifier type)))))))))
                           `(or
-                            ,@(check single-floats 'single-float-p)
+                            ,@(and #+64-bit
+                                   (not (every #'type-singleton-p single-floats)) ;; tested using EQL
+                                   (check single-floats 'single-float-p))
                             ,@(check double-floats 'double-float-p)
                             ,@(check conses 'consp)
                             ,@(loop for type in types
