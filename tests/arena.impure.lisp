@@ -511,6 +511,14 @@
     (assert (pathnamep val))
     (assert (not (points-to-arena *condition*)))))
 
+(test-util:with-test (:name :ensure-generic-function-not-in-arena)
+  (let ((a (new-arena 1048576))
+        (name (gensym "ARENA-GF-")))
+    (with-arena (a) (ensure-generic-function name :lambda-list '(x)))
+    (assert (not (c-find-heap->arena a)))
+    (fmakunbound name)
+    (destroy-arena a)))
+
 (test-util:with-test (:name :gc-epoch-not-in-arena)
   (with-arena (*arena*) (gc))
   (assert (heap-allocated-p sb-kernel::*gc-epoch*)))

@@ -1977,8 +1977,9 @@ bootstrapping.
            (fmakunbound fun-name)
            (apply #'ensure-generic-function fun-name all-keys))
           (t
-           (apply #'ensure-generic-function-using-class
-                  existing fun-name all-keys)))))
+           (sb-vm::without-arena
+             (apply #'ensure-generic-function-using-class
+                    existing fun-name all-keys))))))
 
 (defun generic-clobbers-function (fun-name)
   (cerror "Replace the function binding"
