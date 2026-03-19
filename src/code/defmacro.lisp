@@ -46,7 +46,7 @@ only."
     (error "Non-NIL environment argument in SETF of MACRO-FUNCTION ~S: ~S"
            symbol environment))
   (when (eq (info :function :kind symbol) :special-form)
-    (error "~S names a special form." symbol))
+    (error "~S names a special operator." symbol))
   (when (boundp '*setf-macro-function-hook*) ; unbound during cold init
     (dolist (f *setf-macro-function-hook*)
       (funcall f symbol function)))
