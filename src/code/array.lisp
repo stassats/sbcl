@@ -261,10 +261,11 @@
        fastidiously-parse)
       ;; Do things the hard way after falling through the tagbody.
       (let* ((ctype (type-or-nil-if-unknown type))
-             (ctype (and ctype
-                         (sb-kernel::replace-hairy-type ctype))))
+             (ctype (if ctype
+                        (sb-kernel::replace-hairy-type ctype)
+                        (error "~@<Unable to determine UPGRADED-ARRAY-ELEMENT-TYPE for ~s~:@_because it contains unknown types.~:>"
+                               type))))
         (typecase ctype
-          (null (result simple-vector-widetag))
           (numeric-union-type
            (case (sb-kernel::numtype-aspects-id (sb-kernel::numeric-union-type-aspects ctype))
              (#.(sb-kernel::!compute-numtype-aspect-id :real 'integer nil)

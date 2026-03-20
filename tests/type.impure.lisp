@@ -58,17 +58,12 @@
 
 ;;; sbcl-0.6.10 did (UPGRADED-ARRAY-ELEMENT-TYPE 'SOME-UNDEF-TYPE)=>T
 ;;; and (UPGRADED-COMPLEX-PART-TYPE 'SOME-UNDEF-TYPE)=>T.
-;;;
-;;; some time later, we decided that (U-A-E-T 'SOME-UNDEF-TYPE) should
-;;; in fact return T, and be consistent with calls like
-;;; (MAKE-ARRAY <x> :ELEMENT-TYPE 'SOME-UNDEF-TYPE)
 (with-test (:name (upgraded-array-element-type :undefined))
-  (let (array)
-    (handler-case
-        (setf array (make-array 3 :element-type 'some-undef-type))
-      (error () (assert-error (upgraded-array-element-type 'some-undef-type))))
-    (assert (eql (array-element-type array) (upgraded-array-element-type 'some-undef-type))))
+  (assert-error (upgraded-array-element-type 'some-undef-type))
   (assert (eql (upgraded-array-element-type t) t)))
+
+(with-test (:name (make-array :undefined-element-type))
+  (assert-error (make-array 0 :element-type (opaque-identity 'some-undef-type))))
 
 (with-test (:name (upgraded-complex-part-type :undefined))
   (assert-error (upgraded-complex-part-type 'some-undef-type))
