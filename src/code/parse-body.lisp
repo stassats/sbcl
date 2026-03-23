@@ -53,4 +53,4 @@
                       (t
                        (return))))
               (setq forms (rest forms))))
-      (values forms (cdr decls) doc))))
+      (values forms (cdr decls) (when doc (possibly-base-stringize doc))))))
