@@ -2097,3 +2097,13 @@
      (the integer (* n n))
      n)
    (or integer (complex rational))))
+
+
+(with-test (:name :growing-amounts-in-loops)
+  (checked-compile `(lambda (n)
+                      (declare (integer n)
+                               (optimize (debug 3)))
+                      (let ((v (- n most-positive-fixnum)))
+                        (loop
+                         (let ((new (+ v 1)))
+                           (setf v new)))))))

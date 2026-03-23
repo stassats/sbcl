@@ -348,7 +348,7 @@
           target))))))
 
 ;;; Ignore AMOUNT
-(defun join-equality-constraints (var block in)
+(defun join-equality-constraints (var block in &optional all-previous-outs-computed)
   (let* ((constraints (make-hash-table :test #'equal))
          (pred (block-pred block))
          (i -1))
@@ -380,6 +380,17 @@
                                            (min (max amount (second existing)) overall-min)
                                            (max amount (second existing)))
                                        overall-min))))))))))
+
+    (when (and all-previous-outs-computed
+               (block-in block))
+      ;; If the amount has changed from the previous computation then
+      ;; it's probably being changed in a loop, remove that constraint
+      (do-equality-constraints (in-con in-op not-p amount) var (block-in block)
+        (let ((existing (gethash (list in-con in-op not-p) constraints)))
+          (when (and (eql (car existing) i)
+                     (not (eql (second existing)
+                               amount)))
+            (remhash (list in-con in-op not-p) constraints)))))
     (dohash ((key value) constraints)
       (when (= (car value) i)
         (destructuring-bind (y op not-p) key
