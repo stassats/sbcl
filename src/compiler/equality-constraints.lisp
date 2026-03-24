@@ -147,7 +147,7 @@
 
 (defconstant-eqx +eq-ops+ '(eq eql =) #'equal)
 
-(defun inherit-equality-p (new from not-p &optional (min-amount 0) max-amount (from-amount 0) set)
+(defun inherit-equality-p (new from not-p &optional (min-amount 0) max-amount (from-amount 0))
   (unless min-amount
     (setf min-amount 0))
   (unless from-amount
@@ -163,8 +163,7 @@
          (case from
            ((< <= . #.+eq-ops+) (values '< (+ from-amount min-amount)))
            (>
-            (when (and max-amount
-                       (not set))
+            (when max-amount
               (let ((diff (- from-amount max-amount)))
                 (cond ((> diff 0)
                        (values '> diff)))))))))
@@ -175,8 +174,7 @@
          (case from
            ((> >= . #.+eq-ops+) (values '> (+ from-amount min-amount)))
            (<
-            (when (and max-amount
-                       (not set))
+            (when max-amount
               (let ((diff (- from-amount max-amount)))
                 (cond ((> diff 0)
                        (values '< diff)))))))))
@@ -826,9 +824,7 @@
                       (do-equality-constraints (in-y in-op in-not-p in-amount) var constraints
                         (unless (eq in-y var)
                           (multiple-value-bind (inherit inherit-amount)
-                              ;; Avoid changing the direction of inequalities
-                              ;; because it might be done in a loop.
-                              (inherit-equality-p operator in-op in-not-p min-amount max-amount in-amount t)
+                              (inherit-equality-p operator in-op in-not-p min-amount max-amount in-amount)
                             (when inherit
                               (conset-add-equality-constraint (or gen
                                                                   (setf gen (make-conset)))
