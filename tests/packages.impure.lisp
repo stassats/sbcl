@@ -1322,3 +1322,8 @@ if a restart was invoked."
       (assert (member mmm result))
       (assert (member sym result))
       (assert (= (length result) 2)))))
+
+(with-test (:name :defpackage-nicknames-not-additive)
+  (defpackage "PNN" (:nicknames "PNICK" "PNICK2"))
+  (defpackage "PNN" (:nicknames "NN"))
+  (assert (= (length (package-nicknames "PNN")) 1)))
