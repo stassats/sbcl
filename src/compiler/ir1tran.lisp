@@ -238,7 +238,7 @@
 ;;; If NAME already has a valid entry in (FREE-FUNS *IR1-NAMESPACE*), then return
 ;;; the value. Otherwise, make a new GLOBAL-VAR using information from
 ;;; the global environment and enter it in FREE-FUNS. If NAME
-;;; names a macro or special form, then we error out using the
+;;; names a macro or special operator, then we error out using the
 ;;; supplied context which indicates what we were trying to do that
 ;;; demanded a function.
 (declaim (ftype (sfunction (t string &optional boolean) t) find-free-fun))
@@ -250,7 +250,9 @@
            (if (and (eq kind :macro)
                     (not error-on-macro))
                kind
-               (compiler-error "The ~(~S~) name ~S was found ~A." kind name context)))
+               (compiler-error "The ~A ~S was found ~A."
+                               (if (eq kind :macro) "macro" "special operator")
+                               name context)))
           ((:function nil)
            (check-fun-name name)
            (let ((expansion (fun-name-inline-expansion name))

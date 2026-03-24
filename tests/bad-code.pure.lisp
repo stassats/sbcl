@@ -1071,3 +1071,12 @@
                                   (the sequence (delete x y))
                                   10)
                                :allow-style-warnings t))))
+
+(with-test (:name :function-err-wording)
+  (flet ((try (sym &aux (*error-output* (make-broadcast-stream)))
+           (princ-to-string
+            (block foo (handler-bind
+                           ((sb-c:compiler-error (lambda (e) (return-from foo e))))
+                         (compile nil `(lambda () #',sym)))))))
+    (assert (search "special operator IF was found" (try 'if)))
+    (assert (search "macro COND was found" (try 'cond)))))
