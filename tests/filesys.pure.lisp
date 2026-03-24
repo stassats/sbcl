@@ -126,6 +126,14 @@
     (with-open-file (i "tests/filesys.pure.lisp")
       (assert i))))
 
+;;; The OPEN tests would fail for the wrong reason when the supplied pathname parts
+;;; were simple-base-string. The unparser expected simple-character-string
+;;; so it signaled a type-error instead of file-error.
+(with-test (:name :unparse-simple-base-string-wild)
+  (assert (string= (sb-impl::unparse-physical-file
+                    (pathname (coerce "flub*.txt" 'simple-base-string)) #\^)
+                   "flub*.txt")))
+
 ;;; OPEN, LOAD and friends should signal an error of type FILE-ERROR
 ;;; if they are fed wild pathname designators; firstly, with wild
 ;;; pathnames that don't correspond to any files:

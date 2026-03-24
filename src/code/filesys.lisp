@@ -202,7 +202,7 @@
                    (setf (aref result index) character)
                    (incf index))
                  (output-string (string)
-                   (declare (type (simple-array character 1) string))
+                   (declare (string string))
                    (setf (subseq result index) string)
                    (incf index (length string)))
                  (unparse-fragment (fragment)
