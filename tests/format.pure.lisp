@@ -158,3 +158,21 @@
       (assert (null (funcall formatter s 1)))
       (assert (equal (funcall formatter s 1 2) '(2))))
     (assert (null (format (make-array 3 :element-type 'character :fill-pointer 0) formatter 1 2)))))
+
+(defun definitely-base-stringize-these (name)
+  ;; I want tests to work with readtable-base-char-preference = :both
+  ;; so this has to explicitly ensure that it provides a non-base string to FORMAT.
+  (format t #.(coerce "Hi ~a how are you?~%" '(simple-array character (*)))
+          name))
+;; This test is pointless on #-sb-unicode but it should pass nonetheless
+(with-test (:name :optimized-format-prefers-base-string-literals)
+  (compile 'definitely-base-stringize-these)
+  (let ((c (ctu:find-code-constants #'definitely-base-stringize-these :type 'string)))
+    ;; both are simple-base-string
+    (assert (typep (car c) 'simple-base-string))
+    (assert (typep (cadr c) 'simple-base-string))
+    ;; one should be the string "Hi " and the other " how are you?\n"
+    (assert (or (string= (car c) "Hi ") (string= (cadr c) "Hi ")))
+    (let ((s " how are you?
+"))
+      (assert (or (string= (car c) s) (string= (cadr c) s))))))

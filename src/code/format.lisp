@@ -443,7 +443,7 @@
      (values `(write-char ,(schar directive 0) stream)
              more-directives))
     (simple-string
-     (values `(write-string ,directive stream)
+     (values `(write-string ,(possibly-base-stringize directive) stream)
              more-directives))))
 
 (sb-xc:defmacro expander-next-arg (string offset)
