@@ -1489,10 +1489,9 @@
 
 ;;; Join the constraints coming from the predecessors of BLOCK on
 ;;; every constrained variable into the constraint set IN.
-(defun join-type-constraints (in block &optional equality-only predecessor-outs all-previous-outs-computed)
+(defun join-type-constraints (in block predecessor-outs &optional equality-only all-previous-outs-computed)
   (let ((vars '())
-        (equality-vars)
-        (predecessors (block-pred block)))
+        (equality-vars))
     (flet ((find-vars (out)
              (do-conset-elements (con out)
                (let ((kind  (constraint-kind con))
@@ -1510,28 +1509,15 @@
                    (pushnew (constraint-x con) equality-vars :test #'eq)
                    (when (lambda-var/vector-length-p y)
                      (pushnew y equality-vars)))))))
-      (cond (predecessor-outs
-             (find-vars (car predecessor-outs)))
-            (t
-             (loop for pred in predecessors
-                   do
-                   (let ((out (block-out-for-successor pred block)))
-                     (when out
-                       (find-vars out)
-                       (return)))))))
+      (find-vars (car predecessor-outs)))
     (dolist (var vars)
       (let ((in-var-type *empty-type*))
         (flet ((compute-type (out)
                  (setq in-var-type
                        (type-union in-var-type
                                    (type-from-constraints var out *universal-type*)))))
-          (if predecessor-outs
-              (dolist (out predecessor-outs)
-                (compute-type out))
-              (dolist (pred predecessors)
-                (let ((out (block-out-for-successor pred block)))
-                  (when out
-                    (compute-type out))))))
+          (dolist (out predecessor-outs)
+            (compute-type out)))
 
         (when (type-for-constraints-p in-var-type)
           ;; Remove the existing constraints to avoid joining them again later.
@@ -1544,18 +1530,18 @@
                                                     nil)
                          in))))
     (dolist (var equality-vars)
-      (join-equality-constraints var block in all-previous-outs-computed))))
+      (join-equality-constraints var block in predecessor-outs all-previous-outs-computed))))
 
 (defun compute-block-in (block join-types-p)
   (let ((in nil)
         (bind (block-start-node block))
-        (all-previous-outs-computed t))
+        (all-previous-outs-computed t)
+        outs)
     (cond
       ;; Use constraints from the local calls to this function
       ((and (bind-p bind)
             (functional-kind-eq (bind-lambda bind) nil assignment optional cleanup))
-       (let ((fun (bind-lambda bind))
-             (outs))
+       (let ((fun (bind-lambda bind)))
          (loop for ref in (lambda-refs fun)
                for call = (node-dest ref)
                for call-in = (and call
@@ -1566,9 +1552,7 @@
                              (setf in (copy-conset call-in)))
                          (push call-in outs))
                         (call
-                         (setf all-previous-outs-computed nil))))
-         (when (rest outs)
-           (join-type-constraints in block (not join-types-p) outs all-previous-outs-computed))))
+                         (setf all-previous-outs-computed nil))))))
       (t
        (dolist (pred (block-pred block))
          ;; If OUT has not been calculated, assume it to be the universal
@@ -1576,12 +1560,13 @@
          (let ((out (block-out-for-successor pred block)))
            (cond ((not out)
                   (setf all-previous-outs-computed nil))
-                 (in
-                  (conset-intersection in out))
                  (t
-                  (setq in (copy-conset out))))))
-       (when (rest (block-pred block))
-         (join-type-constraints in block (not join-types-p) nil all-previous-outs-computed))))
+                  (push out outs)
+                  (if in
+                      (conset-intersection in out)
+                      (setq in (copy-conset out)))))))))
+    (when (rest outs)
+      (join-type-constraints in block (nreverse outs) (not join-types-p) all-previous-outs-computed))
     (or in (make-conset))))
 
 (defun update-block-in (block join-types-p)
