@@ -250,12 +250,16 @@
                        (make-vector-length-constraint with))
                       (t
                        with)))
+              (good-type-p (type)
+                (not (or (eq type *universal-type*)
+                         (numeric-type-without-bounds-p type))))
               (add (x y &key (operator operator)
                              (consequent consequent-constraints)
                              (alternative alternative-constraints)
                              (amount min-amount))
                 (when (eq x y)
                   (return-from add))
+                (when (ctype-p y))
                 (unless (lambda-var/vector-length-p x)
                   (unless (lambda-var/vector-length-p y)
                     (return-from add))
@@ -266,13 +270,13 @@
                   (conset-add-equality-constraint alternative operator x y t amount))))
          (do-eql-vars (eql-x ((constraint-var x) constraints))
            (let ((x (replace-var x eql-x)))
-             (when (neq y-type *universal-type*)
+             (when (good-type-p y-type)
                (add x y-type :amount 0))
              (if (lambda-var/vector-length-p y)
                  (do-eql-vars (eql-y ((constraint-var y) constraints))
                    (let ((y (replace-var y eql-y)))
                      (add x y)
-                     (when (neq x-type *universal-type*)
+                     (when (good-type-p x-type)
                        (add x-type y :amount 0))))
                  (add x y))
              (add x y)))
@@ -288,7 +292,7 @@
                                                  :amount inherit-amount
                                                  :consequent target
                                                  :alternative nil)
-                                     (when (neq x-type *universal-type*)
+                                     (when (good-type-p x-type)
                                        (add x-type in-y :operator inherit
                                                         :alternative nil
                                                         :consequent target
