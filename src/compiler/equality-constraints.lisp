@@ -346,38 +346,35 @@
           target))))))
 
 ;;; Ignore AMOUNT
-(defun join-equality-constraints (var block in &optional all-previous-outs-computed)
+(defun join-equality-constraints (var block in pred-outs all-previous-outs-computed)
   (let* ((constraints (make-hash-table :test #'equal))
-         (pred (block-pred block))
          (i -1))
-    (loop for pred in pred
+    (loop for out in pred-outs
           do
-          (let ((out (block-out-for-successor pred block)))
-            (when out
-              (incf i)
-              (do-equality-constraints (in-con in-op not-p amount) var out
-                (let ((existing (gethash (list in-con in-op not-p) constraints)))
-                  (cond ((= (if existing
-                                (car existing)
-                                -1)
-                            (1- i))
-                         (setf (gethash (list in-con in-op not-p) constraints)
-                               (list i
-                                     (if existing
-                                         (min amount (second existing))
-                                         amount)
-                                     (second existing))))
-                        ((and existing
-                              (= (car existing) i))
-                         ;; Maximize the current block value while
-                         ;; not exceeding the overall minimal amount.
-                         (let ((overall-min (third existing)))
-                           (setf (gethash (list in-con in-op not-p) constraints)
-                                 (list i
-                                       (if overall-min
-                                           (min (max amount (second existing)) overall-min)
-                                           (max amount (second existing)))
-                                       overall-min))))))))))
+          (incf i)
+          (do-equality-constraints (in-con in-op not-p amount) var out
+            (let ((existing (gethash (list in-con in-op not-p) constraints)))
+              (cond ((= (if existing
+                            (car existing)
+                            -1)
+                        (1- i))
+                     (setf (gethash (list in-con in-op not-p) constraints)
+                           (list i
+                                 (if existing
+                                     (min amount (second existing))
+                                     amount)
+                                 (second existing))))
+                    ((and existing
+                          (= (car existing) i))
+                     ;; Maximize the current block value while
+                     ;; not exceeding the overall minimal amount.
+                     (let ((overall-min (third existing)))
+                       (setf (gethash (list in-con in-op not-p) constraints)
+                             (list i
+                                   (if overall-min
+                                       (min (max amount (second existing)) overall-min)
+                                       (max amount (second existing)))
+                                   overall-min))))))))
 
     (when (and all-previous-outs-computed
                (block-in block))
