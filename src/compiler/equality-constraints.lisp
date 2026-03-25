@@ -63,23 +63,28 @@
 (defun find-or-create-equality-constraint (operator x y not-p &optional (amount 0))
   (unless amount
     (setf amount 0))
-  (when (and (lambda-var-p x)
-             (lambda-var-p y))
-    ;; Normalize var-var constraints to < and <=
-    (case operator
-      (>
-       (rotatef x y)
-       (setf operator '<))
-      (>=
-       (rotatef x y)
-       (setf operator '<=))))
+  ;; Normalize
+  (cond ((and (vector-length-constraint-p x)
+              (lambda-var-p y))
+         (setf operator (invert-operator operator))
+         (rotatef x y))
+        ((and (lambda-var-p x)
+              (vector-length-constraint-p y)))
+        ((and (lambda-var/vector-length-p x)
+              (lambda-var/vector-length-p y))
+         (case operator
+           (>
+            (rotatef x y)
+            (setf operator '<))
+           (>=
+            (rotatef x y)
+            (setf operator '<=)))))
   (let ((x-var (constraint-var x))
-        (cache-key (typecase y
-                     (vector-length-constraint y
-                      (vector-length-constraint-var y))
-                     (t
-                      y))))
+        (cache-key (constraint-var y)))
     (or (find-equality-constraint operator amount x x-var y cache-key not-p)
+        (and (member operator '(eq eql =))
+             (and (lambda-var/vector-length-p y)
+                  (find-equality-constraint operator amount y (constraint-var y) x (constraint-var x) not-p)))
         (let ((new (make-equality-constraint (length *constraint-universe*)
                                              operator
                                              x y not-p
@@ -109,7 +114,7 @@
 (defun add-eq-constraint (var lvar gen)
   (let ((var2 (ok-lvar-lambda-var lvar gen)))
     (when var2
-      (conset-adjoin (find-or-create-equality-constraint 'eq var var2 nil) gen))))
+      (conset-add-equality-constraint gen 'eq var var2 nil))))
 
 (defun vector-length-var-p (lvar constraints &optional simple)
   (let* ((use (principal-lvar-use lvar))
@@ -337,17 +342,15 @@
                  (if (vector-length-constraint-p var)
                      (make-vector-length-constraint with)
                      with)))
-         (conset-adjoin
-          (find-or-create-equality-constraint (equality-constraint-operator con)
-                                              (if replace-x
-                                                  (replace-var (constraint-x con) var)
-                                                  (constraint-x con))
-                                              (if replace-x
-                                                  (constraint-y con)
-                                                  (replace-var (constraint-y con) var))
-                                              (constraint-not-p con)
-                                              (equality-constraint-amount con))
-          target))))))
+          (conset-add-equality-constraint target (equality-constraint-operator con)
+                                          (if replace-x
+                                              (replace-var (constraint-x con) var)
+                                              (constraint-x con))
+                                          (if replace-x
+                                              (constraint-y con)
+                                              (replace-var (constraint-y con) var))
+                                          (constraint-not-p con)
+                                          (equality-constraint-amount con)))))))
 
 ;;; Ignore AMOUNT
 (defun join-equality-constraints (var block in pred-outs all-previous-outs-computed)
@@ -393,13 +396,7 @@
     (dohash ((key value) constraints)
       (when (= (car value) i)
         (destructuring-bind (y op not-p) key
-          (conset-adjoin
-           (find-or-create-equality-constraint op
-                                               var
-                                               y
-                                               not-p
-                                               (second value))
-           in))))))
+          (conset-add-equality-constraint in op var y not-p (second value)))))))
 
 (defun try-equality-constraint (call gen)
   (let ((constraint (fun-info-equality-constraint (basic-combination-fun-info call)))
