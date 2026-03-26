@@ -29,16 +29,33 @@
   ;;; before quitting the image, and when loading it from compiled fasls
   ;;; (because toplevel forms might use %VOP-EXISTSP at any time).
 (defun %vop-existsp (name query &optional optimistic)
-  (declare (notinline info fun-info-templates #-sb-xc-host sb-impl::gethash3)
+  (declare (notinline info fun-info-templates #-sb-xc-host sb-impl::gethash3
+                                              vop-info-arg-types vop-info-more-args-type)
            #+sb-xc (ignore optimistic))
   (let ((answer
-          (not (null (ecase query
+          (not (null (case query
                        (:named
                         (gethash name *backend-template-names*))
                        (:translate
                         (let ((info (info :function :info name)))
                           (when info
-                            (fun-info-templates info)))))))))
+                            (fun-info-templates info))))
+                       (t
+                        (when (typep query '(cons (eql :translate)))
+                          (let ((arg-types (cdr query))
+                                (info (info :function :info name)))
+                            (when info
+                              (let ((types (mapcar (lambda (x) (primitive-type (specifier-type x)))
+                                                   arg-types)))
+                                (loop for vop in (fun-info-templates info)
+                                      for vop-arg-types = (vop-info-arg-types vop)
+                                      thereis (and (= (length types)
+                                                      (length vop-arg-types))
+                                                   (not (vop-info-more-args-type vop))
+                                                   (loop for vop-arg-type in vop-arg-types
+                                                         for type in types
+                                                         always (and (typep vop-arg-type '(cons (eql :or)))
+                                                                     (member type (cdr vop-arg-type))))))))))))))))
     ;; Negatives won't be stored in the journal in optimistic mode.
     #-sb-xc
     (when (and (not answer) (not optimistic))

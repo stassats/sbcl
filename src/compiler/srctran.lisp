@@ -7134,45 +7134,29 @@
              (give-up-ir1-transform
               "The operands might not be the same type."))))))
 
-(defun maybe-float-lvar-p (lvar)
-  (neq *empty-type* (type-intersection (specifier-type 'float)
-                                       (lvar-type lvar))))
-
-#+(or arm arm64 x86-64 x86)
-(flet ((maybe-invert (op inverted x y)
+(flet ((maybe-invert (inverted x y)
          (cond
-           ((and (not (vop-existsp :translate >=))
-                 (csubtypep (lvar-type x) (specifier-type 'float))
-                 (csubtypep (lvar-type y) (specifier-type 'float)))
-            `(or (,op x y) (= x y)))
            ;; Don't invert if either argument can be a float (NaNs)
-           ((or (maybe-float-lvar-p x) (maybe-float-lvar-p y))
+           ((or (lvar-intersectp x float) (lvar-intersectp y float))
             (give-up-ir1-transform))
            (t
             `(if (,inverted x y) nil t)))))
   (deftransform >= ((x y) (number number) * :node node)
     "invert or open code"
-    (maybe-invert '> '< x y))
+    (maybe-invert '< x y))
   (deftransform <= ((x y) (number number) * :node node)
     "invert or open code"
-    (maybe-invert '< '> x y)))
+    (maybe-invert '> x y)))
 
-;;; FIXME: for some reason these do not survive cold-init with <=
-#-(or arm arm64 x86-64 x86)
-(flet ((maybe-invert (node op inverted x y)
-         (cond
-           ;; Don't invert if either argument can be a float (NaNs)
-           ((or (maybe-float-lvar-p x) (maybe-float-lvar-p y))
-            (delay-ir1-transform node :constraint)
-            `(or (,op x y) (= x y)))
-           (t
-            `(if (,inverted x y) nil t)))))
-  (deftransform >= ((x y) (number number) * :node node)
-    "invert or open code"
-    (maybe-invert node '> '< x y))
-  (deftransform <= ((x y) (number number) * :node node)
-    "invert or open code"
-    (maybe-invert node '< '> x y)))
+(unless-vop-existsp ((:translate single-float single-float) >=)
+  (deftransform >= ((x y) (:or ((single-float single-float) *)
+                               ((double-float double-float) *))
+                    * :node node :important nil)
+    `(or (> x y) (= x y)))
+  (deftransform <= ((x y) (:or ((single-float single-float) *)
+                               ((double-float double-float) *))
+                    * :node node :important nil)
+    `(or (< x y) (= x y))))
 
 ;;; Make sure any constant arg is second.
 (macrolet ((def (name inverse)
@@ -7198,8 +7182,8 @@
                          ;; to worry about NaNs: (non-ref-op NaN NaN) => false,
                          ;; but with reflexive ones we don't know...
                          ,@(when reflexive-p
-                             '((and (not (maybe-float-lvar-p x))
-                                (not (maybe-float-lvar-p y))))))
+                             '((and (not (lvar-intersectp x float))
+                                (not (lvar-intersectp y float))))))
                     (specifier-type '(eql ,reflexive-p))
                     (multiple-value-bind (ix x-complex)
                         (type-approximate-interval (lvar-type x))
