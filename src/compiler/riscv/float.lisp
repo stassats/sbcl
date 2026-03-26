@@ -455,22 +455,26 @@
                   (:translate ,translate)
                   (:generator 3
                     (note-this-location vop :internal-error)
-                    (inst ,op :single temp x y)
-                    (if ,(if complement '(not not-p) 'not-p)
+                    (inst ,op :single temp ,@(if complement
+                                                 '(y x)
+                                                 '(x y)))
+                    (if not-p
                         (inst beq temp zero-tn target)
                         (inst bne temp zero-tn target))))
                 (define-vop (,dname double-float-compare)
                   (:translate ,translate)
                   (:generator 3
                     (note-this-location vop :internal-error)
-                    (inst ,op :double temp x y)
-                    (if ,(if complement '(not not-p) 'not-p)
+                    (inst ,op :double temp ,@(if complement
+                                                 '(y x)
+                                                 '(x y)))
+                    (if not-p
                         (inst beq temp zero-tn target)
                         (inst bne temp zero-tn target)))))))
   (frob < flt nil </single-float </double-float)
   (frob <= fle nil <=/single-float <=/double-float)
-  (frob > fle t >/single-float >/double-float)
-  (frob >= flt t >=/single-float >=/double-float)
+  (frob > flt t >/single-float >/double-float)
+  (frob >= fle t >=/single-float >=/double-float)
   (frob = feq nil =/single-float =/double-float))
 
 

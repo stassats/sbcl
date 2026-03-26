@@ -400,22 +400,26 @@
                   (:translate ,translate)
                   (:generator 3
                     (note-this-location vop :internal-error)
-                    (inst ,op-single 5 x y)
-                    (if ,(if complement '(not not-p) 'not-p)
+                    (inst ,op-single 5 ,@(if complement
+                                             '(y x)
+                                             '(x y)))
+                    (if not-p
                         (inst bceqz 5 target)
                         (inst bcnez 5 target))))
                 (define-vop (,dname double-float-compare)
                   (:translate ,translate)
                   (:generator 3
                     (note-this-location vop :internal-error)
-                    (inst ,op-double 5 x y)
-                    (if ,(if complement '(not not-p) 'not-p)
+                    (inst ,op-double 5 ,@(if complement
+                                             '(y x)
+                                             '(x y)))
+                    (if not-p
                         (inst bceqz 5 target)
                         (inst bcnez 5 target)))))))
   (frob < fcmp.clt.s fcmp.clt.d nil </single-float </double-float)
   (frob <= fcmp.cle.s fcmp.cle.d nil <=/single-float <=/double-float)
-  (frob > fcmp.cle.s fcmp.cle.d t >/single-float >/double-float)
-  (frob >= fcmp.clt.s fcmp.clt.d t >=/single-float >=/double-float)
+  (frob > fcmp.clt.s fcmp.clt.d t >/single-float >/double-float)
+  (frob >= fcmp.cle.s fcmp.cle.d t >=/single-float >=/double-float)
   (frob = fcmp.ceq.s fcmp.ceq.d nil =/single-float =/double-float))
 
 (macrolet ((frob (name translate
