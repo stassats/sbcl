@@ -495,13 +495,15 @@
 
 ;;;; irrational transforms
 
-(make-defs (($type double-float single-float))
+(make-defs ((($type $log $sqrt)
+             (double-float %log %sqrt)
+             (single-float %logf %sqrtf)))
   (deftransform log ((x) ($type) * :node node)
     (let ((cast (cast-or-check-bound-type node (specifier-type 'real))))
       (if cast
           `(if (< x 0)
                (sb-vm::op-not-type1-error x '(,(type-specifier cast) . log))
-               (truly-the $type (log (truly-the (float 0.0) x))))
+               ($log x))
           (give-up-ir1-transform))))
 
   (deftransform log ((x y) ($type $type) * :node node)
@@ -512,8 +514,7 @@
                (if (or (< x 0)
                        (< y 0))
                    (sb-vm::op-not-type2-error x y '(,(type-specifier cast) . log))
-                   (truly-the $type (log (truly-the (float 0.0) x)
-                                         (truly-the (float 0.0) y)))))
+                   (/ ($log x) ($log y))))
           (give-up-ir1-transform))))
 
   (deftransform sqrt ((x) ($type) * :node node)
@@ -521,8 +522,19 @@
       (if cast
           `(if (< x 0)
                (sb-vm::op-not-type1-error x '(,(type-specifier cast) . sqrt))
-               (truly-the $type (sqrt (truly-the (float 0.0) x))))
+               ($sqrt x))
           (give-up-ir1-transform)))))
+
+(deftransform sqrt ((x) (rational) * :node node)
+  (let ((cast (cast-or-check-bound-type node (specifier-type 'real))))
+    (if cast
+        `(if (< x 0)
+             (sb-vm::op-not-type1-error x '(,(type-specifier cast) . sqrt))
+             (%single-float (%sqrt (%double-float x))))
+        (give-up-ir1-transform))))
+
+(deftransform sqrt ((x) ((rational 0)))
+  `(%single-float (%sqrt (%double-float x))))
 
 (macrolet ((def (name prim rtype)
              `(progn
