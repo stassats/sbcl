@@ -1674,11 +1674,12 @@ bool handle_guard_page_triggered(os_context_t *context,os_vm_address_t addr)
     else if(addr >= BINDING_STACK_GUARD_PAGE(th) &&
             addr < BINDING_STACK_GUARD_PAGE(th) + os_vm_page_size) {
 
+        lower_thread_binding_stack_guard_page(th);
+
         if (lose_on_corruption_p) {
             fake_foreign_function_call(context);
             lose("Binding stack exhausted");
         }
-        lower_thread_binding_stack_guard_page(th);
 
         /* For the unfortunate case, when the binding stack is
          * exhausted in a signal handler. */
