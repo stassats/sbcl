@@ -64,8 +64,9 @@
                                                             collect type)))
                             ,@args)))))))
              (if transform
-                 `(sb-c:deftransform ,function (,args)
-                    ',body)
+                 `(eval-when (:compile-toplevel :load-toplevel :execute)
+                      (sb-c:deftransform ,function (,args)
+                        ',body))
                  `(progn
                     (declaim (inline ,function))
                     (defun ,function ,args
@@ -106,7 +107,7 @@
 (def-math-rtn "log10" 1)
 (def-math-rtn "pow" 2)
 #-(or x86 x86-64 arm-vfp arm64 riscv loongarch64)
-(def-math-rtn "sqrt" 1 nil #+ppc64 t)
+(def-math-rtn "sqrt" 1 nil #+ppc64 t) ;; ppc64 might have a VOP enabled via *backend-subfeatures*
 (def-math-rtn "log1p" 1)
 (def-math-rtn "log2" 1)
 
