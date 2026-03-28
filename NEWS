@@ -13,12 +13,12 @@ changes relative to sbcl-2.6.2:
        (thanks to Robert Brown)
     ** add support for the ADCX and ADOX instructions on x86-64.  (thanks to
        Robert Smith)
-    ** on PPC64, indicate the number of return values through flags.
+    ** on PPC64, indicate the number of return values through flags, making
+       function calls four times faster.
     ** fix FFI involving int128 arguments on x86-64.  (thanks to Andreas
        Franke)
     ** fix build on OpenIndiana/x86-64.  (thanks to Andreas Wacknitz)
     ** fix build on Haiku/x86-64.
-    ** backtraces for THROW on x86 are more likely to be useful.
   * bug fix: improved stability of (particularly) the mark-region garbage
     collector.  (lp#2142711)
   * bug fix: compiler type error in complicated expression involving BOOLE and
@@ -47,6 +47,8 @@ changes relative to sbcl-2.6.2:
     are more compact.
   * optimization: the reader prefers base-string symbol-names of uninterned
     symbols if possible.
+  * optimization: (length (remove-duplicates a s)) doesn't cons an
+    intermediate sequence.
   * optimization: REMOVE-DUPLICATES uses hash-tables in more situations.
   * optimization: UPGRADED-ARRAY-ELEMENT-TYPE is now faster.
 
