@@ -1,8 +1,54 @@
 ;;;; -*- coding: utf-8; fill-column: 78 -*-
 
 changes relative to sbcl-2.6.2:
+  * minor incompatible change: (MAKE-ARRAY X :ELEMENT-TYPE 'UNDEFINED) now
+    signals an error, consistent with (UPGRADED-ARRAY-ELEMENT-TYPE
+    'UNDEFINED).
+  * platform support:
+    ** fix disassembler on ppc for the MFLR and ISEL instructions
+    ** the Lisp Return Address object (as part of the Lisp calling convention)
+       is no longer needed or supported on PPC, SPARC, MIPS or ARM.  (This
+       also frees up a widetag slot previously held by return-pc-widetag)
+    ** remove sensitivity to SBCL init files when building embedcore-sbcl.
+       (thanks to Robert Brown)
+    ** add support for the ADCX and ADOX instructions on x86-64.  (thanks to
+       Robert Smith)
+    ** on PPC64, indicate the number of return values through flags.
+    ** fix FFI involving int128 arguments on x86-64.  (thanks to Andreas
+       Franke)
+    ** fix build on OpenIndiana/x86-64.  (thanks to Andreas Wacknitz)
+    ** fix build on Haiku/x86-64.
+    ** backtraces for THROW on x86 are more likely to be useful.
+  * bug fix: improved stability of (particularly) the mark-region garbage
+    collector.  (lp#2142711)
+  * bug fix: compiler type error in complicated expression involving BOOLE and
+    conditionals.  (lp#2142949)
+  * bug fix: dotted lists involving symbols whose names begins with "DEF" are
+    not definitions.  (lp#2143114, reported by Glenn Thompson)
+  * bug fix: STABLE-SORT miscompiled on declared union types involving both
+    LIST and VECTOR.  (lp#2143163, reported by akater, thanks to Vasily
+    Postnicov)
+  * bug fix: more consistent results between compiler and interpreter in
+    numerical computations involving negative zeros.  (lp#2143383)
   * bug fix: USE-PACKAGE once again signals the correct error if an attempt is
     made to use the KEYWORD package.
+  * bug fix: EQUALP on hash tables is no longer sensitive to irrelevant
+    aspects of the hash table.
+  * bug fix: SB-INTROSPECT:DEFTYPE-LAMBDA-LIST is more robust against types
+    defined in low debug situations.
+  * bug fix: ENSURE-GENERIC-FUNCTION ensures that the allocation of a generic
+    function does not happen in an arena.  (Thanks to Andreas Franke)
+  * optimization: actually return early when we hit the cache for a
+    :MAKUNBOUND slot access.  (thanks to John Mallery)
+  * optimization: streams opened with WITH-OPEN-FILE avoid having finalizers.
+  * optimization: improvement of COUNT on non-simple bit-vectors, or simple
+    ones with :START/:END arguments.  (lp#2142062, thanks to Andrew Berkley)
+  * optimization: SIMD routines for checking strings for ASCII-only content
+    are more compact.
+  * optimization: the reader prefers base-string symbol-names of uninterned
+    symbols if possible.
+  * optimization: REMOVE-DUPLICATES uses hash-tables in more situations.
+  * optimization: UPGRADED-ARRAY-ELEMENT-TYPE is now faster.
 
 changes in sbcl-2.6.2 relative to sbcl-2.6.1:
   * minor incompatible change: IMAGPART of a negative float returns 0.0, not
