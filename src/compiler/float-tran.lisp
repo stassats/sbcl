@@ -61,6 +61,23 @@
           (t
            (give-up-ir1-transform)))))
 
+;;; (%double-float (%single-float x)) => (%double-float x) if it doesn't lose precision
+(deftransform %double-float ((n) (single-float) * :important nil)
+  (combination-match n
+      (%single-float (:type (or single-float
+                                (integer #.most-negative-exactly-single-float-integer
+                                         #.most-positive-exactly-single-float-integer))))
+    (splice-fun-args n '%single-float 1))
+  (give-up-ir1-transform))
+
+(deftransform %single-float ((n) (double-float) * :important nil)
+  (combination-match n
+      (%double-float (:type (or float
+                                (integer #.most-negative-exactly-single-float-integer
+                                         #.most-positive-exactly-single-float-integer))))
+    (splice-fun-args n '%double-float 1))
+  (give-up-ir1-transform))
+
 (macrolet ((def (type from-type)
              `(deftransform ,(symbolicate "%" type) ((n) ((or ,type ,from-type)) * :important nil)
                 (when (or (csubtypep (lvar-type n) (specifier-type ',type))
