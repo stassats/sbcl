@@ -1559,6 +1559,9 @@ NOTE: This interface is experimental and subject to change."
                                                      (third car)
                                                      (fourth car))
                                                  cdr))
+                                               ((and (typep car '(cons symbol))
+                                                     (string= (car car) "$VALUE"))
+                                                (cons (symbol-value (second car)) cdr))
                                                (t
                                                 (cons car cdr))))))))))
                (s tree)))

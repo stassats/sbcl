@@ -48,6 +48,19 @@
 (deftransform %double-float ((n) (ratio) * :important nil)
   '(sb-kernel::double-float-ratio n))
 
+(make-defs (($type double-float single-float))
+  (deftransform %$type ((n) (rational) * :important nil)
+    (cond ((combination-match n (/ #1=(:type (integer ($value most-negative-exactly-$type-integer)
+                                                      ($value most-positive-exactly-$type-integer)))
+                                   #1#)
+             t)
+           (splice-fun-args n '/ 2)
+           `(lambda (n d)
+              (/ (%$type n)
+                 (%$type d))))
+          (t
+           (give-up-ir1-transform)))))
+
 (macrolet ((def (type from-type)
              `(deftransform ,(symbolicate "%" type) ((n) ((or ,type ,from-type)) * :important nil)
                 (when (or (csubtypep (lvar-type n) (specifier-type ',type))
