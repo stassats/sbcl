@@ -1,6 +1,6 @@
 ;;;; -*- coding: utf-8; fill-column: 78 -*-
 
-changes relative to sbcl-2.6.2:
+changes in sbcl-2.6.3 relative to sbcl-2.6.2:
   * minor incompatible change: (MAKE-ARRAY X :ELEMENT-TYPE 'UNDEFINED) now
     signals an error, consistent with (UPGRADED-ARRAY-ELEMENT-TYPE
     'UNDEFINED).
