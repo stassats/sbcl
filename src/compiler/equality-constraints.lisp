@@ -391,11 +391,11 @@
       ;; If the amount has changed from the previous computation then
       ;; it's probably being changed in a loop, remove that constraint
       (do-equality-constraints (in-con in-op not-p amount) var (block-in block)
-        (let ((existing (gethash (list in-con in-op not-p) constraints)))
-          (when (and (eql (car existing) i)
-                     (not (eql (second existing)
+        (let ((new (gethash (list in-con in-op not-p) constraints)))
+          (when (and (eql (car new) i)
+                     (not (eql (second new)
                                amount)))
-            (remhash (list in-con in-op not-p) constraints)))))
+            (setf (second new) 0)))))
     (dohash ((key value) constraints)
       (when (= (car value) i)
         (destructuring-bind (y op not-p) key
