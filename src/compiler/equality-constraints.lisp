@@ -292,7 +292,10 @@
                         (flet ((add (operator target)
                                  (multiple-value-bind (inherit inherit-amount)
                                      (inherit-equality-p operator in-op in-not-p min-amount max-amount in-amount)
-                                   (when inherit
+                                   (when (and inherit
+                                              (not (and (ctype-p in-y) ;; don't perform type arithmetic here
+                                                        inherit-amount
+                                                        (/= inherit-amount 0))))
                                      (add x in-y :operator inherit
                                                  :amount inherit-amount
                                                  :consequent target
@@ -816,14 +819,16 @@
                              (t
                               (ok-lvar-lambda-var second constraints)))))
                 (when y
-
                   (do-eql-vars (eql-y (y constraints))
                     (when (eq eql-y var)
                       (do-equality-constraints (in-y in-op in-not-p in-amount) var constraints
                         (unless (eq in-y var)
                           (multiple-value-bind (inherit inherit-amount)
                               (inherit-equality-p operator in-op in-not-p min-amount max-amount in-amount)
-                            (when inherit
+                            (when (and inherit
+                                       (not (and (ctype-p in-y) ;; don't perform type arithmetic here
+                                                 inherit-amount
+                                                 (/= inherit-amount 0))))
                               (conset-add-equality-constraint (or gen
                                                                   (setf gen (make-conset)))
                                                               inherit var in-y nil
