@@ -1273,6 +1273,9 @@
   (let ((b (& val #x7)))
    (let ((a (>> (<< val 3) 29)))
     (^ a (aref tab b))))))")
+(#(57F8794 61E305E FA9DE6B 1D043EF9)
+ "(SB-VM::SPLAT-WORD SB-VM::SPLAT-SMALL SB-VM::SPLAT-ANY SB-VM::SPLAT)"
+ "((& val 3))")
 (#(5BA4FD3 7168950 F5ABDAB 128A2060 12FE1EC2)
  "(:QWORD :DWORD :WORD :HALFWORD :BYTE)"
  "((& (>> val 12) 7))")
@@ -1313,9 +1316,6 @@
   (let ((b (& val #xf)))
    (let ((a (>> (<< val 7) 28)))
     (^ a (aref tab b))))))")
-(#(7514124 9EACDAD 102153B3 15870C8A)
- "(:UNC :WILD :UNSPECIFIC NIL)"
- "((& val 3))")
 (#(75FEA5B BCB074C F042E0D 1081D8FA 1D6F2783)
  "(DEFMETHOD DESTRUCTURING-BIND :MACRO :VALUES-TYPE :FUNCTION-TYPE)"
  "((& (^ (>> val 7) (>> val 15)) 7))")
