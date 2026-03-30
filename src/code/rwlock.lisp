@@ -11,7 +11,11 @@
 
 (in-package "SB-THREAD")
 
-(export '(MAKE-RWLOCK RWLOCK-RDLOCK RWLOCK-WRLOCK RWLOCK-UNLOCK))
+(export '(make-rwlock rwlock-rdlock rwlock-wrlock rwlock-unlock
+          make-rw-spinlock rwspinlock-rdlock rwspinlock-rdunlock
+          rwspinlock-wrlock rwspinlock-wrunlock))
+
+(defmacro my-kernel-thread-id () `(thread-os-tid *current-thread*))
 
 ;;; This design is inspired by that of Bionic libc with adjustments for the fact that SBCL
 ;;; lacks 32-bit integer raw slots on 64-bit machines, and removal of timeouts
@@ -112,7 +116,8 @@
 
 (defun rwlock-rdlock (lock)
   (with-pinned-objects (lock)
-    (or (rwlock-tryrdlock lock) (%rwlock-rdlock lock))))
+    (or (rwlock-tryrdlock lock) (%rwlock-rdlock lock)))
+  t)
 
 (defun rwlock-trywrlock (lock)
   (do ((old (rwlock-state lock)))
@@ -141,7 +146,8 @@
 
 (defun rwlock-wrlock (lock)
   (with-pinned-objects (lock)
-    (or (rwlock-trywrlock lock) (%rwlock-wrlock lock))))
+    (or (rwlock-trywrlock lock) (%rwlock-wrlock lock)))
+  t)
 
 (defun rwlock-unlock (lock)
   (declare (type rwlock lock))
@@ -172,3 +178,59 @@
             (#.PENDING-WRITERS-FLAG
              (futex-wake (&rwlock-writer-wake-word lock) 1))))))))
   t)
+
+(defstruct (rw-spinlock (:constructor make-rw-spinlock))
+  ;; Bits 0-31: Reader count, or #xFFFFFFFF if a writer holds the lock
+  ;; Bits 32-63: Writers waiting to acquire the lock
+  (state 0 :type sb-ext:word))
+
+(defconstant +reader-mask+ #xFFFFFFFF)
+(defconstant +writer-shift+ 32)
+
+(defun rwspinlock-rdlock (lock)
+  (declare (optimize (speed 3) (safety 0)))
+  (loop
+    (let ((state (rw-spinlock-state lock)))
+      ;; The max reader count is capped to #xFFFFFFFE,
+      ;; because exactly #xFFFFFFFF equals one writer.
+      (cond ((< state (1- +reader-mask+))
+             ;; No writer holds the lock, and no writers are waiting for the lock.
+             (when (eql state (sb-ext:cas (rw-spinlock-state lock) state (1+ state)))
+               (return t)))
+            ((and (= (logand state +reader-mask+) (1- +reader-mask+))
+                  (zerop (ash state (- +writer-shift+))))
+             (bug "Too many readers"))))
+   (thread-yield)))
+
+(declaim (inline rwspinlock-rdunlock))
+(defun rwspinlock-rdunlock (lock)
+  (declare (optimize (speed 3) (safety 0)))
+  (sb-ext:atomic-decf (rw-spinlock-state lock))
+  t)
+
+(defun rwspinlock-wrlock (lock)
+  (declare (optimize (speed 3) (safety 0)))
+  (symbol-macrolet ((writer-increment (ash 1 +writer-shift+)))
+    ;; Step 1: Announce a new writer by incrementing the high half of the state bits.
+    ;; After doing this, no additional readers can take the lock.
+    (sb-ext:atomic-incf (rw-spinlock-state lock) writer-increment)
+    ;; Step 2: Wait for 0 contenders and then try to take the lock as a writer
+    (loop
+     (let ((current (rw-spinlock-state lock)))
+       (when (zerop (logand current +reader-mask+))
+         ;; Try to set active reader count to #xFFFFFFFF which means 1 active writer,
+         ;; and also decrement the waiting writer count.
+         (let ((new-state (logior +reader-mask+ (- current writer-increment))))
+           (when (eql current (sb-ext:cas (rw-spinlock-state lock) current new-state))
+             (return t)))))
+     (thread-yield))))
+
+(declaim (inline rwspinlock-wrunlock))
+(defun rwspinlock-wrunlock (lock)
+  (declare (optimize (speed 3) (safety 0)))
+  (let ((disp (ash (+ sb-vm:instance-slots-offset sb-vm:instance-data-start) sb-vm:word-shift)))
+    ;; Clear the the low 32 state bits (assuming little-endian)
+    (with-pinned-objects (lock)
+      (setf (sap-ref-32 (int-sap (get-lisp-obj-address lock))
+                        (- disp sb-vm:instance-pointer-lowtag))
+            0))))
