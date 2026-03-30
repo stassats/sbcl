@@ -1030,7 +1030,7 @@
                        '(lambda (x)
                          `(,(list 1 2) ,(cons 1 2) ,(list nil x) ,(list '(a) #\x))))))
          (fixups
-          (sb-c::unpack-code-fixup-locs
+          (sb-c:unpack-code-fixup-locs
            (sb-vm::%code-fixups (sb-kernel:fun-code-header f)))))
     ;; There are 5 call outs to the fallback allocator, but only 2 (or 3)
     ;; fixups to the asm routines, because of uniquification per code component.

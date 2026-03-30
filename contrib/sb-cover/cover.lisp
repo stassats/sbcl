@@ -229,7 +229,7 @@
   (prog1 (sb-c::integer-from-octets octets) (setf (fill-pointer octets) 0)))
 
 (defun unpack-pair (packed-pair)
-  (let ((list (sb-c::unpack-code-fixup-locs packed-pair)))
+  (let ((list (sb-c:unpack-code-fixup-locs packed-pair)))
     (values (1- (car list)) ; 1 as encoded means 0, etc
             ;; If START and END were =, then the delta is 0, which can't be encoded,
             ;; so the pair reads back as only one integer, which we just repeat.

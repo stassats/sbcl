@@ -1064,10 +1064,13 @@
 #-sb-xc-host
 (defun possibly-log-new-code (object reason &aux (show *show-new-code*))
   (when show
-    (let ((size (code-object-size object))
-          (fmt "~&New code(~Db,~A): ~A~%")
-          (file "jit-code.txt")
-          (*print-pretty* nil))
+    (let* ((size (code-object-size object))
+           (fixups (multiple-value-list
+                    (sb-c:unpack-code-fixup-locs (sb-vm::%code-fixups object))))
+           (nfixups (unless (every #'null fixups) (mapcar #'length fixups)))
+           (fmt "~&New code(~Db,~A): ~A~@[, nfixups=~D~]~%")
+           (file "jit-code.txt")
+           (*print-pretty* nil))
       ;; DISASSEMBLE is for limited debugging only.
       ;; It may write garbled output if multiple threads
       ;; I tried WITH-OPEN-STREAM during cold-init and got:
@@ -1084,11 +1087,11 @@
                                  (open file :direction :output
                                        :if-exists :append :if-does-not-exist :create))
                          (format t "~&; Logging code allocation to ~S~%" file)))))
-            (format f fmt size reason object)
+            (format f fmt size reason object nfixups)
             (disassemble object :stream f)
             (terpri f)
             (force-output f))
-          (format *trace-output* fmt (code-object-size object) reason object))))
+          (format *trace-output* fmt size reason object nfixups))))
   object)
 
 ;;; Unpack an integer from DUMP-FIXUPs.
