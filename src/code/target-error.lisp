@@ -512,12 +512,9 @@ with that condition (or with no condition) will be returned."
          `(condition-slot-reader ,name))))
 (defun install-condition-slot-writer (name condition slot-name)
   (declare (ignore condition))
-  (setf (fdefinition name)
-        (set-closure-name
-         (lambda (new-value condition)
-           (set-condition-slot-value condition new-value slot-name))
-         t
-         `(condition-slot-writer ,name))))
+  ;; Builtin condition types don't need writer functions.
+  ;; It'll be allowed post-build - if you must - when this function gets redefined.
+  (error "Won't make a condition-slot-writer for ~S ~S" name slot-name))
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
 (defun %%compiler-define-condition (name direct-supers layout readers writers)

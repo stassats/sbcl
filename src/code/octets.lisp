@@ -84,12 +84,12 @@
 ;;; provided on the off chance they're of interest.
 
 (define-condition octet-decoding-error (character-decoding-error)
-  ((array :initarg :array :accessor octet-decoding-error-array)
-   (start :initarg :start :accessor octet-decoding-error-start)
-   (end :initarg :end :accessor octet-decoding-error-end)
-   (position :initarg :pos :accessor octet-decoding-bad-byte-position)
+  ((array :initarg :array :reader octet-decoding-error-array)
+   (start :initarg :start :reader octet-decoding-error-start)
+   (end :initarg :end :reader octet-decoding-error-end)
+   (position :initarg :pos :reader octet-decoding-bad-byte-position)
    (external-format :initarg :external-format
-                    :accessor octet-decoding-error-external-format))
+                    :reader octet-decoding-error-external-format))
   (:report
    (lambda (condition stream)
      (format stream "Illegal ~S character starting at byte position ~D."
