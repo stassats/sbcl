@@ -2,10 +2,8 @@
 
 . ./subr.sh
 
-# The relocation test binary can only be built on linux.
-# FIXME: This test _should_ work on any architecture, but it doesn't,
-#        so there must have been a regression in the heap relocator.
-data=`run_sbcl --eval '(progn #+linux(progn(princ "fakemap") #+64-bit(princ "_64")))' \
+# The relocation test binary can only be built on linux or x86-64 + darwin.
+data=`run_sbcl --eval '(progn #+(or linux (and x86-64 darwin))(progn(princ "fakemap") #+64-bit(princ "_64")))' \
   --quit`
 if [ -z "$data" ]
 then

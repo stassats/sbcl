@@ -110,10 +110,11 @@ $(TARGET): $(LIBSBCL)
 	$(CC) ${LINKFLAGS} -o $@ $(USE_LIBSBCL) $(LIBS)
 	$(SBCL_PAXCTL) $@
 
-# tests/heap-reloc/fake-mman.c assumes #+linux, so this recipe
-# only works on linux.
+# tests/heap-reloc/fake-mman.c supports linux and x86-64-darwin.
+# This recipe may or may not work for other arch/os combinations
 heap-reloc-test: ../../tests/heap-reloc/fake-mman.c $(OBJS)
-	$(CC) ${LINKFLAGS} $(CPPFLAGS) -o $@ ../../tests/heap-reloc/fake-mman.c $(filter-out linux-mman.o,$(OBJS)) $(LIBS)
+	$(CC) ${LINKFLAGS} $(CPPFLAGS) -o $@ ../../tests/heap-reloc/fake-mman.c \
+		$(filter-out darwin-mman.o linux-mman.o,$(OBJS)) $(LIBS)
 
 # Enable compiling gencgc with even more assertions and/or
 # data collection, with COMPILING_TESTS. Not really used yet.

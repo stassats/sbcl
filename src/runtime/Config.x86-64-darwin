@@ -22,7 +22,7 @@ ifdef LISP_FEATURE_INODE64
 CFLAGS += -D_DARWIN_USE_64_BIT_INODE
 endif
 
-OS_SRC = bsd-os.c x86-64-bsd-os.c darwin-os.c x86-64-darwin-os.c
+OS_SRC = bsd-os.c x86-64-bsd-os.c darwin-os.c darwin-mman.c x86-64-darwin-os.c
 
 OS_LIBS = -lSystem -lc -ldl
 ifdef LISP_FEATURE_SB_THREAD
