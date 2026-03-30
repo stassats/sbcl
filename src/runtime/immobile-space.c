@@ -1548,7 +1548,42 @@ static struct layout* fix_object_layout(lispobj* obj)
     return native_layout;
 }
 
-static void apply_absolute_fixups(lispobj, struct code*);
+#ifdef LISP_FEATURE_X86_64
+// Fix values which are immobile space object addresses
+static void apply_absolute_fixups(lispobj fixups, struct code* code)
+{
+    struct varint_unpacker unpacker;
+    varint_unpacker_init(&unpacker, fixups);
+    skip_data_stream(&unpacker); // The first data stream comprises the linkage indices
+    char* instructions = code_text_start(code);
+    int prev_loc = 0, loc;
+    // The unpacker produces successive values followed by a zero. Any additional
+    // streams of values in the packed data are ignored.
+    while (varint_unpack(&unpacker, &loc) && loc != 0) {
+        loc += prev_loc; // locations are delta-encoded for compactness
+        prev_loc = loc;
+        void* fixup_where = instructions + loc;
+        lispobj ptr = (lispobj)UNALIGNED_LOAD32(fixup_where);
+        if (is_lisp_pointer(ptr)) { // ref to a SYMBOL or LAYOUT
+            lispobj fixed = follow_fp(ptr);
+            if (fixed != ptr) UNALIGNED_STORE32(fixup_where, fixed);
+            continue;
+        }
+        // If not a tagged descriptor, 'ptr' must be the address of a SYMBOL-VALUE slot
+        lispobj* header_addr;
+        long fpval;
+        if (find_fixedobj_page_index((void*)ptr) < 0) lose("strange absolute fixup");
+        header_addr = search_immobile_space((void*)ptr);
+        gc_assert(header_addr);
+        if (!forwarding_pointer_p(header_addr)) continue;
+        fpval = forwarding_pointer_value(header_addr);
+        int widetag = widetag_of(tempspace_addr(native_pointer(fpval)));
+        if (widetag != SYMBOL_WIDETAG) lose("Expected symbol @ %p", header_addr);
+        UNALIGNED_STORE32(fixup_where,
+                          ptr - (lispobj)header_addr + (lispobj)native_pointer(fpval));
+    }
+}
+#endif
 
 static void __attribute__((unused)) adjust_linkage_cell(int linkage_index)
 {
@@ -2058,56 +2093,6 @@ static void defrag_immobile_space(bool verbose)
 #endif
     free(fixedobj_tempspace.start);
     free(text_tempspace.start);
-}
-#endif
-
-// Fixup immediate values that encode Lisp object addresses
-// in immobile space. Process only the absolute fixups.
-#ifdef LISP_FEATURE_X86_64
-static void apply_absolute_fixups(lispobj fixups, struct code* code)
-{
-    struct varint_unpacker unpacker;
-    varint_unpacker_init(&unpacker, fixups);
-    skip_data_stream(&unpacker); // first data stream comprises the linkage indices
-    char* instructions = code_text_start(code);
-    int prev_loc = 0, loc;
-    // The unpacker will produce successive values followed by a zero. There may
-    // be a second data stream for the relative fixups which we ignore.
-    while (varint_unpack(&unpacker, &loc) && loc != 0) {
-        // For extra compactness, each loc is relative to the prior,
-        // so that the magnitudes are smaller.
-        loc += prev_loc;
-        prev_loc = loc;
-        void* fixup_where = instructions + loc;
-        lispobj ptr = (lispobj)UNALIGNED_LOAD32(fixup_where);
-        lispobj* header_addr;
-        long fpval;
-
-        if (is_lisp_pointer(ptr)) { // reference to a SYMBOL or LAYOUT
-            lispobj fixed = follow_fp(ptr);
-            if (fixed != ptr) UNALIGNED_STORE32(fixup_where, fixed);
-            continue;
-        }
-        // Call to asm routine or linkage table entry using "CALL [#xNNNN]" form.
-        // This fixup is only for whole-heap relocation on startup.
-        if (asm_routines_start <= ptr && ptr < asm_routines_end) {
-            continue;
-        }
-        if (find_fixedobj_page_index((void*)ptr) >= 0) {
-            header_addr = search_immobile_space((void*)ptr);
-            gc_assert(header_addr);
-            if (!forwarding_pointer_p(header_addr))
-                continue;
-            fpval = forwarding_pointer_value(header_addr);
-            int widetag = widetag_of(tempspace_addr(native_pointer(fpval)));
-            // Must be an interior pointer to a symbol value slot
-            if (widetag != SYMBOL_WIDETAG) lose("Expected symbol @ %p", header_addr);
-        } else {
-            lose("strange absolute fixup");
-        }
-        UNALIGNED_STORE32(fixup_where,
-                          ptr - (lispobj)header_addr + (lispobj)native_pointer(fpval));
-    }
 }
 #endif
 
