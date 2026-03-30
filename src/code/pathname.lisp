@@ -35,9 +35,8 @@
 
 ;;; A PATTERN is a list of entries and wildcards used for pattern
 ;;; matches of translations.
-(defstruct (pattern (:constructor %make-pattern (hash pieces))
+(defstruct (pattern (:constructor %make-pattern (pieces))
                     (:copier nil))
-  (hash 0 :type fixnum :read-only t)
   (pieces nil :type list :read-only t))
 
 ;;;; PATHNAME structures

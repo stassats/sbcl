@@ -67,20 +67,16 @@
   '(member nil :unspecific))
 
 (defun make-pattern (pieces)
-  ;; Ensure that the hash will meet the SXASH persistence requirement:
-  ;; "2. For any two objects, x and y, both of which are ... pathnames ... and which are similar,
-  ;;     (sxhash x) and (sxhash y) yield the same mathematical value even if x and y exist in
-  ;;     different Lisp images of the same implementation."
-  ;; Specifically, hashes that depend on object identity (address) are impermissible.
   (dolist (piece pieces)
-    (aver (typep piece '(or string symbol (cons (eql :character-set) string)))))
-  ;; Hashes of PATTERN instances must be deterministic per the requirements of SXHASH on
-  ;; pathnames. Prior to implementing opaque instance hashes, all PATTERNs hashed to a
-  ;; constant, which was valid but suboptimal. After pseudorandom hashing of instances,
-  ;; we had to either forcibly hash patterns to the same thing, or compute a name-based
-  ;; hash. I don't know that storing the hash is more advantageous than computing
-  ;; just-in-time, but I don't really care one way or the other.
-  (%make-pattern (calc-pattern-hash pieces) pieces))
+    (aver (typep piece '(or simple-string symbol (cons (eql :character-set) simple-string)))))
+  (%make-pattern pieces))
+;; Hashes of PATTERN instances must be deterministic per the requirements of SXHASH on
+;; pathnames. Prior to implementing pseudorandom instance hashes, all PATTERNs hashed to
+;; a constant, which was valid but suboptimal. With pseudorandom hashing they violated
+;; the requirement on on externalizability of SXHASH values for pathnames.
+(defun pattern-hash (list &aux (hash 0))
+  (dolist (piece list hash)
+    (mixf hash (hash-pathname-piece piece))))
 
 (declaim (inline pathname-component-present-p))
 (defun pathname-component-present-p (component)
@@ -325,7 +321,7 @@
            ;; or the symbol :UNSPECIFIC as the host.
            (aver (eq host *physical-host*))
            (setq host nil))))
-  (dx-let ((dir-key (cons directory (calc-pattern-hash directory))))
+  (dx-let ((dir-key (cons directory (pattern-hash directory))))
     (declare (inline !allocate-pathname)) ; for DX-allocation
     (flet ((ensure-heap-string (part) ; return any non-string as-is
              ;; FIXME: what about pattern pieces and (:HOME "user") ?
@@ -613,16 +609,13 @@
              (setf res (mix (murmur-hash-word/+fixnum (char-code ch)) res)))
            (sxhash piece))))
     (symbol (symbol-name-hash piece))
-    (pattern (pattern-hash piece))
+    (pattern (pattern-hash (pattern-pieces piece)))
     ;; next case is only for MAKE-PATTERN
     ((cons (eql :character-set)) (hash-pathname-piece (the string (cdr piece))))
     ((cons (eql :home) (cons string null))
      ;; :HOME has two representations- one is just '(:absolute :home ...)
      ;; and the other '(:absolute (:home "user") ...)
      (sxhash (second piece)))))
-(defun calc-pattern-hash (list &aux (hash 0))
-  (dolist (piece list hash)
-    (mixf hash (hash-pathname-piece piece))))
 
 ;;; Convert PATHNAME-DESIGNATOR (a pathname, or string, or
 ;;; stream), into a pathname in PATHNAME.
