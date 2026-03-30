@@ -27,7 +27,7 @@
                           character-widetag)))
       (structure-object
        (if (eq val sb-lockless:+tail+)
-           (inst addi.d y null-tn llist-tail-value-nil-offset)
+           (inst addi.d y null-tn lflist-tail-value-nil-offset)
            (bug "immediate structure-object ~S" val))))))
 
 (define-move-fun (load-number 1) (vop x y)
