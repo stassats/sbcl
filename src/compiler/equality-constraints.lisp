@@ -393,9 +393,12 @@
       (do-equality-constraints (in-con in-op not-p amount) var (block-in block)
         (let ((new (gethash (list in-con in-op not-p) constraints)))
           (when (and (eql (car new) i)
-                     (not (eql (second new)
-                               amount)))
-            (setf (second new) 0)))))
+                     (not (eql (second new) amount)))
+            (if (> (second new) amount)
+                ;; Stop growing
+                (remhash (list in-con in-op not-p) constraints)
+                ;; Decrease directly to zero
+                (setf (second new) 0))))))
     (dohash ((key value) constraints)
       (when (= (car value) i)
         (destructuring-bind (y op not-p) key
