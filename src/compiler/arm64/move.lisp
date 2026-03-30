@@ -178,8 +178,7 @@
        (load-symbol y val))
       (structure-object
        (if (eq val sb-lockless:+tail+)
-           (inst add y null-tn (- lockfree-list-tail-value-offset
-                                  nil-value-offset))
+           (inst add y null-tn lflist-tail-value-nil-offset)
            (bug "immediate structure-object ~S" val))))))
 
 (define-move-fun (load-number 1) (vop x y)

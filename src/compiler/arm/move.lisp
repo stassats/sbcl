@@ -62,9 +62,7 @@
        (if (eq val sb-lockless:+tail+)
            ;; same comment as for LOAD-SYMBOL - how is this guaranteed
            ;; to be GC-safe ? Because we always ignore static-space pointers ?
-           (composite-immediate-instruction add y null-tn
-             (- lockfree-list-tail-value-offset
-                nil-value-offset))
+           (composite-immediate-instruction add y null-tn lflist-tail-value-nil-offset)
            (bug "immediate structure-object ~S" val))))))
 
 (define-move-fun (load-number 1) (vop x y)

@@ -120,7 +120,7 @@
                        (inst mov sc-reg (char-code val)))))
                    (structure-object
                     (aver (eq val sb-lockless:+tail+))
-                    (+ static-space-start lockfree-list-tail-value-offset))))))
+                    (+ nil-value lflist-tail-value-nil-offset))))))
         (aver (null (rest flags)))
         (if (sc-is else immediate)
             (load-immediate res else)

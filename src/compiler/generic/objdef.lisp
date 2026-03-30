@@ -701,7 +701,8 @@ during backtrace.
               (ash (1- sizeof-nil-in-words) word-shift)))
 
 #-x86-64
-(defconstant lockfree-list-tail-value-offset
-  (logior instance-pointer-lowtag
-          (+ (* (length +static-symbols+) (pad-data-block symbol-size))
-             static-space-objects-offset)))
+(defconstant lflist-tail-value-nil-offset
+  (- (logior instance-pointer-lowtag
+             (+ (* (length +static-symbols+) (pad-data-block symbol-size))
+                static-space-objects-offset))
+     nil-value-offset))
