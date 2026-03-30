@@ -15,8 +15,6 @@
           make-rw-spinlock rwspinlock-rdlock rwspinlock-rdunlock
           rwspinlock-wrlock rwspinlock-wrunlock))
 
-(defmacro my-kernel-thread-id () `(thread-os-tid *current-thread*))
-
 ;;; This design is inspired by that of Bionic libc with adjustments for the fact that SBCL
 ;;; lacks 32-bit integer raw slots on 64-bit machines, and removal of timeouts
 ;;; and the choice of reader vs writer preference.
