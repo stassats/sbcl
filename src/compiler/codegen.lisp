@@ -354,14 +354,12 @@
 
 (defun label-elsewhere-p (label-or-posn kind elsewhere-label)
   (let ((elsewhere (label-position elsewhere-label))
-        (label (etypecase label-or-posn
-                 (label
-                  (label-position label-or-posn))
-                 (index
-                  label-or-posn))))
+        (position (etypecase label-or-posn
+                    (label (label-position label-or-posn))
+                    (index label-or-posn))))
     (if (memq kind '(:single-value-return
                      :unknown-return
                      :known-return))
         ;; We're interested in what precedes the return, not after
-        (< elsewhere label)
-        (<= elsewhere label))))
+        (< elsewhere position)
+        (<= elsewhere position))))
