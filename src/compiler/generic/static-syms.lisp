@@ -40,21 +40,17 @@
 ;;; I don't know what else to name it.
 (defun sb-c::static-fdefn-p (name)
   (if (position name +all-static-fdefns+) t nil))
-;;; Return the (byte) offset from NIL to the start of the fdefn object
-;;; for the static function NAME.
 #-linkage-space
 (progn
+;;; Return the byte offset from NIL to the start of the static fdefn object
+;;; for the function NAME.
 (defun static-fdefn-offset (name)
-  (let ((static-fun-index (position name +all-static-fdefns+)))
-    (and static-fun-index
-         (+ (* (length +static-symbols+) (pad-data-block symbol-size))
-            (pad-data-block (1- symbol-size))
-            ;; sizeof SB-LOCKLESS:+TAIL+ is calculated as 1 user data slot,
-            ;; round-to-odd, add the header word.
-            (* (1+ (logior (1+ instance-data-start) 1)) n-word-bytes)
-            (- list-pointer-lowtag)
-            (* static-fun-index (pad-data-block fdefn-size))
-            other-pointer-lowtag))))
+  (awhen (position name +all-static-fdefns+)
+    (+ (* it (pad-data-block fdefn-size))
+       lflist-tail-value-nil-offset
+       ;; figure a header, layout (for #-compact-instance-header), and 1 data word
+       (pad-data-block (+ instance-data-start 2)) ; sizeof SB-LOCKLESS:+TAIL+
+       (- other-pointer-lowtag instance-pointer-lowtag))))
 ;;; Return the (byte) offset from NIL to the raw-addr slot of the
 ;;; fdefn object for the static function NAME.
 (defun static-fun-offset (name)
