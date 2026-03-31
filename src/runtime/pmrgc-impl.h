@@ -725,8 +725,6 @@ static inline page_index_t contiguous_block_final_page(page_index_t first) {
     while (!page_ends_contiguous_block_p(last, page_table[first].gen)) ++last;
     return last;
 }
-
-int gencgc_handle_wp_violation(void*, void*);
 
 
 // The flags control the behavior of sync_close_regions()

@@ -94,7 +94,6 @@
 (defvar *compile-trace-targets* '(:ir1 :ir2 :vop :symbolic-asm :disassemble))
 (defvar *current-path*)
 (defvar *current-component*)
-(defvar *elsewhere-label*)
 (defvar *source-info*)
 (defvar *source-plist*)
 (defvar *source-namestring*)
