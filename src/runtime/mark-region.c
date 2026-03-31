@@ -784,7 +784,18 @@ static void local_smash_weak_pointers()
         }
     }
     weak_vectors = 0;
-    // TODO: tlsindex_to_symbol_map
+
+    if (!tlsindex_to_symbol_map) return;
+    int i;
+    int n_elements = dynamic_values_bytes / bytes_per_tls_symbol;
+    for (i = 0; i < n_elements; ++i) {
+        lispobj symbol = tlsindex_to_symbol_map[i];
+        if (!is_lisp_pointer(symbol) || symbol == NO_TLS_VALUE_MARKER) continue;
+        if (!pointer_survived_gc_yet(symbol))
+            tlsindex_to_symbol_map[i] = NO_TLS_VALUE_MARKER;
+        else
+            log_slot(symbol, &tlsindex_to_symbol_map[i], NULL, SOURCE_NORMAL);
+    }
 }
 
 static void reset_statistics() {
