@@ -52,8 +52,6 @@
 ;;; This returns a form that returns a dual-word aligned number of bytes when
 ;;; given a number of words.
 ;;;
-;;; FIXME: should be a function
-;;; FIXME: should be called PAD-DATA-BLOCK-SIZE
 (defmacro pad-data-block (words)
   `(logandc2 (+ (ash ,words word-shift) lowtag-mask) lowtag-mask))
 
