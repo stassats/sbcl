@@ -65,6 +65,9 @@ sigsegv_handler(int signal, siginfo_t *info, os_context_t *context)
 #ifdef LISP_FEATURE_NONSTOP_FOREIGN_CALL
     if (handle_foreign_call_trigger(context, fault_addr)) return;
 #endif
+#ifdef LISP_FEATURE_TLS_LOAD_INDIRECT
+    if (handle_tls_deref_trap(context, fault_addr)) return;
+#endif
 
     if (!handle_guard_page_triggered(context, fault_addr))
             lisp_memory_fault_error(context, fault_addr);

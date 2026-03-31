@@ -962,6 +962,9 @@ handle_access_violation(os_context_t *ctx,
         return 0;
     }
 #endif
+#ifdef LISP_FEATURE_TLS_LOAD_INDIRECT
+    if (handle_tls_deref_trap(ctx, fault_address)) return 0;
+#endif
     if (handle_guard_page_triggered(ctx, fault_address)) {
         return 0;
     }
