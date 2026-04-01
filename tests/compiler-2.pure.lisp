@@ -5125,3 +5125,14 @@
              t))
     ((8) t)
     ((0) nil)))
+
+(declaim (ftype (function (&key (:a integer)) t) ftype-key-default-type))
+(with-test (:name :ftype-key-default-type)
+  (assert-type
+   (sb-int:named-lambda ftype-key-default-type (&key (a (isqrt *)))
+     a)
+   integer)
+  (assert-type
+   (sb-int:named-lambda ftype-key-default-type (&key (a 1))
+     a)
+   integer))

@@ -681,10 +681,14 @@
                                    (if supplied-p
                                        nil
                                        0))
-                        (bind-vals
-                         (if supplied-p
-                             `(if ,n-supplied ,n-val ,default)
-                             `(if (eq ,n-supplied 0) ,default ,n-val))))
+                        (let ((n-val (wrap-if
+                                      (neq (leaf-defined-type key) *universal-type*)
+                                      `(truly-the ,(leaf-defined-type key))
+                                      n-val)))
+                          (bind-vals
+                           (if supplied-p
+                               `(if ,n-supplied ,n-val ,default)
+                               `(if (eq ,n-supplied 0) ,default ,n-val)))))
                        (t
                         (main-vals default nil)
                         (bind-vals n-val)))
