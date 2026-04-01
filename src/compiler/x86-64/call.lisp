@@ -931,7 +931,9 @@
          (inst jmp fun-ea)
          not-fun
          (unless relative-call
-           (invoke-asm-routine 'jmp 'call-symbol vop))))
+           (if (csubtypep (tn-ref-type fun-ref) (specifier-type '(or null function)))
+               (emit-error-break vop error-trap (error-number-or-lose 'undefined-fun-error) (list fun))
+               (invoke-asm-routine 'jmp 'call-symbol vop)))))
       (:symbol
        (invoke-asm-routine 'jmp 'call-symbol vop))
       (t
@@ -946,8 +948,11 @@
        (assemble ()
          (when (eq type :designator)
            (%test-lowtag fun rbx-tn call nil fun-pointer-lowtag :value-tn-ref fun-ref)
-           (invoke-asm-routine 'call 'call-symbol vop)
-           (inst jmp ret))
+           (cond ((csubtypep (tn-ref-type fun-ref) (specifier-type '(or null function)))
+                  (emit-error-break vop error-trap (error-number-or-lose 'undefined-fun-error) (list fun)))
+                 (t
+                  (invoke-asm-routine 'call 'call-symbol vop)
+                  (inst jmp ret))))
          call
          (inst call (object-slot-ea fun closure-fun-slot fun-pointer-lowtag))
          ret)))))
