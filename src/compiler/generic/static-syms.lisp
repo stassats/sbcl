@@ -27,9 +27,6 @@
   (declare (notinline position))
   (if symbol (position symbol '#.+static-symbols+) t))
 
-(defconstant-eqx +all-static-fdefns+
-    #.(concatenate 'vector +c-callable-fdefns+ +static-fdefns+) #'equalp)
-
 (locally
 #+sb-xc (declare (notinline position))
 ;;; There are no static fdefns with linkage-space, but this predicate tests the nature
@@ -39,13 +36,13 @@
 ;;; was the wrong name for what is essentially the basis of the test so if that's wrong,
 ;;; I don't know what else to name it.
 (defun sb-c::static-fdefn-p (name)
-  (if (position name +all-static-fdefns+) t nil))
+  (if (position name +static-fdefns+) t nil))
 #-linkage-space
 (progn
 ;;; Return the byte offset from NIL to the start of the static fdefn object
 ;;; for the function NAME.
 (defun static-fdefn-offset (name)
-  (awhen (position name +all-static-fdefns+)
+  (awhen (position name +static-fdefns+)
     (+ (* it (pad-data-block fdefn-size))
        lflist-tail-value-nil-offset
        ;; figure a header, layout (for #-compact-instance-header), and 1 data word

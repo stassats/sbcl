@@ -2226,7 +2226,7 @@
         (invert (sb-fasl::%asm-routine-table code)
                 (lambda (x) (sap-int (sap+ (code-instructions code) (car x)))))))
     #-linkage-space
-    (dovector (name sb-vm::+all-static-fdefns+)
+    (dovector (name sb-vm::+static-fdefns+)
       (let ((address (+ sb-vm:nil-value (sb-vm:static-fun-offset name))))
         (setf (gethash address addr->name) name)))
     ;; Not really a routine, but it uses the similar logic for annotations

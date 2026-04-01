@@ -270,6 +270,7 @@
 ;; Vector capacity must be adequate for the number of asm routines, but (KLUDGE)
 ;; the exact count of routines is unknown until make-host-2 is done.
 #+x86-64 (defconstant asm-jump-vect-nelems 112) ; arb
+#-linkage-space (defvar *c-callable-syms*)
 
 (defstruct page
   (type nil :type (member nil :code :list :mixed #+gencgc :small-mixed))
@@ -2004,19 +2005,15 @@ core and return a descriptor to it."
   #+linkage-space (mapc 'ensure-linkage-index sb-vm::+c-callable-fdefns+)
   #-linkage-space
   (progn
-    (dolist (sym sb-vm::+c-callable-fdefns+)
-      (ensure-cold-fdefn sym *static*))
-
     (dovector (sym sb-vm:+static-fdefns+)
       (let* ((fdefn (ensure-cold-fdefn sym *static*))
-             (offset (- (+ (- (descriptor-bits fdefn)
-                              sb-vm:other-pointer-lowtag)
+             (offset (- (+ (- (descriptor-bits fdefn) sb-vm:other-pointer-lowtag)
                            (* sb-vm:fdefn-raw-addr-slot sb-vm:n-word-bytes))
                         (descriptor-bits *nil-descriptor*)))
              (desired (sb-vm:static-fun-offset sym)))
         (unless (= offset desired)
-          (error "Offset from FDEFN ~S to ~S is ~W, not ~W."
-                 sym nil offset desired))))))
+          (error "Offset from FDEFN ~S to ~S is ~W, not ~W." sym nil offset desired))))
+    (setq *c-callable-syms* (vector-in-core sb-vm::+c-callable-fdefns+ *static*))))
 
 ;;; Sort *COLD-LAYOUTS* to return them in a deterministic order.
 (defun sort-cold-layouts ()
@@ -3757,10 +3754,7 @@ static inline int hashtable_weakness(struct hash_table* ht) { return ht->uw_flag
             ;; that doesn't get stripped always by C-SYMBOL-NAME.
       (cdef (if (eq symbol 't) "LISP_T" (c-symbol-name symbol "%*.!"))
             (descriptor-bits (cold-intern symbol))))
-    (cdef "LFLIST_TAIL_ATOM" (descriptor-bits *lflist-tail-atom*))
-    (dolist (symbol (or #-linkage-space sb-vm::+c-callable-fdefns+))
-      (cdef (concatenate 'string (c-symbol-name symbol) "_FDEFN")
-            (descriptor-bits (ensure-cold-fdefn symbol)))))
+    (cdef "LFLIST_TAIL_ATOM" (descriptor-bits *lflist-tail-atom*)))
   #+sb-thread
   (dolist (binding sb-vm::per-thread-c-interface-symbols)
     (let* ((symbol (car (ensure-list binding)))
@@ -3778,11 +3772,15 @@ static inline int hashtable_weakness(struct hash_table* ht) { return ht->uw_flag
           (- (cold-layout-descriptor-bits 'function)
              (gspace-byte-address (cold-layout-gspace))))
 
-  ;; C can call via the lisp linkage table for the known indices
-  #+linkage-space
-  (loop for symbol in sb-vm::+c-callable-fdefns+
+  ;; C can call via the lisp linkage table or a static vector of symbols
+  #-linkage-space
+  (format stream "#define INTERFACE_SYMBOLS ((lispobj*)(~D + NIL))~%"
+          (+ (- (descriptor-bits *c-callable-syms*) sb-vm:nil-value)
+             (- (ash sb-vm:vector-data-offset sb-vm:word-shift) sb-vm:other-pointer-lowtag)))
+  (loop for symbol in sb-vm::+c-callable-fdefns+ for i from 0
         do (format stream "#define ~A_fname_index ~d~%"
-                   (c-symbol-name symbol) (ensure-linkage-index symbol))))
+                   (c-symbol-name symbol)
+                   (or #+linkage-space (ensure-linkage-index symbol) i))))
 
 (defun init-runtime-routines ()
   (dolist (symbol sb-vm::*runtime-asm-routines*)
