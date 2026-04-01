@@ -1148,16 +1148,6 @@
             (setq last ref))))
       (values first fixed-args-state))))
 
-#+call-symbol
-(defun fun-tn-type (lvar tn)
-  (cond ((neq (tn-primitive-type tn) *backend-t-primitive-type*)
-         :function)
-        ((types-equal-or-intersect (lvar-type lvar)
-                                   (specifier-type 'function))
-         :designator)
-        (t
-         :symbol)))
-
 (defun pass-nargs-p (combination)
   (let ((fun-info (combination-fun-info combination))
         (name (combination-fun-source-name combination nil)))
@@ -1199,9 +1189,7 @@
                  (vop* tail-call node block
                        (fun-tn old-fp return-pc pass-refs)
                        (nil)
-                       nargs (emit-step-p node)
-                       #+call-symbol
-                       (fun-tn-type fun-lvar fun-tn)))
+                       nargs (emit-step-p node)))
                 #-linkage-space
                 ((eq fun-tn named)
                  (vop* static-tail-call-named node block
@@ -1306,9 +1294,7 @@
                            (emit-step-p node)))))
               ((not named)
                (vop* call node block (fp fun-tn args) (loc-refs)
-                     arg-locs nargs nvals (emit-step-p node)
-                     #+call-symbol
-                     (fun-tn-type fun-lvar fun-tn)))
+                     arg-locs nargs nvals (emit-step-p node)))
               #-linkage-space
               ((eq fun-tn named)
                (vop* static-call-named node block
@@ -1348,9 +1334,7 @@
                 (fun-lvar-tn node block fun-lvar)
               (cond ((not named)
                      (vop* multiple-call node block (fp fun-tn args) (loc-refs)
-                           arg-locs nargs (emit-step-p node)
-                           #+call-symbol
-                           (fun-tn-type fun-lvar fun-tn)))
+                           arg-locs nargs (emit-step-p node)))
                     #-linkage-space
                     ((eq fun-tn named)
                      (vop* static-multiple-call-named node block
@@ -1807,23 +1791,17 @@
         (let ((env (environment-info (node-environment node))))
           (vop tail-call-variable node block start fun
                (ir2-environment-old-fp env)
-               (ir2-environment-return-pc env)
-               #+call-symbol
-               (fun-tn-type fun-lvar fun))))
+               (ir2-environment-return-pc env))))
        ((and 2lvar
              (eq (ir2-lvar-kind 2lvar) :unknown))
         (vop* multiple-call-variable node block (start fun nil)
               ((reference-tn-list (ir2-lvar-locs 2lvar) t))
-              (emit-step-p node)
-               #+call-symbol
-               (fun-tn-type fun-lvar fun)))
+              (emit-step-p node)))
        (t
         (let ((locs (standard-result-tns lvar)))
           (vop* call-variable node block (start fun nil)
                 ((reference-tn-list locs t)) (length locs)
-                (emit-step-p node)
-                #+call-symbol
-                (fun-tn-type fun-lvar fun))
+                (emit-step-p node))
           (move-lvar-result node block locs lvar)))))))
 
 ;;; Reset the stack pointer to the start of the specified

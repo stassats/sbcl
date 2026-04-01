@@ -119,10 +119,17 @@
                  :immediate-tested immediate-tested))
 
 (defun %test-lowtag (value temp target not-p lowtag &key value-tn-ref)
-  (declare (ignore value-tn-ref))
-  (%lea-for-lowtag-test temp value lowtag)
-  (inst test :byte temp lowtag-mask)
-  (inst jmp (if not-p :nz :z) target))
+  (multiple-value-bind (bit set) (tn-ref-lowtag-bit lowtag value-tn-ref)
+    (cond (bit
+           (inst test :byte value (ash 1 bit))
+           (inst jmp (if (eq (eq set 0)
+                             not-p)
+                         :nz
+                         :z) target))
+          (t
+           (%lea-for-lowtag-test temp value lowtag)
+           (inst test :byte temp lowtag-mask)
+           (inst jmp (if not-p :nz :z) target)))))
 
 (defun %test-headers (value temp target not-p function-p headers
                       &key except

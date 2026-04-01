@@ -160,7 +160,7 @@
       (if (and delay name)
           (setf (ir2-lvar-kind info) :delayed)
           (setf (ir2-lvar-locs info)
-                (list (make-normal-tn tn-ptype))))))
+                (list (make-normal-tn tn-ptype (lvar-type lvar)))))))
   (ltn-annotate-casts lvar)
   (values))
 

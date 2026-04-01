@@ -318,6 +318,17 @@
 (defun instance-tn-ref-p (tn-ref)
   (csubtypep (tn-ref-type tn-ref) (specifier-type 'instance)))
 
+#+call-symbol
+(defun fun-tn-type (tn-ref)
+  (cond ((csubtypep (tn-ref-type tn-ref)
+                    (specifier-type 'function))
+         :function)
+        ((types-equal-or-intersect (tn-ref-type tn-ref)
+                                   (specifier-type 'function))
+         :designator)
+        (t
+         :symbol)))
+
 (defun remove-moves (tn)
   (or (let ((write (sb-c::tn-writes tn)))
         (when (and write (not (tn-ref-next write)))

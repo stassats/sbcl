@@ -696,20 +696,25 @@
 (defmacro define-full-call (vop-name named return variable &optional args)
   (aver (not (and variable (eq return :tail))))
   `(define-vop (,vop-name ,@(when (eq return :unknown) '(unknown-values-receiver)))
-     (:args    ,@(unless (eq return :tail)
-                   '((new-fp :scs (any-reg) :to (:argument 1))))
+     (:args ,@(unless (eq return :tail)
+                '((new-fp :scs (any-reg) :to (:argument 1))))
 
-               ,@(unless named ; FUN is an info argument for named call
-                   '((fun :scs (descriptor-reg control-stack)
-                          :target rax :to (:argument 0))))
+            ,@(unless named   ; FUN is an info argument for named call
+                '((fun :scs (descriptor-reg control-stack)
+                       :target rax :to (:argument 0))))
 
-               ,@(when (eq return :tail)
-                   '((old-fp)
-                     (return-pc)))
+            ,@(when (eq return :tail)
+                '((old-fp)
+                  (return-pc)))
 
-               ,@(unless variable
-                   `((args :more t ,@(unless (eq args :fixed)
-                                       '(:scs (descriptor-reg control-stack)))))))
+            ,@(unless variable
+                `((args :more t ,@(unless (eq args :fixed)
+                                    '(:scs (descriptor-reg control-stack)))))))
+     (:arg-refs
+      ,@(unless (eq return :tail)
+          '(nil))
+      ,@(unless named
+          '(fun-ref)))
 
      ,@(when (memq return '(:fixed :unboxed)) '((:results (values :more t))))
 
@@ -727,8 +732,7 @@
                ;; passing locs in (FIRST (vop-codegen-info vop)).
                ,@(when named '(fun))
                ,@(when (eq return :fixed) '(nvals))
-               step-instrumenting
-               ,@(unless named '(fun-type)))
+               step-instrumenting)
 
      (:ignore   ,@(unless (or variable (eq return :tail)) '(arg-locs))
                 ,@(unless variable '(args))
@@ -870,9 +874,9 @@
                `(emit-direct-call fun ',(if (eq return :tail) 'jmp 'call)
                                   node step-instrumenting))
               ((eq return :tail)
-               `(tail-call-unnamed rax fun-type vop))
+               `(tail-call-unnamed rax fun-ref vop))
               (t
-               `(call-unnamed rax fun-type vop)))
+               `(call-unnamed rax fun-ref vop)))
        ,@(ecase return
            (:fixed '((default-unknown-values vop values nvals node rbx move-temp)))
            (:unknown
@@ -913,17 +917,17 @@
          (inst* instruction (ea (linkage-cell-fixup name node) rax-tn)))))
 
 ;;; Invoke the function-designator FUN.
-(defun tail-call-unnamed (fun type vop)
+(defun tail-call-unnamed (fun fun-ref vop)
   (let ((relative-call (code-immobile-p vop))
         (fun-ea (object-slot-ea fun closure-fun-slot fun-pointer-lowtag)))
-    (case type
+    (case (fun-tn-type fun-ref)
       (:designator
        (assemble ()
-         (%lea-for-lowtag-test rbx-tn fun fun-pointer-lowtag)
-         (inst test :byte rbx-tn lowtag-mask)
-         (inst jmp :nz (if relative-call
-                           (make-fixup 'call-symbol :assembly-routine)
-                           not-fun))
+         (%test-lowtag fun rbx-tn (if relative-call
+                                      (make-fixup 'call-symbol :assembly-routine)
+                                      not-fun)
+                       t fun-pointer-lowtag
+                       :value-tn-ref fun-ref)
          (inst jmp fun-ea)
          not-fun
          (unless relative-call
@@ -933,21 +937,20 @@
       (t
        (inst jmp fun-ea)))))
 
-(defun call-unnamed (fun type vop)
-  (case type
-    (:symbol
-     (invoke-asm-routine 'call 'call-symbol vop))
-    (t
-     (assemble ()
-       (when (eq type :designator)
-         (%lea-for-lowtag-test rbx-tn fun fun-pointer-lowtag)
-         (inst test :byte rbx-tn lowtag-mask)
-         (inst jmp :z call)
-         (invoke-asm-routine 'call 'call-symbol vop)
-         (inst jmp ret))
-       call
-       (inst call (object-slot-ea fun closure-fun-slot fun-pointer-lowtag))
-       ret))))
+(defun call-unnamed (fun fun-ref vop)
+  (let ((type (fun-tn-type fun-ref)))
+    (case type
+      (:symbol
+       (invoke-asm-routine 'call 'call-symbol vop))
+      (t
+       (assemble ()
+         (when (eq type :designator)
+           (%test-lowtag fun rbx-tn call nil fun-pointer-lowtag :value-tn-ref fun-ref)
+           (invoke-asm-routine 'call 'call-symbol vop)
+           (inst jmp ret))
+         call
+         (inst call (object-slot-ea fun closure-fun-slot fun-pointer-lowtag))
+         ret)))))
 
 ;;; This is defined separately, since it needs special code that BLT's
 ;;; the arguments down. All the real work is done in the assembly
@@ -957,7 +960,6 @@
          (function :scs (descriptor-reg control-stack) :target rax)
          (old-fp)
          (return-pc))
-  (:info fun-type)
   (:temporary (:sc unsigned-reg :offset rsi-offset :from (:argument 0)) rsi)
   (:temporary (:sc unsigned-reg :offset rax-offset :from (:argument 1)) rax)
   (:vop-var vop)
@@ -967,9 +969,9 @@
     (move rsi args)
     (move rax function)
     ;; And jump to the assembly routine.
-    (invoke-asm-routine 'jmp (if (eq fun-type :function)
-                                 'tail-call-variable
-                                 'tail-call-callable-variable)
+    (invoke-asm-routine 'jmp (if (eq (sb-c::tn-primitive-type function) *backend-t-primitive-type*)
+                                 'tail-call-callable-variable
+                                 'tail-call-variable)
                         vop)))
 
 ;;;; unknown values return

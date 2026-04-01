@@ -954,6 +954,12 @@
 
       ,@(unless variable `((args :more t ,@(unless (eq args :fixed)
                                              '(:scs (descriptor-reg control-stack)))))))
+     (:arg-refs
+      ,@(unless (eq return :tail)
+          '(nil))
+      ,@(case named
+          ((nil)
+           '(fun-ref))))
 
      ,@(when (memq return '(:fixed :unboxed))
          '((:results (values :more t))))
@@ -973,9 +979,7 @@
             ,@(unless variable '(nargs))
             ,@(when (eq named :direct) '(fun))
             ,@(when (eq return :fixed) '(nvals))
-            step-instrumenting
-            ,@(unless named
-                '(fun-type)))
+            step-instrumenting)
 
      (:ignore
       ,@(unless (or variable (eq return :tail)) '(arg-locs))
@@ -1124,8 +1128,8 @@
                        (move cfp-tn new-fp-tn)
                        (inst blr lr)))
                 (if (eq return :tail)
-                    `(tail-call-unnamed lexenv lr fun-type)
-                    `(call-unnamed lexenv lr fun-type new-fp-tn))))
+                    `(tail-call-unnamed lexenv fun-ref lr)
+                    `(call-unnamed lexenv fun-ref lr new-fp-tn))))
 
          ,@(ecase return
              (:fixed
@@ -1170,7 +1174,7 @@
    (function-arg :scs (descriptor-reg) :target lexenv)
    (old-fp-arg :scs (any-reg) :load-if nil)
    (lra-arg :scs (descriptor-reg) :load-if nil))
-  (:info fun-type)
+  (:arg-refs nil fun-ref)
   (:temporary (:sc any-reg :offset nl2-offset :from (:argument 0)) args)
   (:temporary (:sc descriptor-reg :offset lexenv-offset :from (:argument 1)) lexenv)
   (:ignore old-fp-arg lra-arg)
@@ -1184,44 +1188,42 @@
       (when cur-nfp
         (inst add nsp-tn cur-nfp (add-sub-immediate
                                   (bytes-needed-for-non-descriptor-stack-frame)))))
-    (invoke-asm-routine (if (eq fun-type :function)
+    (invoke-asm-routine (if (csubtypep (tn-ref-type fun-ref) (specifier-type 'function))
                             'tail-call-variable
                             'tail-call-callable-variable)
                         tmp-tn
                         :tail t)))
 
 ;;; Invoke the function-designator FUN.
-(defun tail-call-unnamed (lexenv lr type)
-  (case type
-    (:symbol
-     (invoke-asm-routine 'tail-call-symbol tmp-tn :tail t))
-    (t
-     (assemble ()
-       (when (eq type :designator)
-         (load-asm-routine lr 'call-symbol)
-         (inst and tmp-tn lexenv lowtag-mask)
-         (inst cmp tmp-tn fun-pointer-lowtag)
-         (inst b :ne call))
-       (loadw lr lexenv closure-fun-slot fun-pointer-lowtag)
-       call
-       (inst add lr lr 4)
-       (inst br lr)))))
+(defun tail-call-unnamed (lexenv fun-ref lr)
+  (let ((type (fun-tn-type fun-ref)))
+    (case type
+      (:symbol
+       (invoke-asm-routine 'tail-call-symbol tmp-tn :tail t))
+      (t
+       (assemble ()
+         (when (eq type :designator)
+           (load-asm-routine lr 'call-symbol)
+           (%test-lowtag lexenv tmp-tn call t fun-pointer-lowtag :value-tn-ref fun-ref))
+         (loadw lr lexenv closure-fun-slot fun-pointer-lowtag)
+         call
+         (inst add lr lr 4)
+         (inst br lr))))))
 
-(defun call-unnamed (lexenv lr type new-fp-tn)
-  (case type
-    (:symbol
-     (invoke-asm-routine 'call-symbol lr :load-cfp new-fp-tn))
-    (t
-     (assemble ()
-       (when (eq type :designator)
-         (load-asm-routine lr 'call-symbol)
-         (inst and tmp-tn lexenv lowtag-mask)
-         (inst cmp tmp-tn fun-pointer-lowtag)
-         (inst b :ne call))
-       (loadw lr lexenv closure-fun-slot fun-pointer-lowtag)
-       call
-       (move cfp-tn new-fp-tn)
-       (inst blr lr)))))
+(defun call-unnamed (lexenv fun-ref lr new-fp-tn)
+  (let ((type (fun-tn-type fun-ref)))
+    (case type
+      (:symbol
+       (invoke-asm-routine 'call-symbol lr :load-cfp new-fp-tn))
+      (t
+       (assemble ()
+         (when (eq type :designator)
+           (load-asm-routine lr 'call-symbol)
+           (%test-lowtag lexenv tmp-tn call t fun-pointer-lowtag :value-tn-ref fun-ref))
+         (loadw lr lexenv closure-fun-slot fun-pointer-lowtag)
+         call
+         (move cfp-tn new-fp-tn)
+         (inst blr lr))))))
 
 ;;;; Unknown values return:
 
