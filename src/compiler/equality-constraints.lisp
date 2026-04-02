@@ -9,6 +9,7 @@
 
 (in-package "SB-C")
 
+(declaim (inline constraint-var))
 (defun constraint-var (thing)
   (if (vector-length-constraint-p thing)
       (vector-length-constraint-var thing)
@@ -48,10 +49,10 @@
                              `((equality-constraint-amount ,con)))
                       (equality-constraint-not-p ,con))))))))
 
-(defun find-equality-constraint (operator amount x x-var y y-key not-p)
+(defun find-equality-constraint (operator amount x x-var y not-p)
   (let ((constraints (lambda-var-equality-constraints-hash x-var)))
     (when constraints
-      (let ((constraints (gethash y-key constraints)))
+      (let ((constraints (gethash y constraints)))
         (loop for con in constraints
               when (and (eq (equality-constraint-operator con) operator)
                         (eq (constraint-not-p con) not-p)
@@ -79,12 +80,11 @@
            (>=
             (rotatef x y)
             (setf operator '<=)))))
-  (let ((x-var (constraint-var x))
-        (cache-key (constraint-var y)))
-    (or (find-equality-constraint operator amount x x-var y cache-key not-p)
+  (let ((x-var (constraint-var x)))
+    (or (find-equality-constraint operator amount x x-var y not-p)
         (and (member operator '(eq eql =))
              (and (lambda-var/vector-length-p y)
-                  (find-equality-constraint operator amount y (constraint-var y) x (constraint-var x) not-p)))
+                  (find-equality-constraint operator amount y (constraint-var y) x not-p)))
         (let ((new (make-equality-constraint (length *constraint-universe*)
                                              operator
                                              x y not-p
@@ -101,7 +101,7 @@
             (let ((hash (or (lambda-var-equality-constraints-hash x-var)
                             (setf (lambda-var-equality-constraints-hash x-var)
                                   (make-hash-table :test #'eq)))))
-              (push new (gethash cache-key hash)))
+              (push new (gethash y hash)))
             (let ((y (constraint-var y)))
               (when (lambda-var-p y)
                 (add y))))
