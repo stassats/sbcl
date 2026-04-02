@@ -57,7 +57,7 @@
 (defvar *constraint-blocks-p*)
 
 (defstruct (vector-length-constraint
-            (:constructor make-vector-length-constraint (var))
+            (:constructor %make-vector-length-constraint (var))
             (:copier nil))
   (var nil :type lambda-var :read-only t))
 

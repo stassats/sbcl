@@ -35,13 +35,13 @@
     `(do-conset-constraints-intersection
          (,con (,constraints (lambda-var-equality-constraints (constraint-var ,var))))
        (flet ((body (,con ,op ,@(and amount (list amount)) ,not-p) ,@body))
-         (cond ((vector-constraint-eq-p (constraint-x ,con) ,var)
+         (cond ((eq (constraint-x ,con) ,var)
                 (body (constraint-y ,con)
                       (equality-constraint-operator ,con)
                       ,@(and amount
                              `((equality-constraint-amount ,con)))
                       (equality-constraint-not-p ,con)))
-               ((vector-constraint-eq-p (constraint-y ,con) ,var)
+               ((eq (constraint-y ,con) ,var)
                 (body (constraint-x ,con)
                       (invert-operator (equality-constraint-operator ,con))
                       ,@(and amount
@@ -55,8 +55,8 @@
         (loop for con in constraints
               when (and (eq (equality-constraint-operator con) operator)
                         (eq (constraint-not-p con) not-p)
-                        (vector-constraint-eq-p (constraint-x con) x)
-                        (vector-constraint-eq-p (constraint-y con) y)
+                        (eq (constraint-x con) x)
+                        (eq (constraint-y con) y)
                         (eql (equality-constraint-amount con) amount))
               return con)))))
 
@@ -116,6 +116,11 @@
     (when var2
       (conset-add-equality-constraint gen 'eq var var2 nil))))
 
+(defun make-vector-length-constraint (var)
+  (or (lambda-var-vector-length-constraint var)
+      (setf (lambda-var-vector-length-constraint var)
+            (%make-vector-length-constraint var))))
+
 (defun vector-length-var-p (lvar constraints &optional simple)
   (let* ((use (principal-lvar-use lvar))
          (array-lvar
@@ -134,13 +139,6 @@
                          (ok-lvar-lambda-var array-lvar constraints))))
     (and array-var
          (make-vector-length-constraint array-var))))
-
-(defun vector-constraint-eq-p (con1 con2)
-  (or (eq con1 con2)
-      (and (vector-length-constraint-p con1)
-           (vector-length-constraint-p con2)
-           (eq (vector-length-constraint-var con1)
-               (vector-length-constraint-var con2)))))
 
 (defun ok-lvar-lambda-var/vector-length (lvar constraints &optional simple)
   (or (vector-length-var-p lvar constraints simple)
@@ -394,11 +392,12 @@
         (let ((new (gethash (list in-con in-op not-p) constraints)))
           (when (and (eql (car new) i)
                      (not (eql (second new) amount)))
-            (if (> (second new) amount)
-                ;; Stop growing
-                (remhash (list in-con in-op not-p) constraints)
-                ;; Decrease directly to zero
-                (setf (second new) 0))))))
+            (setf (second new)
+                  (if (> (second new) amount)
+                      ;; Stop growing
+                      amount
+                      ;; Decrease directly to zero
+                      0))))))
     (dohash ((key value) constraints)
       (when (= (car value) i)
         (destructuring-bind (y op not-p) key
@@ -431,7 +430,7 @@
       (rotatef lvar-x lvar-y)
       (setf invert t))
     (do-equality-constraints (in-y op not-p) x constraints
-      (when (or (vector-constraint-eq-p in-y y)
+      (when (or (eq in-y y)
                 (and (ctype-p in-y)
                      (lvar-p lvar-y)
                      (or (and (type-singleton-p in-y)
@@ -756,12 +755,12 @@
                                       (> '<=))
                                     op))
                               (relations (x y con)
-                                (cond ((vector-constraint-eq-p (constraint-x con) x)
-                                       (and (vector-constraint-eq-p (constraint-y con) y)
+                                (cond ((eq (constraint-x con) x)
+                                       (and (eq (constraint-y con) y)
                                             (normalize-not (equality-constraint-operator con)
                                                            (equality-constraint-not-p con))))
-                                      ((vector-constraint-eq-p (constraint-y con) x)
-                                       (and (vector-constraint-eq-p (constraint-x con) y)
+                                      ((eq (constraint-y con) x)
+                                       (and (eq (constraint-x con) y)
                                             (normalize-not (invert-operator (equality-constraint-operator con))
                                                            (equality-constraint-not-p con)))))))
                        (let ((constraints1 (block-out (node-block ref1)))

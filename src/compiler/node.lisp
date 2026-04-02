@@ -1465,6 +1465,7 @@
   (inheritable-constraints nil :type (or null (vector t)))
   (equality-constraints    nil :type (or null (vector t)))
   (equality-constraints-hash nil :type (or null hash-table))
+  (vector-length-constraint nil)
   source-form)
 
 (defprinter (lambda-var :identity t)
