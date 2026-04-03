@@ -128,19 +128,6 @@
         (list (length (generic-function-methods generic-function)))
         (values))))
 
-(defmethod print-object ((cache cache) stream)
-  (print-unreadable-object (cache stream :type t :identity t)
-    (multiple-value-bind (lines-used lines-total) (cache-statistics cache)
-      (format stream
-              "~D key~:P~:[~;, value~], ~D/~D lines~@[ (LF ~,,2F%)~], depth ~D/~D"
-              (cache-key-count cache)
-              (cache-value cache)
-              lines-used
-              lines-total
-              (when (plusp lines-total) (/ lines-used lines-total))
-              (cache-depth cache)
-              (cache-limit cache)))))
-
 (defmethod print-object ((dfun-info dfun-info) stream)
   (declare (type stream stream))
   (print-unreadable-object (dfun-info stream :type t :identity t)))

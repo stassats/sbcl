@@ -102,6 +102,23 @@
 ;;; somebody funcalls #'%copy-cache, which nobody does.
 (declaim (freeze-type cache))
 
+;;; Fast way to check if a thing found at the position of a cache key is one:
+;;; it is always either a #<LAYOUT for thing {xxxx}> or the unbound marker.
+(declaim (inline cache-key-p))
+(defun cache-key-p (thing) (%instancep thing))
+
+(defmethod print-object ((cache cache) stream)
+  (let* ((vector (cache-vector cache))
+         (used (loop for i from 0 by (cache-line-size cache) below (length vector)
+                     count (cache-key-p (svref vector i))))
+         (capacity (/ (length vector) (cache-line-size cache))))
+    (print-unreadable-object (cache stream :type t :identity t)
+      (format stream
+              "~D key~:P~:[~;, value~], ~D/~D lines~@[ (LF ~,,2F%)~], depth ~D/~D"
+              (cache-key-count cache) (cache-value cache)
+              used capacity (when (plusp capacity) (/ used capacity))
+              (cache-depth cache) (cache-limit cache)))))
+
 (defun compute-cache-mask (vector-length line-size)
   ;; Since both vector-length and line-size are powers of two, we
   ;; can compute a bitmask such that
@@ -139,11 +156,6 @@
        (if (unbound-marker-p ,n-value)
            ,else
            ,n-value))))
-
-;;; Fast way to check if a thing found at the position of a cache key is one:
-;;; it is always either a #<LAYOUT for thing {xxxx}> or the unbound marker.
-(declaim (inline cache-key-p))
-(defun cache-key-p (thing) (%instancep thing))
 
 ;;; Atomically update the current probe depth of a cache.
 (defun note-cache-depth (cache depth)
@@ -609,22 +621,7 @@
 
 ;;;; For debugging & collecting statistics.
 
-(defun map-all-caches (function)
-  (dolist (p (list-all-packages))
-    (do-symbols (s p)
-      (when (eq p (symbol-package s))
-        (dolist (name (list s
-                            `(setf ,s)
-                            (slot-reader-name s)
-                            (slot-writer-name s)
-                            (slot-boundp-name s)
-                            (slot-makunbound-name s)))
-          (when (fboundp name)
-            (let ((fun (fdefinition name)))
-              (when (typep fun 'generic-function)
-                (let ((cache (funcall 'gf-dfun-cache fun)))
-                  (when cache
-                    (funcall function name cache)))))))))))
+(defun list-all-caches () (sb-vm:list-allocated-objects :all :test #'cache-p))
 
 (defun check-cache-consistency (cache)
   (let ((table (make-hash-table :test 'equal)))
@@ -636,7 +633,7 @@
                      (setf (gethash layouts table) t)))
                cache)))
 
-(defun cache-statistics (cache &optional compute-histogram)
+(defun cache-statistics (cache)
   (let* ((vector (cache-vector cache))
          (size (length vector))
          (line-size (cache-line-size cache))
@@ -644,33 +641,27 @@
          (total-n-keys 0) ; a "key" is a tuple of layouts
          (n-dirty 0) ; lines that have an unbound marker but are not wholly empty
          (n-obsolete 0) ; lines that need to be evicted due to 0 in a layout-clos-hash
-         (histogram
-           (when compute-histogram
-             (make-array (1+ (cache-limit cache)) :initial-element 0))))
-    (if compute-histogram ; this conses, so don't do it when just printing a cache
-        (loop for i from 0 by line-size below size
-              unless (unbound-marker-p (svref vector i))
-              do (let* ((layouts (loop for j from 0 repeat (cache-key-count cache)
+         (histogram (make-array (1+ (cache-limit cache)) :initial-element 0)))
+    (loop for i from 0 by line-size below size
+          unless (unbound-marker-p (svref vector i))
+          do (let* ((layouts (loop for j from 0 repeat (cache-key-count cache)
                                        collect (svref vector (+ i j))))
-                        (index (compute-cache-index cache layouts))
-                        (n-misses 0))
-                   (cond ((find-if-not #'cache-key-p layouts)
-                          (incf n-dirty))
-                         ((find 0 layouts :key #'layout-clos-hash)
-                          (incf n-obsolete))
-                         (t
-                          (incf total-n-keys)
-                          (dotimes (n (1+ (cache-depth cache))
-                                      (error "Tuple ~S not found" layouts))
-                            (when (eq index i) (return)) ; hit
-                            (incf n-misses)
-                            (setq index (next-cache-index (cache-mask cache)
-                                                          index
-                                                          (cache-line-size cache))))
-                          (incf (aref histogram n-misses))))))
-        (loop for i from 0 by line-size below size
-              when (cache-key-p (svref vector i))
-              do (incf total-n-keys)))
+                    (index (compute-cache-index cache layouts))
+                    (n-misses 0))
+               (cond ((find-if-not #'cache-key-p layouts)
+                      (incf n-dirty))
+                     ((find 0 layouts :key #'layout-clos-hash)
+                      (incf n-obsolete))
+                     (t
+                      (incf total-n-keys)
+                      (dotimes (n (1+ (cache-depth cache))
+                                (error "Tuple ~S not found" layouts))
+                        (when (eq index i) (return)) ; hit
+                        (incf n-misses)
+                        (setq index (next-cache-index (cache-mask cache)
+                                                      index
+                                                      (cache-line-size cache))))
+                      (incf (aref histogram n-misses))))))
     (values total-n-keys total-lines n-dirty n-obsolete histogram)))
 
 (defun summarize-cache-statistics (&optional show-all)
@@ -679,7 +670,7 @@
   (let* ((caches
            (mapcar (lambda (cache)
                      (multiple-value-bind (count capacity n-dirty n-obsolete histogram)
-                         (cache-statistics cache t)
+                         (cache-statistics cache)
                        (list histogram count capacity n-dirty n-obsolete cache)))
                    (sb-vm:list-allocated-objects :all :test #'cache-p)))
          (n 0)
