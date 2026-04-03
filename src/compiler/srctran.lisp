@@ -6824,13 +6824,14 @@
                  (cond ((equal value "")
                         `(and (stringp ,y)
                               (zerop (length ,y))))
-                       ((typep value '(cons (or fixnum symbol character) null))
+                       ((typep value '(cons (or number symbol character)
+                                       (or fixnum symbol character)))
                         `(and (,(if (car value)
                                     'listp
                                     'consp)
                                ,y)
-                              (eq (car ,y) ',(car value))
-                              (null (cdr ,y))))))))
+                              (eql (car ,y) ',(car value))
+                              (eq (cdr ,y) ',(cdr value))))))))
            ;; (equal x (list y))
            ;; (equal x (cons car cdr))
            (unroll-list (lvar x y)
@@ -6955,13 +6956,13 @@
                                   ,@(loop for v across value
                                           for i from 0
                                           collect `(,test (aref ,y ,i) ',v))))))
-                       ((typep value '(cons symbol null))
+                       ((typep value '(cons symbol symbol))
                         `(and (,(if (car value)
                                     'listp
                                     'consp)
                                ,y)
                               (eq (car ,y) ',(car value))
-                              (null (cdr ,y))))
+                              (eq (cdr ,y) ',(cdr value))))
                        ((and (proper-or-dotted-list-p value)
                              (loop with cdr = value
                                    while (consp cdr)
