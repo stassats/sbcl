@@ -11,7 +11,6 @@
 ;;;; absolutely no warranty. See the COPYING and CREDITS files for
 ;;;; more information.
 
-#+mark-region-gc (invoke-restart 'run-tests::skip-file)
 (use-package "SB-THREAD")
 
 (defun miller-rabin-prime-p (n &optional (s 50))

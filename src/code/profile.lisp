@@ -80,7 +80,7 @@
 ;;; We associate a PROFILE-INFO structure with each profiled function
 ;;; name. This holds the functions that we call to manipulate the
 ;;; closure which implements the encapsulation.
-(defvar *profiled-fun-name->info*
+(define-load-time-global *profiled-fun-name->info*
   (make-hash-table
    ;; EQL testing isn't good enough for generalized function names
    ;; like (SETF FOO).
@@ -135,7 +135,7 @@
   ;; profiled call adds to the total runtime for the program
   (total (missing-arg) :type single-float :read-only t))
 (declaim (freeze-type overhead))
-(defvar *overhead*)
+(declaim (global *overhead*))
 (declaim (type overhead *overhead*))
 (makunbound '*overhead*) ; in case we reload this file when tweaking
 
@@ -250,16 +250,16 @@
        (legal-fun-name-or-type-error name)
        ;; Then we map onto it.
        (funcall function name))
-      (string (let ((package (find-undeleted-package-or-lose name)))
-                (do-symbols (symbol package)
-                  (when (eq (symbol-package symbol) package)
-                    (when (and (fboundp symbol)
-                               (not (macro-function symbol))
-                               (not (special-operator-p symbol)))
-                      (funcall function symbol))
-                    (let ((setf-name `(setf ,symbol)))
-                      (when (fboundp setf-name)
-                        (funcall function setf-name)))))))))
+      (string
+       (with-package-iterator (iter name :internal :external)
+         (loop (multiple-value-bind (flag symbol) (iter)
+                 (unless flag (return))
+                 (let ((fboundp (fboundp symbol)))
+                   (when (and fboundp (not (sb-impl::macro/special-guard-fun-p fboundp)))
+                     (funcall function symbol)))
+                 (let ((setf-name `(setf ,symbol)))
+                   (when (fboundp setf-name)
+                     (funcall function setf-name)))))))))
   (values))
 
 ;;; Profile the named function, which should exist and not be profiled
