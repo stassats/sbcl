@@ -123,7 +123,7 @@
     (dolist (reg save) (inst push reg))
     ;; count of bytes or elements (always at RBP+16) into 2nd arg
     (inst mov rdi-tn (ea 16 rbp-tn))
-    (call-static-fun 'handle-arena-request 2)
+    (call-lisp-fun 'handle-arena-request 2)
     (inst mov rax-tn rdx-tn) ; Lisp result reg into C result reg
     (dolist (reg (reverse save)) (inst pop reg)))
   (emit-begin-pseudo-atomic))

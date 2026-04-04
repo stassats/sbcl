@@ -9,7 +9,7 @@
 
 (in-package "SB-VM")
 
-(macrolet ((static-fun-addr (name optimize)
+(macrolet ((linkage-cell (name optimize)
              (declare (ignorable optimize))
              #-immobile-code `(ea (make-fixup ,name :linkage-cell) null-tn)
              ;; With immobile code, there is a choice of calling to the simple-fun
@@ -27,7 +27,7 @@
                   ;; between simple-funs. (However, editcore can and will cause it to occur)
                   (make-fixup ,name :linkage-cell))))
 
-(defun call-static-fun (fun arg-count &optional (optimize t))
+(defun call-lisp-fun (fun arg-count &optional (optimize t))
   (declare (ignorable optimize))
   (inst push rbp-tn)
   (inst mov rbp-tn rsp-tn)
@@ -35,17 +35,17 @@
   (inst mov (ea rsp-tn) rbp-tn)
   (inst mov rbp-tn rsp-tn)
   (inst mov rcx-tn (fixnumize arg-count))
-  (inst call (static-fun-addr fun optimize))
+  (inst call (linkage-cell fun optimize))
   (inst pop rbp-tn))
 
-(defun tail-call-static-fun (fun arg-count &optional (optimize t))
+(defun tail-call-lisp-fun (fun arg-count &optional (optimize t))
   (declare (ignorable optimize))
   (inst push rbp-tn)
   (inst mov rbp-tn rsp-tn)
   (inst sub rsp-tn n-word-bytes)
   (inst push (ea (frame-byte-offset return-pc-save-offset) rbp-tn))
   (inst mov rcx-tn (fixnumize arg-count))
-  (inst jmp (static-fun-addr fun optimize))))
+  (inst jmp (linkage-cell fun optimize))))
 
 (defun test-cpu-feature (bit-number)
   (multiple-value-bind (byte bit) (floor bit-number n-byte-bits)

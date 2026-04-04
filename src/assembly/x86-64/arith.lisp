@@ -64,7 +64,7 @@
                 (inst ret)
 
                 DO-STATIC-FUN
-                (tail-call-static-fun ',(symbolicate "TWO-ARG-" fun) 2))))
+                (tail-call-lisp-fun ',(symbolicate "TWO-ARG-" fun) 2))))
 
   (define-generic-arith-routine (+ 10)
     (move res x)
@@ -140,7 +140,7 @@
                         rip-tn))
   (inst clc) (inst ret)
   GENERIC
-  (tail-call-static-fun '%negate 1))
+  (tail-call-lisp-fun '%negate 1))
 
 ;;;; comparison
 
@@ -166,7 +166,7 @@
                 (inst ret)
 
                 DO-STATIC-FUN
-                (call-static-fun ',static-fn 2)
+                (call-lisp-fun ',static-fn 2)
                 ;; X now holds T or NIL corresponding to the answer but it needs
                 ;; to be returned as :L or :G in EFLAGS. We rely on address of T
                 ;; being less address of NIL (asserted above)
@@ -194,7 +194,7 @@
   (inst ret)
 
   DO-STATIC-FUN
-  (call-static-fun 'two-arg-= 2)
+  (call-lisp-fun 'two-arg-= 2)
   (inst sub x null-tn)
   (inst cmp x (static-symbol-offset t)))
 
