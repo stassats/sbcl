@@ -1,0 +1,124 @@
+(defun calc-et (from-sec from-ns to-sec to-ns)
+  (let ((from (floor (+ (* 1000000000 from-sec) from-ns) 1000))
+        (to   (floor (+ (* 1000000000 to-sec)   to-ns)   1000)))
+    (- to from)))
+
+(defmacro my-timing (form)
+  (let ((clockid #+linux sb-unix:clock-thread-cputime-id
+                 #+darwin sb-unix:clock-process-cputime-id))
+    `(sb-int:binding* (((sec-before nsec-before) (sb-unix:clock-gettime ,clockid))
+                       (nil ,form)
+                       ((sec-after nsec-after)  (sb-unix:clock-gettime ,clockid)))
+       (calc-et sec-before nsec-before sec-after nsec-after))))
+
+(defparameter *validate* nil)
+(defun compare (testcases &optional (validate *validate*))
+  (declare (simple-vector testcases))
+  (declare (optimize speed))
+  (declare (notinline sb-ext:octets-to-string)) ; because unsafely flushable
+  (when validate ; make sure they agree
+    (sb-int:dovector (x testcases)
+      (let ((way1 (sb-unicode:utf8-decode-from-octets x))
+            (way2 (sb-ext:octets-to-string x)))
+        (assert (string= way1 way2)))))
+  ;; These tests cons a lot and can be easily skewed by having very random
+  ;; places at which they GC.  We get fairly consistent results when both the
+  ;; baseline and experiment have a manual GC done beforehand.
+  (gc)
+  ;; run the new way first to give the benefit-of-doubt to the old way
+  ;; in terms of bringing memory into L1 cache
+  (let ((et-new (my-timing
+                 (sb-int:dovector (x testcases) (sb-unicode:utf8-decode-from-octets x)))))
+    (gc)
+    (let ((et-old (my-timing
+                   (sb-int:dovector (x testcases) (sb-ext:octets-to-string x)))))
+      (format t "~D ~D (~f%)~%" et-old et-new (* 100 (/ (- et-new et-old) et-old))))))
+
+(defun random-string (stringlen percent-ascii &aux (unicode (- 100 percent-ascii)))
+  (let ((s (make-string stringlen)))
+    (dotimes (i stringlen s)
+      (setf (char s i)
+            (code-char (if (< (random 100.0) unicode)
+                           (max #xE000 (random char-code-limit))
+                           (max 1 (random 128))))))))
+
+(defun bench ()
+  (dolist  (stringlen '(5 100 1000 10000 1000000))
+    (dolist (percent-ascii '(100 99 98 97 96 95 90 80 70 60 50 40))
+      (let ((n-trials (ceiling 10000000 stringlen)))
+        (format t "~&~3D% ASCII, length=~d [~d iterations]: " percent-ascii stringlen n-trials)
+        (force-output)
+        (let ((testcases
+               (coerce
+                (loop repeat n-trials
+                      collect
+                      (string-to-octets (random-string stringlen percent-ascii)))
+                'vector)))
+          (compare testcases))))))
+
+#|
+My results on an x86-64 macbook (negative percent diff means new is is better)
+and the deltas are either very similar or show slightly less of an improvement
+for arm64 macbook, but still always an improvement over the baseline.
+
+100% ASCII, length=5 [2000000 iterations]: 426481 89626 (-78.984764%)
+ 99% ASCII, length=5 [2000000 iterations]: 469787 60676 (-87.08436%)
+ 98% ASCII, length=5 [2000000 iterations]: 471085 65415 (-86.11397%)
+ 97% ASCII, length=5 [2000000 iterations]: 488598 68924 (-85.89352%)
+ 96% ASCII, length=5 [2000000 iterations]: 482445 74787 (-84.49834%)
+ 95% ASCII, length=5 [2000000 iterations]: 481117 77478 (-83.896225%)
+ 90% ASCII, length=5 [2000000 iterations]: 491657 87709 (-82.16053%)
+ 80% ASCII, length=5 [2000000 iterations]: 515252 103540 (-79.904976%)
+ 70% ASCII, length=5 [2000000 iterations]: 539165 116004 (-78.484505%)
+ 60% ASCII, length=5 [2000000 iterations]: 569675 136532 (-76.033356%)
+ 50% ASCII, length=5 [2000000 iterations]: 589356 143996 (-75.56723%)
+ 40% ASCII, length=5 [2000000 iterations]: 613356 144063 (-76.51234%)
+100% ASCII, length=100 [100000 iterations]: 140443 3974 (-97.17038%)
+ 99% ASCII, length=100 [100000 iterations]: 149191 50945 (-65.8525%)
+ 98% ASCII, length=100 [100000 iterations]: 139345 77090 (-44.67688%)
+ 97% ASCII, length=100 [100000 iterations]: 154108 74434 (-51.700108%)
+ 96% ASCII, length=100 [100000 iterations]: 144111 87651 (-39.178135%)
+ 95% ASCII, length=100 [100000 iterations]: 162271 79519 (-50.996174%)
+ 90% ASCII, length=100 [100000 iterations]: 157988 92868 (-41.21832%)
+ 80% ASCII, length=100 [100000 iterations]: 196840 91016 (-53.76143%)
+ 70% ASCII, length=100 [100000 iterations]: 209938 108707 (-48.219475%)
+ 60% ASCII, length=100 [100000 iterations]: 248108 109260 (-55.962727%)
+ 50% ASCII, length=100 [100000 iterations]: 254467 121921 (-52.087696%)
+ 40% ASCII, length=100 [100000 iterations]: 285208 114461 (-59.867535%)
+100% ASCII, length=1000 [10000 iterations]: 105570 1546 (-98.53557%)
+ 99% ASCII, length=1000 [10000 iterations]: 112052 87494 (-21.91661%)
+ 98% ASCII, length=1000 [10000 iterations]: 120597 77042 (-36.116154%)
+ 97% ASCII, length=1000 [10000 iterations]: 133759 75267 (-43.729393%)
+ 96% ASCII, length=1000 [10000 iterations]: 124279 76452 (-38.483574%)
+ 95% ASCII, length=1000 [10000 iterations]: 145278 76784 (-47.14685%)
+ 90% ASCII, length=1000 [10000 iterations]: 141478 81126 (-42.658222%)
+ 80% ASCII, length=1000 [10000 iterations]: 177988 89134 (-49.921345%)
+ 70% ASCII, length=1000 [10000 iterations]: 190698 99088 (-48.039307%)
+ 60% ASCII, length=1000 [10000 iterations]: 240096 108468 (-54.82307%)
+ 50% ASCII, length=1000 [10000 iterations]: 241091 113381 (-52.9717%)
+ 40% ASCII, length=1000 [10000 iterations]: 274307 113896 (-58.478638%)
+100% ASCII, length=10000 [1000 iterations]: 116469 1521 (-98.69408%)
+ 99% ASCII, length=10000 [1000 iterations]: 122827 84726 (-31.020052%)
+ 98% ASCII, length=10000 [1000 iterations]: 125854 85905 (-31.742336%)
+ 97% ASCII, length=10000 [1000 iterations]: 144160 76104 (-47.208656%)
+ 96% ASCII, length=10000 [1000 iterations]: 149835 76644 (-48.847733%)
+ 95% ASCII, length=10000 [1000 iterations]: 149988 79170 (-47.21578%)
+ 90% ASCII, length=10000 [1000 iterations]: 143812 98798 (-31.300587%)
+ 80% ASCII, length=10000 [1000 iterations]: 188148 89944 (-52.19508%)
+ 70% ASCII, length=10000 [1000 iterations]: 214511 129084 (-39.824066%)
+ 60% ASCII, length=10000 [1000 iterations]: 240322 110871 (-53.865646%)
+ 50% ASCII, length=10000 [1000 iterations]: 237560 122167 (-48.574253%)
+ 40% ASCII, length=10000 [1000 iterations]: 272658 114349 (-58.061382%)
+100% ASCII, length=1000000 [10 iterations]: 122355 3950 (-96.77169%)
+ 99% ASCII, length=1000000 [10 iterations]: 127108 70778 (-44.316643%)
+ 98% ASCII, length=1000000 [10 iterations]: 135022 80389 (-40.462296%)
+ 97% ASCII, length=1000000 [10 iterations]: 126778 72913 (-42.487656%)
+ 96% ASCII, length=1000000 [10 iterations]: 144430 74448 (-48.453922%)
+ 95% ASCII, length=1000000 [10 iterations]: 138535 78872 (-43.067097%)
+ 90% ASCII, length=1000000 [10 iterations]: 145037 77884 (-46.3006%)
+ 80% ASCII, length=1000000 [10 iterations]: 190233 89723 (-52.83521%)
+ 70% ASCII, length=1000000 [10 iterations]: 197363 95052 (-51.838997%)
+ 60% ASCII, length=1000000 [10 iterations]: 216470 115180 (-46.791702%)
+ 50% ASCII, length=1000000 [10 iterations]: 244138 108852 (-55.413742%)
+ 40% ASCII, length=1000000 [10 iterations]: 247799 123019 (-50.355328%)
+|#

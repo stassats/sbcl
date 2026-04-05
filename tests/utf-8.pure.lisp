@@ -428,3 +428,37 @@
                              else if (= i 24) do (incf pos 2)
                              else do (incf pos 1))))))))
 (delete-file *test-path*)
+
+#+sb-unicode
+(defun random-string (stringlen percent-ascii &aux (unicode (- 100 percent-ascii)))
+  (let ((s (make-string stringlen)))
+    (dotimes (i stringlen s)
+      (setf (char s i)
+            (code-char (if (< (random 100.0) unicode)
+                           (max #xE000 (random char-code-limit))
+                           (max 1 (random 128))))))))
+
+(with-test (:name :optimized-utf8-decoder
+                  :skipped-on (:not :sb-unicode))
+  ;; some tests need 100% ascii so that it hits the special case for base-string
+  (dolist (percent-ascii '(100 50 10))
+    (dotimes (i 1000)
+      (let* ((string (random-string (random 1000) percent-ascii))
+             (octets (string-to-octets string :null-terminate t))
+             (readback1
+              (sb-ext:octets-to-string octets :end (1- (length octets))))
+             (readback2
+              (sb-sys:with-pinned-objects (octets)
+                (sb-unicode:utf8-decode-from-sap (sb-sys:vector-sap octets))))
+             (readback3
+              ;; doesn't take END or a displaaced string. It could, but if you need
+              ;; such capability, the SAP interface will do.
+              (sb-unicode:utf8-decode-from-octets
+               (subseq octets 0 (1- (length octets))))))
+        (when (= percent-ascii 100)
+          (assert (not (sb-kernel:simple-base-string-p readback1)))
+          (assert (sb-kernel:simple-base-string-p readback2))
+          (assert (sb-kernel:simple-base-string-p readback3)))
+        (assert (string= string readback1))
+        (assert (string= string readback2))
+        (assert (string= string readback3))))))
