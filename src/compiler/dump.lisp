@@ -1061,18 +1061,6 @@
 
 ;;;; component (function) dumping
 
-(defun dump-segment (segment code-length fasl-output)
-  (declare (type sb-assem:segment segment)
-           (type fasl-output fasl-output))
-  (let* ((stream (fasl-output-stream fasl-output))
-         (n-written (write-segment-contents segment stream)))
-    ;; In CMU CL there was no enforced connection between the CODE-LENGTH
-    ;; argument and the number of bytes actually written. I added this
-    ;; assertion while trying to debug portable genesis. -- WHN 19990902
-    (unless (= code-length n-written)
-      (bug "code-length=~W, n-written=~W" code-length n-written)))
-  (values))
-
 (eval-when (:compile-toplevel)
   (assert (<= (length +fixup-kinds+) 16))) ; fixup-kind fits in 4 bits
 
@@ -1256,7 +1244,10 @@
       (dump-integer-as-n-bytes (length (ir2-component-entries 2comp))
                                4 ; output 4 bytes
                                fasl-output)
-      (dump-segment (asm-segment assembly) (length (asm-bytes assembly)) fasl-output)
+      (let ((n-written (write-segment-contents (asm-segment assembly)
+                                               (fasl-output-stream fasl-output)))
+            (length (length (asm-bytes assembly))))
+        (aver (= n-written length)))
 
       (let ((handle (dump-pop fasl-output)))
         (dolist (patch (patches))
