@@ -39,7 +39,8 @@
     (dotimes (i stringlen s)
       (setf (char s i)
             (code-char (if (< (random 100.0) unicode)
-                           (max #xE000 (random char-code-limit))
+                           (loop (let ((c (max 1 (random char-code-limit))))
+                                   (when (sb-unicode:scalar-p c) (return c))))
                            (max 1 (random 128))))))))
 
 (defun bench ()

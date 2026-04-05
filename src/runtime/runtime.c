@@ -809,3 +809,37 @@ initialize_lisp(int argc, char *argv[], char *envp[])
 }
 
 int lisp_gc_strategy_id() { return GC_STRATEGY_ID; }
+
+/**
+ * Convert UTF-8 to UCS4 assuming adequate output space and well-formed input.
+ *  input -  pointer to UTF-8 octets
+ *  in_len - number of octets to process
+ *  output - VECTOR-SAP of the resulting Lisp SIMPLE-CHARACTER-STRING
+ * Returns the number of UCS4 characters placed into 'output'
+ */
+size_t utf8_into_simple_character_string(const uint8_t* input, size_t in_len, uint32_t* output)
+{
+    const uint8_t* in = input;
+    const uint8_t* end = input + in_len;
+    uint32_t* out_start = output;
+
+    while (in < end) {
+        uint8_t first = *in++;
+        uint32_t c; // codepoint
+        if (first < 0x80) { // 1-byte sequence (0xxxxxxx)
+            c = first;
+        } else if (first < 0xE0) { // 2-byte sequence (110xxxxx 10xxxxxx)
+            c = ((first & 0x1F) << 6) | (in[0] & 0x3F);
+            in += 1;
+        } else if (first < 0xF0) { // 3-byte sequence (1110xxxx 10xxxxxx 10xxxxxx)
+            c = ((first & 0x0F) << 12) | ((in[0] & 0x3F) << 6) | (in[1] & 0x3F);
+            in += 2;
+        } else { // 4-byte sequence (11110xxx 10xxxxxx 10xxxxxx 10xxxxxx)
+            c = ((first & 0x07) << 18) | ((in[0] & 0x3F) << 12)
+              | ((in[1] & 0x3F) << 6) | (in[2] & 0x3F);
+            in += 3;
+        }
+        *output++ = c;
+    }
+    return output - out_start;
+}

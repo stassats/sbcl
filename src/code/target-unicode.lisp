@@ -2039,33 +2039,19 @@ according to the IDNA confusableSummary.txt table"
 (labels
     ((copy-to-char-string (sap length-in-octets nchars)
        (declare (sb-sys:system-area-pointer sap) (index length-in-octets nchars))
-       (macrolet
-           ;; This character decoder is taken from (one of several) UTF8->STRING
-           ;; functions in enc-basic without any of the CRLF conversions.
-           ;; The best solution - at least for #+(or arm64 x86-64) - would be to cons
-           ;; a DX file buffer and call SIMD-COPY-UTF8-TO-CHARACTER-STRING on it.
-           ((cref (n) `(sb-sys:sap-ref-8 sap ,n))
-            (utf8-char@sap (bytes)
-              `(ecase ,bytes
-                 (1 (cref 0))
-                 (2 (logior (ash (ldb (byte 5 0) (cref 0)) 6)
-                            (ldb (byte 6 0) (cref 1))))
-                 (3 (logior (ash (ldb (byte 4 0) (cref 0)) 12)
-                            (ash (ldb (byte 6 0) (cref 1)) 6)
-                            (ldb (byte 6 0) (cref 2))))
-                 (4 (logior (ash (ldb (byte 3 0) (cref 0)) 18)
-                            (ash (ldb (byte 6 0) (cref 1)) 12)
-                            (ash (ldb (byte 6 0) (cref 2)) 6)
-                            (ldb (byte 6 0) (cref 3)))))))
-         (let ((string (make-array nchars :element-type 'character))
-               (end-sap (sb-sys:sap+ sap length-in-octets))
-               (char-index -1))
-           (declare (sb-kernel:index-or-minus-1 char-index))
-           (loop
-            (let ((n (utf8-encoded-len-from-leading-byte (sb-sys:sap-ref-8 sap 0))))
-              (setf (char string (incf char-index)) (code-char (utf8-char@sap n)))
-              (when (sb-sys:sap>= (setf sap (sb-sys:sap+ sap n)) end-sap)
-                (return string)))))))
+       ;; It is generally quicker to call a foreign function to decode utf8,
+       ;; with the possible exception of strings shorter than a few characters.
+       (let* ((string (make-array nchars :element-type 'character))
+              (result
+               (sb-sys:with-pinned-objects (string)
+                 (sb-alien:alien-funcall
+                  (sb-alien:extern-alien "utf8_into_simple_character_string"
+                   (function sb-alien:unsigned
+                             sb-sys:system-area-pointer sb-alien:unsigned
+                             sb-alien:system-area-pointer))
+                  sap length-in-octets (sb-sys:vector-sap string)))))
+         (sb-int:aver (= result nchars))
+         string))
      (copy-to-base-string (sap nchars)
        (if (= nchars 0)
            #.(coerce "" 'simple-base-string)

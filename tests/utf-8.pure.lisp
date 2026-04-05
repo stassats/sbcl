@@ -435,7 +435,8 @@
     (dotimes (i stringlen s)
       (setf (char s i)
             (code-char (if (< (random 100.0) unicode)
-                           (max #xE000 (random char-code-limit))
+                           (loop (let ((c (max 1 (random char-code-limit))))
+                                   (when (sb-unicode:scalar-p c) (return c))))
                            (max 1 (random 128))))))))
 
 (with-test (:name :optimized-utf8-decoder
@@ -451,7 +452,7 @@
               (sb-sys:with-pinned-objects (octets)
                 (sb-unicode:utf8-decode-from-sap (sb-sys:vector-sap octets))))
              (readback3
-              ;; doesn't take END or a displaaced string. It could, but if you need
+              ;; doesn't take END or a displaced string. It could, but if you need
               ;; such capability, the SAP interface will do.
               (sb-unicode:utf8-decode-from-octets
                (subseq octets 0 (1- (length octets))))))
