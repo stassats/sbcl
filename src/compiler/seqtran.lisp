@@ -1598,36 +1598,47 @@
                (transform-replace t node)))
          (give-up-ir1-transform)))))
 
-(deftransform replace ((seq1 seq2)
-                       ((or null (simple-array * (*))) list) *
+(deftransform replace ((seq1 seq2 &key (start1 0) end1)
+                       ((or null (simple-array * (*))) list &key (:start1 t) (:end1 t)) *
                        :node node)
   (upgraded-element-type-specifier-or-give-up seq1)
-  (cond ((and (lvar-matches seq2 :fun-names '(reverse sb-impl::list-reverse))
-              ;; Nothing should be modifying the original sequence
-              (almost-immediately-used-p seq2 (lvar-use seq2)
-                                         :flushable t)
-              (splice-fun-args seq2 :any 1 nil))
+  `(let* ((len1 (length seq1))
+          (start1 ,(if start1
+                       'start1
+                       0))
+          (end1 (or end1 len1)))
+     ,@(when (and (or start1 end1)
+                  (policy node (> insert-array-bounds-checks 0)))
+         `((unless (<= 0 start1 end1 len1)
+             (sequence-bounding-indices-bad-error seq1 start1 end1))))
+     ,(cond ((and (lvar-matches seq2 :fun-names '(reverse sb-impl::list-reverse))
+                  ;; Nothing should be modifying the original sequence
+                  (almost-immediately-used-p seq2 (lvar-use seq2)
+                                             :flushable t)
+                  (splice-fun-args seq2 :any 1 nil))
+             `(when seq1
+                (let* ((list-length (length seq2))
 
-         `(when seq1
-            (let* ((list-length (length seq2))
-                   (vector-length (length seq1))
-                   (diff (- list-length vector-length)))
-              (when (> diff 0)
-                (setf seq2 (nthcdr diff seq2)))
-              (loop for i from (+ vector-length (if (< diff 0)
-                                                    (1- diff)
-                                                    -1))
-                    downto 0
-                    for elt in seq2
-                    do (setf (aref seq1 i) elt))
-              seq1)))
-        (t
-         `(when seq1
-            (loop for i below (length seq1)
-                  while seq2
-                  do (setf (aref seq1 i)
-                           (pop seq2)))
-            seq1))))
+                       (diff (- list-length
+                                (- end1 start1))))
+                  (when (> diff 0)
+                    (setf seq2 (nthcdr diff seq2)))
+                  (loop for i from (+ end1 (if (< diff 0)
+                                               (1- diff)
+                                               -1))
+                        downto ,(if start1
+                                    'start1
+                                    0)
+                        for elt in seq2
+                        do (setf (aref seq1 i) elt))
+                  seq1)))
+            (t
+             `(when seq1
+                (loop for i from start1 below end1
+                      while seq2
+                      do (setf (aref seq1 i)
+                               (pop seq2)))
+                seq1)))))
 
 #+sb-unicode
 (progn
