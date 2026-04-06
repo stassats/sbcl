@@ -107,7 +107,7 @@
                  ;; I blindly copied this expansion from that of a typical DEFSTRUCT's
                  ;; accessor. I don't claim to understand the use of THE*.
                  `(the* (,(dsd-type dsd1) :derive-type-only t)
-                        (,(dsd-reader dsd1 nil) object ,i)))
+                        (,(dsd-primitives dsd1 dd1) object ,i)))
                ;; slots differ in physical representation and/or lisp type
                `(if ,test
                     (,(dsd-accessor-name then) object)

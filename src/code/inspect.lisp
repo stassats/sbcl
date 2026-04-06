@@ -170,7 +170,7 @@ evaluated expressions.
         (info (layout-info (sb-kernel:layout-of object))))
     (when (sb-kernel::defstruct-description-p info)
       (dolist (dd-slot (dd-slots info) (nreverse parts-list))
-        (let* ((reader (dsd-reader dd-slot (neq (dd-type info) 'structure)))
+        (let* ((reader (dsd-primitives dd-slot info))
                (index (dsd-index dd-slot))
                (value (funcall reader object index)))
           (push (cons (dsd-name dd-slot) value) parts-list))))))

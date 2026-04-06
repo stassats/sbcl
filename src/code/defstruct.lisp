@@ -209,10 +209,11 @@
   (acond ((dsd-raw-slot-data dsd) (raw-slot-data-raw-type it))
          (t)))
 
-(defun dsd-reader (dsd funinstancep)
+(defun dsd-primitives (dsd dd) ; return low-level (reader, writer) for this slot
+  (declare (type defstruct-slot-description dsd) (type defstruct-description dd))
   (acond ((dsd-raw-slot-data dsd)
           (values (raw-slot-data-reader-name it) (raw-slot-data-writer-name it)))
-         (funinstancep
+         ((eq (dd-type dd) 'funcallable-structure)
           (values '%funcallable-instance-info '%set-funcallable-instance-info))
          (t
           (values '%instance-ref '%instance-set))))
@@ -289,7 +290,7 @@
           (binding* ((key (cons dd dsd))
                      (name (string (dsd-name dsd))) ; anonymize by stringification
                      ;; reader and writer are the primitive operations
-                     ((reader writer) (dsd-reader dsd (neq (dd-type dd) 'structure)))
+                     ((reader writer) (dsd-primitives dsd dd))
                      ;; accessor is the global defun
                      (accessor (dsd-accessor-name dsd)))
             (declare (dynamic-extent key))
@@ -450,8 +451,8 @@
   ;; that compare more than one word at a time.
   (collect ((group1) (group2) (group3))
     (mapc (lambda (dsd comparator)
-            (let ((x `(truly-the ,(dsd-type dsd) (,(dsd-reader dsd nil) a ,(dsd-index dsd))))
-                  (y `(truly-the ,(dsd-type dsd) (,(dsd-reader dsd nil) b ,(dsd-index dsd)))))
+            (let ((x `(truly-the ,(dsd-type dsd) (,(dsd-primitives dsd dd) a ,(dsd-index dsd))))
+                  (y `(truly-the ,(dsd-type dsd) (,(dsd-primitives dsd dd) b ,(dsd-index dsd)))))
               (cond ((member comparator '(= char-equal))
                      (group1 `(,comparator ,x ,y))) ; bounded amount of testing
                     ((member comparator '(bit-vector-=)) ; TODO: strings
@@ -1268,7 +1269,7 @@ unless :NAMED is also specified.")))
                                 (external-unbound-handling nil))
   (binding* ((dd (car slot-key))
              (dsd (cdr slot-key))
-             ((reader writer) (dsd-reader dsd (neq (dd-type dd) 'structure)))
+             ((reader writer) (dsd-primitives dsd dd))
              (type-spec (dsd-type dsd))
              (index (dsd-index dsd)))
     (ecase operation
@@ -2365,18 +2366,18 @@ or they must be declared locally notinline at each call site.~@:>"
                                                 environment)
   (declare (ignore environment))
   (if (typep object 'structure-object)
-      (let ((type (type-of object)))
+      (let ((dd (layout-dd (%instance-layout object))))
         (collect ((inits))
-          (dolist (dsd (dd-slots (layout-dd (%instance-layout object))))
+          (dolist (dsd (dd-slots dd))
             (declare (type defstruct-slot-description dsd))
             (let ((slot-name (dsd-name dsd)))
               (when (or (memq slot-name slot-names)
                         (not slot-names-p))
-                (let* ((accessor (dsd-reader dsd nil))
+                (let* ((accessor (dsd-primitives dsd dd))
                        (index (dsd-index dsd))
                        (value (funcall accessor object index)))
                   (inits `(setf (,accessor ,object ,index) ',value))))))
-          (values `(allocate-struct ',(the symbol type)) ;; no anonymous defstructs
+          (values `(allocate-struct ',(dd-name dd)) ;; no anonymous defstructs
                   `(progn ,@(inits)))))
       #-sb-xc-host
       (let ((class (class-of object)))

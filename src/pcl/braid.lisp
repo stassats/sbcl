@@ -116,8 +116,8 @@
              ;; This is nuts! any DEFAULT might need its lexical environment,
              ;; yet we EVAL in the null environment.
              :initfunction ,(eval-form (dsd-default slotd)))))
-       (accessor-closures (dsd)
-         (multiple-value-bind (reader-fn writer-fn) (sb-kernel::dsd-reader dsd nil)
+       (accessor-closures (dsd dd)
+         (multiple-value-bind (reader-fn writer-fn) (dsd-primitives dsd dd)
            ;; This is for a structure class that exists only in its compile-time representation.
            ;; I don't see how these would get called, since you can't make an instance
            ;; of the structure.
@@ -136,7 +136,7 @@
                            (delete it sb-kernel::*struct-access-fragments-delayed*)))
                     (t
                      (dolist (dsd (dd-slots dd))
-                       (push (cons dsd (accessor-closures dsd)) extra-data)))))
+                       (push (cons dsd (accessor-closures dsd dd)) extra-data)))))
            (multiple-value-bind (super slot-overrides)
                (if (consp include)
                    (values (car include) (mapcar #'car (cdr include)))
