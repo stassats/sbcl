@@ -48,6 +48,19 @@ os_vm_size_t os_vm_page_size = BACKEND_PAGE_BYTES;
 /* Expose to Lisp the value of the preprocessor define. Don't touch! */
 int install_sig_memory_fault_handler = INSTALL_SIG_MEMORY_FAULT_HANDLER;
 
+#ifdef ADDRESS_SANITIZER
+/* This trick prevents ASan from reporting false positives.
+ * Not only could I not get spurious errors to go away by sprinkling NO_SANITIZE_ADDRESS
+ * all over, even if I could, it was too invasive for my liking. The difficulty stemmed
+ * from the fact the sanitizer thought that sigcontexts from the kernel aren't usable
+ * (it said that reading them constituted a use-after-free bug) and so I couldn't so much
+ * as call arch_get_bad_addr() or take *os_context_pc_addr(context) without encountering
+ * recursive errors. Whereas this fixed it with fairly localized intervention */
+char enable_tls_indirection_preinit = 1;
+#else
+char enable_tls_indirection_preinit = 0;
+#endif
+
 /* Except for os_zero, these routines are only called by Lisp code.
  * These routines may also be replaced by os-dependent versions
  * instead. */

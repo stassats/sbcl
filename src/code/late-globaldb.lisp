@@ -81,6 +81,10 @@
   ;; cells contain NO-TLS-VALUE which ordinarily causes SET to affect SYMBOL-GLOBAL-VALUE.
   ;; So we have to store directly into offsets off the primitive thread.
   ;; See %SET-SYMBOL-VALUE-IN-THREAD for comparison.
+  ;; (On x86-64, the SET vops understands that for a symbol which is always-thread-local
+  ;; it should store into the TLS bypassing the test for NO-TLS-VALUE. However, that is
+  ;; currently not a mandatory behavior, but rather an optimization, and not all the
+  ;; backends behave as desired)
   #+sb-thread
   (macrolet ((expand ()
                `(setf (sap-ref-lispobj sap ,(info :variable :wired-tls '*current-thread*))
@@ -95,6 +99,22 @@
                                        ,(if (equal form '(sb-kernel:make-unbound-marker))
                                             'ubm form)))))))
     (let ((sap (current-thread-sap)) (ubm (make-unbound-marker))) (expand)))
+  ;; Some applications can't tolerate unexpected SIGSEGV. Even ones that ordinarily could
+  ;; may exhibit sporadic crashes under the LLVM interceptors which change the sa_flags in
+  ;; struct sigaction before passing along the syscall argument. (How is that reasonable?)
+  #+tls-load-indirect
+  (when (= (extern-alien "enable_tls_indirection_preinit" char) 1)
+    (do ((symbolmap (int-sap (ash sb-vm::*tls-symbol-map* sb-vm:n-fixnum-tag-bits)))
+         (i (- (symbol-tls-index '*package*) 8) (+ i 16)) ; step by 2 words
+         (end (- (ash sb-vm::*free-tls-index* sb-vm:n-fixnum-tag-bits) 8)))
+        ((>= i end))
+      (let ((indirection-word (sap-ref-word (current-thread-sap) i)))
+        (when (= indirection-word sb-vm:no-tls-value-marker) ; now must point it to the symbol
+          ;; (could AVER that no-tls-value is stored as the value, but that would just crash)
+          (let ((symbol (sap-ref-lispobj symbolmap (ash i -1))))
+            ;; If no symbol, the index is unused (or else there's an unavoidable race)
+            (unless (= (get-lisp-obj-address symbol) sb-vm:no-tls-value-marker)
+              (setf (sap-ref-lispobj (sb-thread:current-thread-sap) i) symbol)))))))
   thread)
 
 (eval-when (:compile-toplevel)
