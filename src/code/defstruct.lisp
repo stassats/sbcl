@@ -215,6 +215,8 @@
           (values (raw-slot-data-reader-name it) (raw-slot-data-writer-name it)))
          ((eq (dd-type dd) 'funcallable-structure)
           (values '%funcallable-instance-info '%set-funcallable-instance-info))
+         ((eq (dd-name dd) 'layout)
+          (values '%instance-ref '%layout-slot-set))
          (t
           (values '%instance-ref '%instance-set))))
 

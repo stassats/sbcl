@@ -769,6 +769,10 @@ scavenge_immobile_roots(generation_index_t min_gen, generation_index_t max_gen)
     scavenge_immobile_newspace();
 }
 
+static int should_mprotect(low_page_index_t page) {
+    return fixedobj_pages[page].attr.parts.obj_align == SYMBOL_SIZE
+        && fixedobj_page_wp(page);
+}
 void write_protect_immobile_space()
 {
     immobile_scav_queue_head = 0;
@@ -781,14 +785,14 @@ void write_protect_immobile_space()
     int i, start = -1, end = -1; // inclusive bounds on page indices
     low_page_index_t max_used_fixedobj_page = calc_max_used_fixedobj_page();
     for (i = max_used_fixedobj_page ; i >= 0 ; --i) {
-        if (fixedobj_page_wp(i)) {
+        if (should_mprotect(i)) {
             if (end < 0) end = i;
             start = i;
         }
-        if (end >= 0 && (!fixedobj_page_wp(i) || i == 0)) {
+        if (end >= 0 && (!should_mprotect(i) || i == 0)) {
             os_protect(fixedobj_page_address(start),
                        IMMOBILE_CARD_BYTES * (1 + end - start),
-                       OS_VM_PROT_READ|OS_VM_PROT_EXECUTE);
+                       OS_VM_PROT_READ);
             start = end = -1;
         }
     }
@@ -1274,6 +1278,11 @@ void deport_codeblob_offsets_from_heap()
     lispobj* vector_copy = malloc(nbytes);
     loaded_codeblob_offsets = memcpy(vector_copy, loaded_codeblob_offsets, nbytes);
     SYMBOL(IMMOBILE_CODEBLOB_VECTOR)->value = NIL;
+    int page = 0, limit = calc_max_used_fixedobj_page();
+    for (page = 0; page <= limit; ++page) {
+        if (fixedobj_pages[page].attr.parts.obj_align > SYMBOL_SIZE) // layout page
+            SET_WP_FLAG(page, WRITE_PROTECT_CLEARED);
+    }
 }
 
 // Change all objects to generation 0
@@ -1394,18 +1403,32 @@ void prepare_immobile_space_for_save(bool verbose)
 
 int immobile_space_handle_wp_violation(void* fault_addr)
 {
-    low_page_index_t fixedobj_page_index = find_fixedobj_page_index(fault_addr);
-    if (fixedobj_page_index < 0)
+    low_page_index_t page = find_fixedobj_page_index(fault_addr);
+    if (page < 0)
       return 0; // unhandled
 
+#if 0
+    if (fixedobj_pages[page].attr.parts.obj_align == SYMBOL_SIZE) { // good
+        // Should only experience sigsegv on symbols and not layouts
+        int byte_offset = (char*)fault_addr - (char*)PTR_ALIGN_DOWN(fault_addr, IMMOBILE_CARD_BYTES);
+        int object_offset = byte_offset / 48;
+        struct symbol*s = (void*)((object_offset * 48) +
+                                  (char*)PTR_ALIGN_DOWN(fault_addr, IMMOBILE_CARD_BYTES));
+        fprintf(stderr, "fault @ %p page %d object %p\n",
+                fault_addr, page, s /*, (char*)VECTOR(s->name)->data*/);
+    } else {
+        /* Needed for tracking down logic errors in software marking.
+         * To reach here you of course must use mprotect */
+        lose("Unexpected fault on fixedobj page @ %p. Dropping to ldb", fault_addr);
+    }
+#endif
     os_protect(PTR_ALIGN_DOWN(fault_addr, IMMOBILE_CARD_BYTES),
-               IMMOBILE_CARD_BYTES, OS_VM_PROT_ALL);
+               IMMOBILE_CARD_BYTES, OS_VM_PROT_READ|OS_VM_PROT_WRITE);
 
     // FIXME: the _CLEARED flag doesn't achieve much if anything.
-    if (!(fixedobj_pages[fixedobj_page_index].attr.parts.flags
-          & (WRITE_PROTECT|WRITE_PROTECT_CLEARED)))
+    if (!(fixedobj_pages[page].attr.parts.flags & (WRITE_PROTECT|WRITE_PROTECT_CLEARED)))
         return 0;
-    SET_WP_FLAG(fixedobj_page_index, WRITE_PROTECT_CLEARED);
+    SET_WP_FLAG(page, WRITE_PROTECT_CLEARED);
 
     return 1;
 }
@@ -2166,4 +2189,19 @@ void* expropriate_memory_from_tlsf(size_t amount)
   //fprintf(stderr, "TLSF integrity checks passed\n");
 #endif
   return start;
+}
+
+void layout_slot_set(lispobj layout, lispobj newval, int slot)
+{
+    struct instance *i = INSTANCE(layout);
+    low_page_index_t page = find_fixedobj_page_index(i);
+    SET_WP_FLAG(page, WRITE_PROTECT_CLEARED);
+    i->slots[slot] = newval;
+}
+lispobj layout_slot_cas(lispobj layout, lispobj old, lispobj new, int slot)
+{
+    struct instance *i = INSTANCE(layout);
+    low_page_index_t page = find_fixedobj_page_index(i);
+    SET_WP_FLAG(page, WRITE_PROTECT_CLEARED);
+    return __sync_val_compare_and_swap(&i->slots[slot], old, new);
 }

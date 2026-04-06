@@ -12,7 +12,14 @@
 ;;; the second one was more likely to crash
 (dotimes (i 1000 (gc)) (alloc-layoutless-instances))
 
-(defstruct trythis a)
+;;; This test creates a TRYTHIS instance on a page of layouts. It is no longer legal
+;;; to set slots of instances of layout pages without going through the GC store barrier.
+;;; Therefore define a setter that calls %LAYOUT-SLOT-SET.
+;;; And honestly I don't know what this test is actually testing.
+(defstruct trythis (%a nil :read-only t))
+(defun trythis-a (instance) (trythis-%a instance))
+(defun (setf trythis-a) (newval instance)
+  (sb-kernel:%layout-slot-set (the trythis instance) 0 newval))
 
 ;;; Assign a bitmap that is not the special case for "all tagged"
 ;;; but does correctly indicate 1 tagged slot.

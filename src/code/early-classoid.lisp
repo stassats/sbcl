@@ -199,6 +199,9 @@
 
 ;;; 32-bit is not done yet. Three slots are still used, instead of two.
 
+;;; TODO: this should probably become a BUILTIN-CLASSOID for the same reason
+;;; PATHNAME is (see rev 816d286a), namely to prevent use of COPY-STRUCTURE,
+;;; MAKE-INSTANCE, and (SETF SLOT-VALUE).
 (sb-xc:defstruct (layout (:copier nil)
                          ;; Parsing DEFSTRUCT uses a temporary layout
                          (:constructor make-temporary-layout
@@ -277,6 +280,9 @@
   ;; access to slot-definitions and locations by name, etc.
   ;; See MAKE-SLOT-TABLE in pcl/slots-boot.lisp for further details.
   (slot-table #(1 nil) :type simple-vector)
+  ;; In lieu of card-marking, this should maintain a so-called intrusive
+  ;; linked list of layouts touched since last GC
+  ; (chain 0 :type sb-vm:word) ; not yet
   (id-word0 0 :type word)
   (id-word1 0 :type word)
   (id-word2 0 :type word)

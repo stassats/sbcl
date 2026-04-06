@@ -13,6 +13,32 @@
 
 ;;;; structure frobbing primitives
 
+(export '(%layout-slot-set %layout-slot-cas))
+(defun %layout-slot-set (layout index value)
+  #-immobile-space (%instance-set layout index value)
+  #+immobile-space
+  (sb-vm::with-pseudo-atomic-foreign-calls
+    ;; This is pseudo-atomic because if you mark first and then GC occurs before storing,
+    ;; then GC could (possibly) clear the mark, then you store, and now there's a violation
+    ;; of the marking invariant. If you mark after the store, then you run the risk of an
+    ;; abusive TERMINATE-THREAD causing a violation by aborting before setting the mark.
+    ;; Btw, 1 foreign call per slot assignment is really not a big deal. If you're altering
+    ;; layouts at runtime, slot setting is the least of your problems. Making the hundreds
+    ;; of CLOS metaobjects that go along with class lattice changes is worse by far.
+    (alien-funcall (extern-alien "layout_slot_set" (function void unsigned unsigned int))
+                   (get-lisp-obj-address layout) (get-lisp-obj-address value)
+                   (truly-the (mod 32) index)))
+  value)
+(defun %layout-slot-cas (layout index oldval newval)
+  #-immobile-space (%instance-cas layout index oldval newval)
+  #+immobile-space
+  (sb-vm::with-pseudo-atomic-foreign-calls
+    (%make-lisp-obj
+     (alien-funcall (extern-alien "layout_slot_cas"
+                                  (function unsigned unsigned unsigned unsigned int))
+                    (get-lisp-obj-address layout) (get-lisp-obj-address oldval)
+                    (get-lisp-obj-address newval) (truly-the (mod 32) index)))))
+
 ;;; For lack of any better to place to write up some detail surrounding
 ;;; layout creation for structure types, I'm putting here.
 ;;; When you issue a DEFSTRUCT at the REPL, there are *three* instances
@@ -667,7 +693,8 @@
                     ;; or else a compiled perfect-hash-based mapper. Either way, punt.
                     (funcall old symbol)
                     (let* ((new (make-second-stage-slot-mapper vector))
-                           (actual-old (cas (layout-slot-mapper layout) me new)))
+                           (actual-old
+                            (%layout-slot-cas layout (get-dsd-index layout slot-mapper) me new)))
                       (when (eq actual-old me)
                         (install-hash-based-slot-mapper
                          layout pairs unique-hashes `(slot-mapper ,(dd-name dd))))
