@@ -30,7 +30,11 @@ extern void arch_handle_allocation_trap(os_context_t*);
 extern bool arch_pseudo_atomic_atomic(struct thread *thread);
 extern void arch_set_pseudo_atomic_interrupted(struct thread *thread);
 extern void arch_clear_pseudo_atomic_interrupted(struct thread *thread);
+#ifdef LISP_FEATURE_PPC
 extern os_vm_address_t arch_get_bad_addr(int, siginfo_t*, os_context_t*);
+#else
+#define arch_get_bad_addr(sig,info,context) info->si_addr
+#endif
 extern unsigned char *arch_internal_error_arguments(os_context_t*);
 extern unsigned int arch_install_breakpoint(void *pc);
 extern void arch_remove_breakpoint(void *pc, unsigned int orig_inst);

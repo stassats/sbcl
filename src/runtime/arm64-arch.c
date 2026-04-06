@@ -23,14 +23,6 @@
 #include "breakpoint.h"
 #include "pseudo-atomic.h"
 
-#ifndef LISP_FEATURE_WIN32
-os_vm_address_t arch_get_bad_addr(int sig, siginfo_t *code, os_context_t *context)
-{
-    return (os_vm_address_t)code->si_addr;
-
-}
-#endif
-
 void arch_skip_instruction(os_context_t *context)
 {
     uint32_t trap_instruction = *(uint32_t *)OS_CONTEXT_PC(context);

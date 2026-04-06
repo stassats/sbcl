@@ -184,17 +184,6 @@ void untune_asm_routines_for_microarch(void)
     memset(consts, 0, sizeof *consts);
     SYMBOL(CALLBACK_WRAPPER_TRAMPOLINE)->value = 0;
 }
-
-#ifndef _WIN64
-os_vm_address_t
-arch_get_bad_addr(int __attribute__((unused)) sig,
-                  siginfo_t *code,
-                  os_context_t __attribute__((unused)) *context)
-{
-    return (os_vm_address_t)code->si_addr;
-}
-#endif
-
 
 /*
  * hacking signal contexts

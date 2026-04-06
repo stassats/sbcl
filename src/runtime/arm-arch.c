@@ -22,11 +22,6 @@
 #include "interr.h"
 #include "breakpoint.h"
 
-os_vm_address_t arch_get_bad_addr(int sig, siginfo_t *code, os_context_t *context)
-{
-    return (os_vm_address_t)code->si_addr;
-}
-
 void arch_skip_instruction(os_context_t *context)
 {
     /* KLUDGE: Other platforms check for trap codes and skip inlined

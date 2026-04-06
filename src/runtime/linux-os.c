@@ -272,7 +272,8 @@ int os_preinit(char *argv[], char *envp[])
  * page fault on this OS.
  */
 static void
-fallback_sigsegv_handler(int signal, siginfo_t *info, os_context_t *context)
+fallback_sigsegv_handler(__attribute__((unused)) int signal,
+                         siginfo_t *info, os_context_t *context)
 {
     // This calls corruption_warning_and_maybe_lose.
     lisp_memory_fault_error(context, arch_get_bad_addr(signal, info, context));

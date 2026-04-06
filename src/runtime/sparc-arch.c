@@ -23,11 +23,6 @@
 #include "breakpoint.h"
 #include "pseudo-atomic.h"
 
-os_vm_address_t arch_get_bad_addr(int sig, siginfo_t *code, os_context_t *context)
-{
-    return (os_vm_address_t)code->si_addr;
-}
-
 void arch_skip_instruction(os_context_t *context)
 {
     OS_CONTEXT_PC(context) = *os_context_npc_addr(context);

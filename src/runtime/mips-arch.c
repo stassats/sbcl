@@ -22,15 +22,6 @@
 
 #define INSN_LEN sizeof(unsigned int)
 
-os_vm_address_t
-arch_get_bad_addr(int signam, siginfo_t *siginfo, os_context_t *context)
-{
-    /* Classic CMUCL comment:
-
-       Finding the bad address on the mips is easy. */
-    return (os_vm_address_t)siginfo->si_addr;
-}
-
 static inline unsigned int
 os_context_register(os_context_t *context, int offset)
 {

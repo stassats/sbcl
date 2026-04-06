@@ -55,7 +55,8 @@ char *os_get_runtime_executable_path()
 void os_init() {}
 
 static void
-sigsegv_handler(int signal, siginfo_t *info, os_context_t *context)
+sigsegv_handler(__attribute__((unused)) int signal,
+                siginfo_t *info, os_context_t *context)
 {
     /*fprintf(stderr, "SIGSEGV: pc=%p addr=%p\n",
            context->uc_mcontext.rip, info->si_addr);*/

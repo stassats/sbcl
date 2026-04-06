@@ -157,7 +157,8 @@ os_context_sigmask_addr(os_context_t *context)
  */
 
 void
-memory_fault_handler(int signal, siginfo_t *siginfo, os_context_t *context)
+memory_fault_handler(__attribute__((unused)) int signal,
+                     siginfo_t *siginfo, os_context_t *context)
 {
     void *fault_addr = arch_get_bad_addr(signal, siginfo, context);
 

@@ -27,12 +27,6 @@
 #define BREAK_INST 0x002A0000
 #define BREAK_MASK 0xFFFF8000
 
-os_vm_address_t
-arch_get_bad_addr(int signam, siginfo_t *siginfo, os_context_t *context)
-{
-    return (os_vm_address_t)siginfo->si_addr;
-}
-
 void arch_skip_instruction(os_context_t *context)
 {
     OS_CONTEXT_PC(context) += 4;
