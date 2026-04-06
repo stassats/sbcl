@@ -55,6 +55,7 @@
 #endif
 
 
+#ifndef LISP_FEATURE_PPC64
 os_vm_address_t
 arch_get_bad_addr(int sig, siginfo_t *code, os_context_t *context)
 {
@@ -67,7 +68,7 @@ arch_get_bad_addr(int sig, siginfo_t *code, os_context_t *context)
 #endif
     return addr;
 }
-
+#endif
 
 void
 arch_skip_instruction(os_context_t *context)
