@@ -551,3 +551,11 @@ number of CPU cycles elapsed as secondary value. EXPERIMENTAL."
     (inst mov :byte new 1)
     (zeroize old)
     (inst cmpxchg :lock :byte (mutex-slot m state) new)))
+
+#+(and permgen sb-xc-host)
+(define-vop (gc-remember-layout)
+  (:args (obj :scs (descriptor-reg)))
+  (:vop-var vop)
+  (:generator 1
+    (inst push obj)
+    (invoke-asm-routine 'call 'gc-remember-layout vop)))

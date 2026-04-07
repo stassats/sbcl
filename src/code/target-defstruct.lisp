@@ -15,6 +15,7 @@
 
 (export '(%layout-slot-set %layout-slot-cas))
 (defun %layout-slot-set (layout index value)
+  #+permgen (%primitive sb-vm::gc-remember-layout layout)
   #-immobile-space (%instance-set layout index value)
   #+immobile-space
   (sb-vm::with-pseudo-atomic-foreign-calls
