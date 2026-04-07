@@ -89,7 +89,6 @@
              ;; symbol-write-barrier includes the special case for #+permgen
              (emit-symbol-write-barrier vop object rax newval-tn-ref)
              (emit-gengc-barrier object nil rax newval-tn-ref))
-         (emit-gengc-barrier object nil rax newval-tn-ref)
          (move rax old)
          (inst cmpxchg :lock (ea (- (* offset n-word-bytes) lowtag) object) new))))
     (move result rax)))
