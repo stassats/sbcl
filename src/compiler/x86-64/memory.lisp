@@ -80,6 +80,29 @@
                      (setf value-tn-ref (tn-ref-across value-tn-ref))
                      while value-tn-ref)))))))
 
+(defun symbol-set-barrier-p (symbol newval-tn-ref)
+  (if (and (sc-is symbol immediate) (static-symbol-p (tn-value symbol)))
+      nil
+      (require-gengc-barrier-p symbol newval-tn-ref)))
+
+;;; There are 3 unused bits in the symbol-hash slot which I had intended
+;;; to use to indicate whether a symbol is in fixedobj space and whether the
+;;; containing card was marked since the last GC, to avoid repetitive
+;;; work - just do a bit test and skip.
+;;; Initially I'd like to just get this correct, and then see if it's worth
+;;; doing that optimization which will complicate the GC a little.
+(defun emit-symbol-write-barrier (vop symbol temp newval-tn-ref)
+  (declare (ignorable vop))
+  #+permgen
+  (when (require-gengc-barrier-p symbol newval-tn-ref)
+    (unless (and (sc-is symbol immediate) (static-symbol-p (tn-value symbol)))
+      (inst push symbol)
+      (invoke-asm-routine 'call 'gc-remember-symbol vop)))
+  ;; IMMEDIATE sc means that the symbol is static or immobile.
+  ;; Static symbols are roots, and immobile symbols use page fault handling.
+  (unless (sc-is symbol immediate)
+    (emit-gengc-barrier symbol nil temp newval-tn-ref)))
+
 #-soft-card-marks
 (defun emit-code-page-gengc-barrier (object scratch-reg)
   (inst mov scratch-reg object)

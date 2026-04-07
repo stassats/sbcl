@@ -92,18 +92,6 @@
   (:generator 1
     (inst mov result unbound-marker-widetag)))
 
-(defun emit-symbol-write-barrier (vop symbol temp newval-tn-ref)
-  (declare (ignorable vop))
-  #+permgen
-  (when (require-gengc-barrier-p symbol newval-tn-ref)
-    (unless (and (sc-is symbol immediate) (static-symbol-p (tn-value symbol)))
-      (inst push symbol)
-      (invoke-asm-routine 'call 'gc-remember-symbol vop)))
-  ;; IMMEDIATE sc means that the symbol is static or immobile.
-  ;; Static symbols are roots, and immobile symbols use page fault handling.
-  (unless (sc-is symbol immediate)
-    (emit-gengc-barrier symbol nil temp newval-tn-ref)))
-
 ;; Return the effective address of the value slot of static SYMBOL.
 (defun static-symbol-value-ea (symbol &optional (byte 0))
   (ea (+ (static-symbol-offset symbol)

@@ -39,9 +39,6 @@
       `(%cas-symbol-global-value symbol old new)
       (sb-c::give-up-ir1-transform)))
 
-(macrolet ((access-wired-tls-val (sym) ; SYM is a symbol
-             `(thread-tls-ea (load-time-tls-offset ,sym))))
-
 (flet ((emit-cas (ea symbol old new rax result vop &aux (node (sb-c::vop-node vop)))
          (if (sc-is old immediate) (move-immediate rax (immediate-tn-repr old)) (move rax old))
          (inst cmpxchg :lock ea new)
@@ -132,6 +129,8 @@
 ;;; symbol-value only about twice as often as BIND, which is not enough to outform
 ;;; a comparision and conditional move. But I suspect this situation is rare.
 
+(macrolet ((access-wired-tls-val (sym) ; SYM is a symbol
+             `(thread-tls-ea (load-time-tls-offset ,sym))))
 ;; This code is tested by 'codegen.impure.lisp'
 (defun emit-symeval (value symbol symbol-ref symbol-reg check-boundp vop)
   (let ((known-symbol (and (constant-tn-p symbol) (tn-value symbol))))
