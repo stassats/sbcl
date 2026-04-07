@@ -1407,11 +1407,15 @@ many elements are copied."
 
 (defun %concatenate-to-list (&rest sequences)
   (declare (explicit-check))
-  (let* ((result (list nil))
+  (let* ((result (unaligned-dx-cons nil))
          (splice result))
+    (declare (dynamic-extent result)
+             (sb-c::no-debug result splice))
     (do-rest-arg ((sequence) sequences)
       (sb-sequence:dosequence (e sequence)
-        (setf splice (cdr (rplacd splice (list e))))))
+        (let ((cons (list e)))
+          (setf (cdr splice) cons
+                splice cons))))
     (cdr result)))
 
 (defun %concatenate-to-vector (widetag &rest sequences)
@@ -1434,15 +1438,19 @@ many elements are copied."
 
 (defun %concatenate-to-list-subseq (&rest sequences)
   (declare (explicit-check))
-  (let* ((result (list nil))
+  (let* ((result (unaligned-dx-cons nil))
          (splice result))
+    (declare (dynamic-extent result)
+             (sb-c::no-debug result splice))
     (do-rest-arg ((arg index*) sequences)
       (symbol-macrolet ((index (truly-the index index*)))
         (cond ((eq arg '%splice)
                (let ((n (truly-the index (fast-&rest-nth (incf index) sequences))))
                  (loop repeat n
                        do
-                       (setf splice (cdr (rplacd splice (list (fast-&rest-nth (incf index) sequences))))))))
+                       (let ((cons (list (fast-&rest-nth (incf index) sequences))))
+                         (setf (cdr splice) cons
+                               splice cons)))))
               ((eq arg '%repeat)
                (let* ((n (fast-&rest-nth (incf index) sequences))
                       (n (the index
@@ -1454,7 +1462,9 @@ many elements are copied."
                       (element (fast-&rest-nth (incf index) sequences)))
                  (loop repeat n
                        do
-                       (setf splice (cdr (rplacd splice (list element)))))))
+                       (let ((cons (list element)))
+                         (setf (cdr splice) cons
+                               splice cons)))))
               (t
                (multiple-value-bind (seq start2 end2)
                    (cond ((eq arg '%subseq)
@@ -1465,7 +1475,9 @@ many elements are copied."
                          (t
                           (values arg 0 nil)))
                  (do-subsequence (e seq start2 end2)
-                   (setf splice (cdr (rplacd splice (list e))))))))))
+                   (let ((cons (list e)))
+                         (setf (cdr splice) cons
+                               splice cons))))))))
     (cdr result)))
 
 (defun %concatenate-to-vector-subseq (widetag &rest sequences)
