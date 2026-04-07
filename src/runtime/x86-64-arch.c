@@ -917,29 +917,50 @@ int handle_tls_deref_trap(os_context_t* context, os_vm_address_t addr)
 {
     unsigned char* pc = (void*)os_context_pc(context);
     if (!(addr == 0 && gc_managed_heap_space_p((lispobj)pc))) return 0;
+
+    int variant = 0;
+    // Check that the faulting instruction has one of two forms:
+    //   * MOV Rd,[Rn+1]
+    //   * CMP BYTE PTR [Rn+1], UNBOUND-MARKER-WIDETAG
+    if (((pc[0] == 0x48 || pc[0] == 0x4D) && pc[1] == 0x8B &&
+         (pc[2] & 0300) == 0100 && pc[3] == 1)) {
+        variant = 1; // MOV instruction
+    } else if (pc[0] == 0x80 && (pc[1] & 0370) == 0170 && pc[2] == 1 &&
+               pc[3] == UNBOUND_MARKER_WIDETAG) {
+        // 1 = (SYMBOL_VALUE_SLOT << WORD_SHIFT) - OTHER_POINTER_LOWTAG
+        variant = 2; // CMP instruction with no REX prefix
+    } else if (pc[0] == 0x41 && pc[1] == 0x80 && (pc[2] & 0370) == 0170 &&
+               pc[3] == 1 && pc[4] == UNBOUND_MARKER_WIDETAG) {
+        variant = 3; // CMP using any of R8 through R15
+    } else {
+      return 0;
+    }
+
     struct code* code = (void*)component_ptr_from_pc((char*)pc);
     if (!code) return 0;
     struct compiled_debug_info* cdi = (void*)native_pointer(code->debug_info);
     if (cdi->eh_locs == NIL) return 0;
 
-    // Check that the faulting instruction is MOV Rd,[Rn+1]
-    if ((pc[0] == 0x48 || pc[0] == 0x4D) && pc[1] == 0x8B &&
-        (pc[2] & 0300) == 0100 && pc[3] == 1) {
-    } else {
-      return 0;
-    }
     struct vector* eh_locs = VECTOR(cdi->eh_locs);
     uint32_t* data = (void*)eh_locs->data;
     uint32_t pc_offset = (char*)pc - code_text_start(code);
     int i = bsearch_greatereql_uint32(pc_offset, data, vector_len(eh_locs));
     if (i<0 || data[i] != pc_offset) return 0;
 
-    pc -= 7;
-    int32_t disp = UNALIGNED_LOAD32(pc+3);
+    int32_t disp;
+    switch (variant) {
+    case 1: case 2: case 3:
+        // The instruction preceding the faulting one is always 7 bytes:
+        //   498B85700F0000  MOV RAX, [R13+disp32]
+        pc -= 7;
+        disp = UNALIGNED_LOAD32(pc+3);
+        break;
+    }
     int logical_index = disp >> (1+WORD_SHIFT);
     lispobj symbol = tlsindex_to_symbol_map[logical_index];
     gc_assert(symbol != NO_TLS_VALUE_MARKER);
-    //fprintf(stderr, "TLS trap handled: %s\n", (char*)VECTOR(SYMBOL(symbol)->name)->data);
+    /*fprintf(stderr, "TLS trap variant %d for %s\n", variant,
+            (char*)VECTOR(SYMBOL(symbol)->name)->data);*/
     struct thread* th = get_sb_vm_thread();
     lispobj* pcell = (lispobj*)(disp + (char*)th);
     lispobj value = pcell[1];

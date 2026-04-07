@@ -282,6 +282,11 @@
                             (t
                              (symbol-slot-ea (tn-value symbol) symbol-value-slot)))
             unbound-marker-widetag))
+     #+tls-load-indirect
+     ((sc-is symbol immediate constant) ; 2 instructions, possibly handling a load fault
+      (inst mov temp (thread-tls-ea (load-time-tls-offset (tn-value symbol) -8)))
+      (push (emit-label (gen-label)) (sb-assem::asmstream-eh-locs sb-assem:*asmstream*))
+      (inst cmp :byte (ea 1 temp) unbound-marker-widetag))
      (t
       ;; For a known symbol that is not known to be either aways global or thread-local,
       ;; wire in a TLS index. It's unlikely that TLS will be exhausted by doing this, in contrast
