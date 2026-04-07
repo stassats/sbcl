@@ -1325,7 +1325,7 @@ many elements are copied."
                           (start 0))
                       (declare (index start))
                       (do-rest-arg ((seq) sequences)
-                        (string-dispatch (,@dispatch t)
+                        (string-dispatch (,@dispatch list t)
                                          seq
                           (let ((length (length seq)))
                             (replace result seq :start1 start)
@@ -1394,7 +1394,7 @@ many elements are copied."
                                               (values seq start end (- end start))))
                                            (t
                                             (values (truly-the sequence arg) 0 nil (length arg))))
-                                   (string-dispatch (,@dispatch t) seq
+                                   (string-dispatch (,@dispatch list t) seq
                                      (replace result seq :start1 start :start2 start2 :end2 end2)
                                      (incf start length))))))
                         result)))))))
