@@ -219,6 +219,13 @@
           (values '%instance-ref '%layout-slot-set))
          (t
           (values '%instance-ref '%instance-set))))
+
+(defun dsd-reader (dsd flag) ; for backward-compatibility
+  (sb-int:aver (not flag)) ; reject subtypes of FUNCALLABLE-STRUCTURE
+  (acond ((dsd-raw-slot-data dsd)
+          (values (raw-slot-data-reader-name it) (raw-slot-data-writer-name it)))
+         (t
+          (values '%instance-ref '%instance-set))))
 
 ;;;; Typed (non-class) structures
 

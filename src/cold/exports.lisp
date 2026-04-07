@@ -1743,6 +1743,7 @@ is a good idea, but see SB-SYS re. blurring of boundaries.")
            "DOUBLE-FLOAT-LOW-BITS" "DOUBLE-FLOAT-SIGNIFICAND"
            "DSD-ACCESSOR-NAME" "DSD-ALWAYS-BOUNDP" "DSD-DEFAULT" "DSD-INDEX"
            "DSD-NAME" "DSD-RAW-TYPE" "DSD-READ-ONLY" "DSD-PRIMITIVES" "DSD-TYPE"
+           "DSD-READER"
            "DYNAMIC-SPACE-OBJ-P"
            "DYNBIND"
            "FLOAT-WAIT" "DYNAMIC-SPACE-FREE-POINTER" "DYNAMIC-USAGE"
