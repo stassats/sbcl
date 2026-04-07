@@ -776,6 +776,10 @@ struct fixedobj_page { // 8 bytes per page
     union immobile_page_attr {
       int packed;
       struct {
+        // The only "flags" indicate the write-protect status. They used to
+        // also indicate the nature of objects stored on a page, distinguishing
+        // interned symbols from uninterned symbols for example.
+        // Revision 6a080ae2 did away with such usage.
         unsigned char flags;
         unsigned char obj_align; // object spacing expressed in lisp words
         unsigned char unused1;

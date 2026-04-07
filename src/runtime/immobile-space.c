@@ -105,15 +105,13 @@ unsigned int immobile_scav_queue_count;
 #define WRITE_PROTECT_CLEARED 0x40
 
 // Packing and unpacking attributes
-// the low two flag bits are for write-protect status
 #define MAKE_ATTR(spacing) ((spacing)<<8)
 #define OBJ_SPACING(attr) ((attr>>8) & 0xFF)
 
 // Ignore the write-protect bits and the generations when comparing attributes
 #define ATTRIBUTES_MATCH_P(page_attr,specified_attr) \
-  ((page_attr & 0xFFFF3F) == specified_attr)
-#define SET_WP_FLAG(index,flag) \
-  fixedobj_pages[index].attr.parts.flags = (fixedobj_pages[index].attr.parts.flags & 0x3F) | flag
+  ((page_attr & 0xFFFF00) == specified_attr)
+#define SET_WP_FLAG(index,bits) fixedobj_pages[index].attr.parts.flags = bits
 
 #define set_page_full(i) fixedobj_pages[i].free_index = IMMOBILE_CARD_BYTES
 #define page_full_p(i) (fixedobj_pages[i].free_index >= (int)IMMOBILE_CARD_BYTES)
