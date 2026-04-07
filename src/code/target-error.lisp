@@ -2365,13 +2365,13 @@ PROCEED WITH CAUTION."))))
 
 PROCEED WITH CAUTION."))))
 
+(sb-impl:define-thread-local *heap-exhausted-error-available-bytes*)
+(sb-impl:define-thread-local *heap-exhausted-error-requested-bytes*)
 (define-condition heap-exhausted-error (storage-condition)
   ()
   (:report
    (lambda (condition stream)
      (declare (ignore condition))
-     (declare (special *heap-exhausted-error-available-bytes*
-                       *heap-exhausted-error-requested-bytes*))
      ;; See comments in interr.lisp -- there is a method to this madness.
      (if (and (boundp '*heap-exhausted-error-available-bytes*)
               (boundp '*heap-exhausted-error-requested-bytes*))

@@ -761,11 +761,12 @@
 ;;; that we don't need to allocate it when running out of
 ;;; memory. Similarly we pass the amounts in special variables as
 ;;; there may be multiple threads running into trouble at the same
-;;; time. The condition is created by GC-REINIT.
+;;; time.
+;;; (Why not allocate the condition on the control stack? Well, we can't,
+;;; at least currently. An ad-hoc technique to do so wouldn't be out of
+;;; the question, and might look more elegant)
 (define-load-time-global *heap-exhausted-error-condition*
   (make-condition 'heap-exhausted-error))
-(sb-impl:define-thread-local *heap-exhausted-error-available-bytes*)
-(sb-impl:define-thread-local *heap-exhausted-error-requested-bytes*)
 
 (defun heap-exhausted-error (available requested)
   ;; Double word aligned bytes, can be passed as fixnums to avoid
