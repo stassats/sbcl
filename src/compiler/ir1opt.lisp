@@ -1216,7 +1216,10 @@
              (let ((type (derive-combination-type node show)))
                (when type
                  (derive-node-type node type)
-                 (maybe-terminate-block node nil)))))
+                 (when (eq (node-derived-type node) *empty-type*)
+                   (if (node-deleted node)
+                       (return-from ir1-optimize-combination))
+                   (maybe-terminate-block node nil))))))
       (ecase kind
         (:local
          (let ((fun (combination-lambda node)))

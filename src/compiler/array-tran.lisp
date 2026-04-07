@@ -139,14 +139,17 @@
 ;;; return type is going to be the same as the new-value for SETF
 ;;; functions.
 (defun assert-new-value-type (new-value array)
-  (let ((type (type-array-element-type (lvar-type array))))
-    (unless (eq type *wild-type*)
-      (assert-lvar-type
-       new-value
-       type
-       (lexenv-policy (node-lexenv (lvar-dest new-value)))
-       'aref-context)))
-  (lvar-type new-value))
+  (let ((type (type-array-element-type (lvar-type array)))
+        (value-type (lvar-type new-value)))
+    (cond ((eq type *wild-type*)
+           value-type)
+          (t
+           (assert-lvar-type
+            new-value
+            type
+            (lexenv-policy (node-lexenv (lvar-dest new-value)))
+            'aref-context)
+           (type-intersection value-type type)))))
 
 (defoptimizers externally-checkable-type
     (hairy-data-vector-set/check-bounds

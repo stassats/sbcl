@@ -5136,3 +5136,10 @@
    (sb-int:named-lambda ftype-key-default-type (&key (a 1))
      a)
    integer))
+
+(with-test (:name :deleted-node-in-derive-type)
+  (checked-compile
+   `(lambda (a)
+      (declare ((simple-array nil (9)) a))
+      (setf (aref a 0) 1)
+      a)))
