@@ -76,13 +76,23 @@
   (:results (result :scs (descriptor-reg any-reg)))
   (:vop-var vop)
   (:generator 5
-     (let ((newval-tn-ref (vop-nth-arg 2 vop)))
-       (if (eq name 'sb-impl::cas-symbol-%info)
-           (emit-symbol-write-barrier vop object rax newval-tn-ref)
-           (emit-gengc-barrier object nil rax newval-tn-ref)))
-     (move rax old)
-     (inst cmpxchg :lock (ea (- (* offset n-word-bytes) lowtag) object) new)
-     (move result rax)))
+    (let ((newval-tn-ref (vop-nth-arg 2 vop)))
+      (cond
+        #+immobile-space
+        ((eq name 'sb-impl::cas-symbol-%info)
+         (pseudo-atomic ()
+          (emit-symbol-write-barrier vop object rax newval-tn-ref)
+          (move rax old)
+          (inst cmpxchg :lock (ea (- (* offset n-word-bytes) lowtag) object) new)))
+        (t
+         (if (eq name 'sb-impl::cas-symbol-%info)
+             ;; symbol-write-barrier includes the special case for #+permgen
+             (emit-symbol-write-barrier vop object rax newval-tn-ref)
+             (emit-gengc-barrier object nil rax newval-tn-ref))
+         (emit-gengc-barrier object nil rax newval-tn-ref)
+         (move rax old)
+         (inst cmpxchg :lock (ea (- (* offset n-word-bytes) lowtag) object) new))))
+    (move result rax)))
 
 ;;;; symbol hacking VOPs
 
@@ -131,11 +141,14 @@
   (:temporary (:sc unsigned-reg) val-temp)
   (:vop-var vop)
   (:generator 4
-    (emit-symbol-write-barrier vop symbol val-temp (vop-nth-arg 1 vop))
-    (emit-store (if (sc-is symbol immediate)
-                      (symbol-slot-ea (tn-value symbol) symbol-value-slot)
-                      (object-slot-ea symbol symbol-value-slot other-pointer-lowtag))
-      value val-temp)))
+    (pseudo-atomic (:elide-if #+immobile-space
+                              (not (symbol-set-barrier-p symbol (vop-nth-arg 1 vop)))
+                              #-immobile-space t)
+      (emit-symbol-write-barrier vop symbol val-temp (vop-nth-arg 1 vop))
+      (emit-store (if (sc-is symbol immediate)
+                        (symbol-slot-ea (tn-value symbol) symbol-value-slot)
+                        (object-slot-ea symbol symbol-value-slot other-pointer-lowtag))
+        value val-temp))))
 
 #-sb-thread
 (progn
@@ -257,6 +270,11 @@
 
 #+sb-xc-host ; not needed post-build
 (macrolet ((gcbar ()
+             #+immobile-space
+             `(assemble ()
+                (inst push object)
+                (invoke-asm-routine 'call 'mark-card vop))
+             #-immobile-space
              `(assemble ()
                 #+permgen
                 (progn
@@ -271,9 +289,10 @@
          (index :scs (unsigned-reg))
          (linkage-cell :scs (sap-reg))
          (linkage-val :scs (unsigned-reg)))
-  (:temporary (:sc unsigned-reg) temp)
+  #-immobile-space (:temporary (:sc unsigned-reg) temp)
   (:vop-var vop)
   (:generator 1
+   (pseudo-atomic (:elide-if (or #-immobile-space t))
     (gcbar)
     (inst cmp :byte (ea (- other-pointer-lowtag) object) fdefn-widetag)
     (inst jmp :ne SYMBOL)
@@ -283,19 +302,20 @@
     (inst or :dword :lock
           (object-slot-ea object symbol-hash-slot other-pointer-lowtag) index)
     CELL-SET
-    (inst mov (ea linkage-cell) linkage-val)))
+    (inst mov (ea linkage-cell) linkage-val))))
 (define-vop (set-fname-fun)
   (:args (object :scs (descriptor-reg))
          (function :scs (descriptor-reg))
          (linkage-cell :scs (sap-reg))
          (linkage-val :scs (unsigned-reg immediate)))
-  (:temporary (:sc unsigned-reg) temp)
+  #-immobile-space (:temporary (:sc unsigned-reg) temp)
   (:vop-var vop)
   (:generator 1
+   (pseudo-atomic (:elide-if (or #-immobile-space t))
     (gcbar)
     (storew function object fdefn-fun-slot other-pointer-lowtag)
     (unless (and (sc-is linkage-val immediate) (zerop (tn-value linkage-val)))
-      (inst mov (ea linkage-cell) linkage-val)))))
+      (inst mov (ea linkage-cell) linkage-val))))))
 
 (define-vop (fdefn-fun) ; This vop works on symbols and fdefns
   (:args (fdefn :scs (descriptor-reg)))

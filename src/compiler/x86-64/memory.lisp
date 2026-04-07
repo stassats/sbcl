@@ -92,16 +92,19 @@
 ;;; Initially I'd like to just get this correct, and then see if it's worth
 ;;; doing that optimization which will complicate the GC a little.
 (defun emit-symbol-write-barrier (vop symbol temp newval-tn-ref)
-  (declare (ignorable vop))
-  #+permgen
-  (when (require-gengc-barrier-p symbol newval-tn-ref)
-    (unless (and (sc-is symbol immediate) (static-symbol-p (tn-value symbol)))
-      (inst push symbol)
-      (invoke-asm-routine 'call 'gc-remember-symbol vop)))
-  ;; IMMEDIATE sc means that the symbol is static or immobile.
-  ;; Static symbols are roots, and immobile symbols use page fault handling.
-  (unless (sc-is symbol immediate)
-    (emit-gengc-barrier symbol nil temp newval-tn-ref)))
+  (declare (ignorable vop temp))
+  (when (symbol-set-barrier-p symbol newval-tn-ref)
+    #+immobile-space
+    (progn (inst push symbol)
+           (if (sc-is symbol immediate)
+               (invoke-asm-routine 'call 'mark-symbol-card vop)
+               (invoke-asm-routine 'call 'mark-card vop)))
+    #-immobile-space
+    (progn
+      #+permgen
+      (progn (inst push symbol)
+             (invoke-asm-routine 'call 'gc-remember-symbol vop))
+      (emit-gengc-barrier symbol nil temp newval-tn-ref))))
 
 #-soft-card-marks
 (defun emit-code-page-gengc-barrier (object scratch-reg)

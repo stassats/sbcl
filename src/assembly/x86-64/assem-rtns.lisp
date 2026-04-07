@@ -466,6 +466,47 @@
       (inst leave)
       (inst ret)))))
 
+#+(and immobile-space sb-assembling)
+(define-assembly-routine (mark-symbol-card
+                          (:return-style :none)
+                          (:export mark-card)) ; if the space is unknown
+    ((:temp rax unsigned-reg rax-offset)
+     (:temp rdx unsigned-reg rdx-offset))
+  (inst push rax)
+  (inst mov rax (ea 16 rsp-tn)) ; load the argument
+  (inst push rdx)
+  ;; stack: symbol
+  ;;        return PC
+  ;;        saved rax
+  ;;        saved rdx
+  (inst mov rdx (rip-relative-ea (make-fixup "FIXEDOBJ_SPACE_START" :foreign-dataref)))
+  (inst sub rax (ea rdx)) ; compute symbol - FIXEDOBJ_SPACE_START
+  (inst shr rax (1- (integer-length immobile-card-bytes)))
+  FIXEDOBJ
+  (inst mov rdx (rip-relative-ea (make-fixup "fixedobj_pages" :foreign-dataref)))
+  (inst mov rdx (ea rdx))
+  (inst mov :byte (ea 4 rdx rax 8) #x40) ; SET_WP_FLAG to WRITE_PROTECT_CLEARED
+  (inst pop rdx)
+  (inst pop rax)
+  (inst ret 8) ; remove 1 stack arg
+  (inst .align 4 :long-nop)
+  MARK-CARD
+  (inst push rax)
+  (inst mov rax (ea 16 rsp-tn)) ; load the argument
+  (inst push rdx)
+  (inst mov rdx (rip-relative-ea (make-fixup "FIXEDOBJ_SPACE_START" :foreign-dataref)))
+  (inst sub rax (ea rdx)) ; compute symbol - FIXEDOBJ_SPACE_START
+  ;; Preserve the sign in the right-shift so that one comparison suffices.
+  ;; (If the difference was negative, is looks like a large positive.)
+  (inst sar rax (1- (integer-length immobile-card-bytes)))
+  (inst cmp rax (/ fixedobj-space-size immobile-card-bytes))
+  (inst jmp :B FIXEDOBJ) ; unsigned comparison
+  (inst mov rax (ea 24 rsp-tn)) ; reload the argument
+  (mark-gc-card rax)
+  (inst pop rdx)
+  (inst pop rax)
+  (inst ret 8)) ; remove 1 stack arg
+
 ;; Adding to the thread-local remset has to be pseudo-atomic because GC takes
 ;; ownership of the the vector when it inserts rememberd objects into the common
 ;; remset and it assigns 0 into the thread slot.

@@ -39,9 +39,10 @@
       `(%cas-symbol-global-value symbol old new)
       (sb-c::give-up-ir1-transform)))
 
-(flet ((emit-cas (ea symbol old new rax result vop &aux (node (sb-c::vop-node vop)))
+(flet ((emit-cas (ea symbol old new rax result pa vop &aux (node (sb-c::vop-node vop)))
          (if (sc-is old immediate) (move-immediate rax (immediate-tn-repr old)) (move rax old))
          (inst cmpxchg :lock ea new)
+         (when pa (emit-end-pseudo-atomic))
          (unless (or (and (sc-is symbol immediate) (sb-c::always-boundp (tn-value symbol) node))
                      (policy node (= safety 0)))
            (inst cmp :byte rax unbound-marker-widetag)
@@ -59,11 +60,14 @@
   (:policy :fast-safe)
   (:vop-var vop)
   (:generator 10
-    (emit-symbol-write-barrier vop symbol rax (vop-nth-arg 2 vop))
-    (emit-cas (if (sc-is symbol immediate)
-                  (symbol-slot-ea (tn-value symbol) symbol-value-slot)
-                  (symbol-value-slot-ea symbol))
-              symbol old new rax result vop)))
+    ;; There's an error trap in EMIT-CAS which mustn't be inside PSEUDO-ATOMIC
+    (let ((pa #+immobile-space (symbol-set-barrier-p symbol (vop-nth-arg 2 vop))))
+      (when pa (emit-begin-pseudo-atomic))
+      (emit-symbol-write-barrier vop symbol rax (vop-nth-arg 2 vop))
+      (emit-cas (if (sc-is symbol immediate)
+                    (symbol-slot-ea (tn-value symbol) symbol-value-slot)
+                    (symbol-value-slot-ea symbol))
+                symbol old new rax result pa vop))))
 
 (define-vop (%compare-and-swap-symbol-value)
   (:translate %compare-and-swap-symbol-value)
@@ -88,13 +92,19 @@
                               (symbol-tls-index-ea symbol)
                               (tls-index-of symbol)))
     (inst add cell thread-tn)
-    (inst cmp :qword (ea cell) no-tls-value-marker)
-    (inst jmp :ne CAS)
-    ;; GLOBAL
-    (emit-symbol-write-barrier vop symbol cell (vop-nth-arg 2 vop))
-    (emit-lea-symbol-value-slot cell symbol)
-    CAS
-    (emit-cas (ea cell) symbol old new rax result vop))))
+    ;; IF this is CAS of a thread-local value, then pseudo-atomic is not needed,
+    ;; but trying to skip the p-a (to "optimize") is just silly because we have
+    ;; to assume that this is NOT thread-local for CAS to have any merit.
+    (let ((pa #+immobile-space (symbol-set-barrier-p symbol (vop-nth-arg 2 vop)))
+          (cas (gen-label)))
+      (when pa (emit-begin-pseudo-atomic))
+      (inst cmp :qword (ea cell) no-tls-value-marker)
+      (inst jmp :ne CAS)
+      ;; GLOBAL
+      (emit-symbol-write-barrier vop symbol cell (vop-nth-arg 2 vop))
+      (emit-lea-symbol-value-slot cell symbol)
+      (emit-label CAS)
+      (emit-cas (ea cell) symbol old new rax result pa vop)))))
 
 ;;; The :tls-load-indirect feature is, in most situations, an improvement over "direct"
 ;;; access (contrary to what indirection implies, but I couldn't settle on a better name).
@@ -338,11 +348,20 @@
                                        (tls-index-of symbol)))
              (inst add cell thread-tn))))
     (inst cmp :qword (ea cell) no-tls-value-marker)
-    (inst jmp :ne STORE)
-    (emit-symbol-write-barrier vop symbol val-temp (vop-nth-arg 1 vop))
-    (emit-lea-symbol-value-slot cell symbol)
+    (inst jmp :ne STORE) ; is thread-local
+    (let ((pa #+immobile-space (symbol-set-barrier-p symbol (vop-nth-arg 1 vop))))
+      (cond (pa ; do barrier + store within P-A, then jump out
+             (pseudo-atomic ()
+               (emit-symbol-write-barrier vop symbol val-temp (vop-nth-arg 1 vop))
+               (emit-lea-symbol-value-slot cell symbol)
+               (emit-store (ea cell) value val-temp))
+             (inst jmp DONE))
+            (t
+             (emit-symbol-write-barrier vop symbol val-temp (vop-nth-arg 1 vop))
+             (emit-lea-symbol-value-slot cell symbol))))
     STORE
-    (emit-store (ea cell) value val-temp)))
+    (emit-store (ea cell) value val-temp)
+    DONE))
 
 ;;;; binding and unbinding
 

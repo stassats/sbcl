@@ -767,33 +767,9 @@ scavenge_immobile_roots(generation_index_t min_gen, generation_index_t max_gen)
     scavenge_immobile_newspace();
 }
 
-static int should_mprotect(low_page_index_t page) {
-    return fixedobj_pages[page].attr.parts.obj_align == SYMBOL_SIZE
-        && fixedobj_page_wp(page);
-}
 void write_protect_immobile_space()
 {
     immobile_scav_queue_head = 0;
-
-    if (!ENABLE_PAGE_PROTECTION)
-        return;
-
-    // Now find contiguous ranges of pages that are protectable,
-    // minimizing the number of system calls as much as possible.
-    int i, start = -1, end = -1; // inclusive bounds on page indices
-    low_page_index_t max_used_fixedobj_page = calc_max_used_fixedobj_page();
-    for (i = max_used_fixedobj_page ; i >= 0 ; --i) {
-        if (should_mprotect(i)) {
-            if (end < 0) end = i;
-            start = i;
-        }
-        if (end >= 0 && (!should_mprotect(i) || i == 0)) {
-            os_protect(fixedobj_page_address(start),
-                       IMMOBILE_CARD_BYTES * (1 + end - start),
-                       OS_VM_PROT_READ);
-            start = end = -1;
-        }
-    }
 }
 
 static inline generation_index_t
@@ -1277,10 +1253,7 @@ void deport_codeblob_offsets_from_heap()
     loaded_codeblob_offsets = memcpy(vector_copy, loaded_codeblob_offsets, nbytes);
     SYMBOL(IMMOBILE_CODEBLOB_VECTOR)->value = NIL;
     int page = 0, limit = calc_max_used_fixedobj_page();
-    for (page = 0; page <= limit; ++page) {
-        if (fixedobj_pages[page].attr.parts.obj_align > SYMBOL_SIZE) // layout page
-            SET_WP_FLAG(page, WRITE_PROTECT_CLEARED);
-    }
+    for (page = 0; page <= limit; ++page) SET_WP_FLAG(page, WRITE_PROTECT_CLEARED);
 }
 
 // Change all objects to generation 0
