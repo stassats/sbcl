@@ -1155,9 +1155,7 @@
              (type-intersection current-type
                                 (type-union (make-numeric-type :low lo
                                                                :high hi)
-                                            (make-numeric-type :complexp :complex
-                                                               :low lo
-                                                               :high hi)))))))
+                                            (specifier-type 'complex)))))))
     (t
      (multiple-value-bind (greater equal)
          (if not-p

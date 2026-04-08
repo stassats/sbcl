@@ -1368,9 +1368,7 @@
                          :complexp (if (csubtypep re-type
                                                   (specifier-type 'rational))
                                        :real
-                                       :complex)
-                         :low (numeric-type-low re-type)
-                         :high (numeric-type-high re-type))
+                                       :complex))
       (specifier-type 'complex)))
 
 (defun complex-derive-type-aux-2 (re-type im-type same-arg)

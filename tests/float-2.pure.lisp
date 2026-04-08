@@ -913,3 +913,9 @@ fractional bits."
     ((1) (condition 'type-error
                     (lambda (c)
                       (= (type-error-datum c) 2))))))
+
+(with-test (:name :one-arg-complex-type)
+  (assert-type (lambda (x)
+                 (declare ((single-float 5.0) x))
+                 (imagpart (complex x)))
+               single-float))

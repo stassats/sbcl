@@ -3391,13 +3391,10 @@
         ((eq (numeric-type-complexp type) :complex)
          (let* ((format (case (numeric-type-class type)
                           ((integer rational) 'single-float)
-                          (t (numeric-type-format type))))
-                (bound-format (or format 'float)))
+                          (t (numeric-type-format type)))))
            (make-numeric-type :class 'float
                               :format format
-                              :complexp :complex
-                              :low (coerce -1 bound-format)
-                              :high (coerce 1 bound-format))))
+                              :complexp :complex)))
         (t
          (let* ((interval (numeric-type->interval type))
                 (range-info (interval-range-info interval))
@@ -3420,8 +3417,7 @@
                      (t (type-union minus zero plus)))))
              (if (eq (numeric-type-complexp type) :real)
                  result
-                 (type-union result (make-numeric-type :class 'float
-                                                       :complexp :complex))))))))
+                 (type-union result (specifier-type '(complex float)))))))))
 
 (defoptimizer (signum derive-type) ((num))
   (one-arg-derive-type num #'signum-derive-type-aux))
