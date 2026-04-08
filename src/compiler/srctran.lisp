@@ -6966,9 +6966,10 @@
                               (eq (car ,y) ',(car value))
                               (eq (cdr ,y) ',(cdr value))))
                        ((and (proper-or-dotted-list-p value)
-                             (loop with cdr = value
-                                   while (consp cdr)
-                                   always (symbolp (pop cdr))))
+                             (let ((cdr value))
+                               (and (loop while (consp cdr)
+                                          always (symbolp (pop cdr)))
+                                    (symbolp cdr))))
                         `(equal x y))))))
            ;; (equalp x (list y))
            ;; (equalp x (cons car cdr))

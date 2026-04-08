@@ -1119,3 +1119,11 @@
 (with-test (:name :make-sequence-non-simple)
   (assert-error (make-sequence '(and vector (not simple-array)) 10)
       type-error))
+
+(with-test (:name :equalp-to-equal)
+  (checked-compile-and-assert
+      ()
+      `(lambda (l)
+         (equalp l '(A . "FOO")))
+    (('(A . "FoO")) t)
+    (('(B . "FOO")) nil)))
