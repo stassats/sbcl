@@ -13,8 +13,8 @@ then
   stdout=$TEST_DIRECTORY/$TEST_FILESTEM.out
   stderr=$TEST_DIRECTORY/$TEST_FILESTEM.err
   run_sbcl >$stdout 2>$stderr <<EOF
-;; Immobile pages have physical protection, so it's unlikely that it would be wrong.
-;; However, the verifier was never actually checking.
+;; Mark a page as logically protected when it should not be, and confirm that
+;; the heap invariant checker finds an error.
 (assert (= (sb-kernel:generation-of '*posix-argv*) sb-vm:+pseudo-static-generation+))
 (assert (< (sb-kernel:generation-of *posix-argv*) sb-vm:+pseudo-static-generation+))
 (define-alien-type nil
@@ -29,7 +29,7 @@ then
 (setf (extern-alien "pre_verify_gen_0" char) 1)
 (let ((i (floor (- (sb-kernel:get-lisp-obj-address '*posix-argv*)
                    sb-vm:fixedobj-space-start)
-                4096)))
+                sb-vm:immobile-card-bytes)))
   ;; Mark it as-if write-protected (though without using mprotect)
   ;; This constant is defined in immobile-space.c: #define WRITE_PROTECT 0x80
   (setf (slot (deref fixedobj-pages i) 'flags) 128)

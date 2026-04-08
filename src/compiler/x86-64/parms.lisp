@@ -42,7 +42,7 @@
 ;;; the start of objects.
 (defconstant gencgc-alloc-granularity 0)
 ;;; The card size for immobile/low space
-(defconstant immobile-card-bytes 4096)
+(defconstant immobile-card-bytes 2048)
 
 ;;; ### Note: 'lispword' always means 8 bytes, and 'word' usually means
 ;;; the same as 'lispword', except in the assembler and disassembler,
