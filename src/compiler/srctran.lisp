@@ -2375,17 +2375,19 @@
   (let* ((number-interval (numeric-type->interval number-type))
          (divisor-interval (numeric-type->interval divisor-type)))
     (cond ((and (not float)
-                (eq (rem-result-type number-type divisor-type) 'integer))
-           ;; Since the remainder type is INTEGER, both args are
-           ;; INTEGERs.
-           (let* ((res (integer-truncate-derive-type
-                        (interval-low number-interval)
-                        (interval-high number-interval)
-                        (interval-low divisor-interval)
-                        (interval-high divisor-interval))))
-             (if (eq res t)
-                 *empty-type*
-                 (specifier-type (if (listp res) res 'integer)))))
+                (rational-type-p number-type)
+                (integer-type-p divisor-type))
+           (let ((div (interval-div number-interval divisor-interval t)))
+             (flet ((make-quot (div)
+                      (let ((quot (truncate-quotient-bound div)))
+                        (make-numeric-type :class 'integer
+                                           :low (interval-low quot)
+                                           :high (interval-high quot)
+                                           :normalize-zeros nil))))
+               (if (listp div)
+                   (type-union (make-quot (first div))
+                               (make-quot (second div)))
+                   (make-quot div)))))
           (t
            (multiple-value-bind (quot conservative)
                (if (and (member (interval-high divisor-interval) '(1 1f0 1d0))
@@ -3076,81 +3078,6 @@
       (multiple-value-bind (neg pos) (interval-split zero num t t)
         (interval-merge-pair (truncate-rem-bound neg div)
                              (truncate-rem-bound pos div)))))))
-
-;;; Derive useful information about the range. Returns three values:
-;;; - '+ if its positive, '- negative, or nil if it overlaps 0.
-;;; - The abs of the minimal value (i.e. closest to 0) in the range.
-;;; - The abs of the maximal value if there is one, or nil if it is
-;;;   unbounded.
-(defun numeric-union-info (low high)
-  (cond ((and low (not (minusp low)))
-         (values '+ low high))
-        ((and high (not (plusp high)))
-         (values '- (- high) (if low (- low) nil)))
-        (t
-         (values nil 0 (and low high (max (- low) high))))))
-
-(defun integer-truncate-derive-type
-       (number-low number-high divisor-low divisor-high)
-  ;; The result cannot be larger in magnitude than the number, but the
-  ;; sign might change. If we can determine the sign of either the
-  ;; number or the divisor, we can eliminate some of the cases.
-  (multiple-value-bind (number-sign number-min number-max)
-      (numeric-union-info number-low number-high)
-    (multiple-value-bind (divisor-sign divisor-min divisor-max)
-        (numeric-union-info divisor-low divisor-high)
-      (when (and divisor-max (zerop divisor-max))
-        ;; We've got a problem: guaranteed division by zero.
-        (return-from integer-truncate-derive-type t))
-      (when (zerop divisor-min)
-        ;; We'll assume that they aren't going to divide by zero.
-        (incf divisor-min))
-      (cond ((and number-sign divisor-sign)
-             ;; We know the sign of both.
-             (if (eq number-sign divisor-sign)
-                 ;; Same sign, so the result will be positive.
-                 `(integer ,(if divisor-max
-                                (truncate number-min divisor-max)
-                                0)
-                           ,(if number-max
-                                (truncate number-max divisor-min)
-                                '*))
-                 ;; Different signs, the result will be negative.
-                 `(integer ,(if number-max
-                                (- (truncate number-max divisor-min))
-                                '*)
-                           ,(if divisor-max
-                                (- (truncate number-min divisor-max))
-                                0))))
-            ((eq divisor-sign '+)
-             ;; The divisor is positive. Therefore, the number will just
-             ;; become closer to zero.
-             `(integer ,(if number-low
-                            (truncate number-low divisor-min)
-                            '*)
-                       ,(if number-high
-                            (truncate number-high divisor-min)
-                            '*)))
-            ((eq divisor-sign '-)
-             ;; The divisor is negative. Therefore, the absolute value of
-             ;; the number will become closer to zero, but the sign will also
-             ;; change.
-             `(integer ,(if number-high
-                            (- (truncate number-high divisor-min))
-                            '*)
-                       ,(if number-low
-                            (- (truncate number-low divisor-min))
-                            '*)))
-            ;; The divisor could be either positive or negative.
-            (number-max
-             ;; The number we are dividing has a bound. Divide that by the
-             ;; smallest posible divisor.
-             (let ((bound (truncate number-max divisor-min)))
-               `(integer ,(- bound) ,bound)))
-            (t
-             ;; The number we are dividing is unbounded, so we can't tell
-             ;; anything about the result.
-             `integer)))))
 
 (defun random-derive-type-aux (type)
   (let ((class (numeric-type-class type))

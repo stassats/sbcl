@@ -2488,4 +2488,16 @@
      (declare ((rational -6 5) n)
               (integer x))
      (ceiling n x))
-   (values (integer -6 6) rational &optional)))
+   (values (integer -6 6) rational &optional))
+  (assert-type
+   (lambda (a b)
+     (declare ((integer 4 5) a)
+              ((integer -2 3) b))
+     (truncate a b))
+   (values (or (integer -5 -2) (integer 1 5)) (mod 3) &optional))
+  (assert-type
+   (lambda (a b)
+     (declare ((rational -5 4) a)
+              (integer b))
+     (truncate a b))
+   (values (integer -5 5) (rational -5 4) &optional)))
