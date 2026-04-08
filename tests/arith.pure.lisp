@@ -471,7 +471,7 @@
                    (let ((fast (checked-compile
                                 `(lambda ,vars
                                    (,op ,@args))
-                                :allow-style-warnings (eq op '/)))
+                                :allow-warnings (eq op '/)))
                          (slow (checked-compile
                                 `(lambda ,vars
                                    (declare (notinline ,op))
