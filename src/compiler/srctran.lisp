@@ -2158,8 +2158,13 @@
         (t
          (numeric-contagion x y))))
 
-(defoptimizer (/ derive-type) ((x y))
-  (two-arg-derive-type x y #'/-derive-type-aux))
+(defoptimizer (/ derive-type) ((x y) node)
+  (let ((type (two-arg-derive-type x y #'/-derive-type-aux)))
+    (when (eq type *empty-type*)
+      (let ((*compiler-error-context* node))
+        (setf (combination-kind node) :error
+              (combination-info node) (list #'compiler-warn "division by zero"))))
+    type))
 
 (defconstant +left-shift-derive-type-cutoff+ 256)
 
@@ -2397,6 +2402,10 @@
                                   (make-quot (second div))))
                      (t
                       (make-quot div))))))
+          ((and float
+                (rational-type-p number-type)
+                (eq divisor-type (specifier-type '(eql 0))))
+           *empty-type*)
           (t
            (multiple-value-bind (quot conservative)
                (if (and (member (interval-high divisor-interval) '(1 1f0 1d0))
@@ -2481,13 +2490,18 @@
         (t
          (numeric-contagion num div))))
 
-(defoptimizer (truncate derive-type) ((number divisor))
+(defoptimizer (truncate derive-type) ((number divisor) node)
   (let ((quot (two-arg-derive-type number divisor
                                    #'truncate-derive-type-quot-aux))
         (rem (two-arg-derive-type number divisor
                                   #'truncate-derive-type-rem-aux)))
-    (when (and quot rem)
-      (make-values-type (list quot rem)))))
+    (if (eq quot *empty-type*)
+        (let ((*compiler-error-context* node))
+          (setf (combination-kind node) :error
+                (combination-info node) (list #'compiler-warn "division by zero"))
+          quot)
+        (when (and quot rem)
+          (make-values-type (list quot rem))))))
 
 (defun %unary-truncate-derive-type-aux (number)
   (truncate-derive-type-quot number (specifier-type '(integer 1 1))))
@@ -2525,15 +2539,20 @@
                                (numeric-type-format
                                 (numeric-contagion number-type divisor-type :float t)))))
 
-(defoptimizer (ftruncate derive-type) ((number &optional divisor))
+(defoptimizer (ftruncate derive-type) ((number &optional divisor) node)
   (let* ((divisor (if divisor
                       (lvar-type divisor)
                       (specifier-type '(eql 1))))
          (number (lvar-type number))
          (quot (%two-arg-derive-type number divisor #'ftruncate-derive-type-quot-aux))
          (rem (%two-arg-derive-type number divisor #'truncate-derive-type-rem-aux)))
-    (when (and quot rem)
-      (make-values-type (list quot rem)))))
+    (if (eq quot *empty-type*)
+        (let ((*compiler-error-context* node))
+          (setf (combination-kind node) :error
+                (combination-info node) (list #'compiler-warn "division by zero"))
+          quot)
+        (when (and quot rem)
+          (make-values-type (list quot rem))))))
 
 (defun fceiling-derive-type-quot-aux (number-type divisor-type same-arg)
   (declare (ignore same-arg))
@@ -2543,15 +2562,20 @@
                                 (numeric-type-format
                                  (numeric-contagion number-type divisor-type :float t)))))
 
-(defoptimizer (fceiling derive-type) ((number &optional divisor))
+(defoptimizer (fceiling derive-type) ((number &optional divisor) node)
   (let* ((divisor (if divisor
                       (lvar-type divisor)
                       (specifier-type '(eql 1))))
          (number (lvar-type number))
          (quot (%two-arg-derive-type number divisor #'fceiling-derive-type-quot-aux))
          (rem (%two-arg-derive-type number divisor #'ceiling-rem-bound-aux)))
-    (when (and quot rem)
-      (make-values-type (list quot rem)))))
+    (if (eq quot *empty-type*)
+        (let ((*compiler-error-context* node))
+          (setf (combination-kind node) :error
+                (combination-info node) (list #'compiler-warn "division by zero"))
+          quot)
+        (when (and quot rem)
+          (make-values-type (list quot rem))))))
 
 (defun ffloor-derive-type-quot-aux (number-type divisor-type same-arg)
   (declare (ignore same-arg))
@@ -2561,15 +2585,20 @@
                               (numeric-type-format
                                (numeric-contagion number-type divisor-type :float t)))))
 
-(defoptimizer (ffloor derive-type) ((number &optional divisor))
+(defoptimizer (ffloor derive-type) ((number &optional divisor) node)
   (let* ((divisor (if divisor
                       (lvar-type divisor)
                       (specifier-type '(eql 1))))
          (number (lvar-type number))
          (quot (%two-arg-derive-type number divisor #'ffloor-derive-type-quot-aux))
          (rem (%two-arg-derive-type number divisor #'floor-rem-bound-aux)))
-    (when (and quot rem)
-      (make-values-type (list quot rem)))))
+    (if (eq quot *empty-type*)
+        (let ((*compiler-error-context* node))
+          (setf (combination-kind node) :error
+                (combination-info node) (list #'compiler-warn "division by zero"))
+          quot)
+        (when (and quot rem)
+          (make-values-type (list quot rem))))))
 
 
 (macrolet ((derive (type)

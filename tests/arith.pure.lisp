@@ -43,7 +43,7 @@
     (() (condition 'division-by-zero))))
 
 (with-test (:name (/ :division-by-zero bignum))
-  (checked-compile-and-assert (:allow-style-warnings t)
+  (checked-compile-and-assert (:allow-warnings t)
       '(lambda () (/ (1+ most-positive-fixnum) 0))
     (() (condition 'division-by-zero))))
 
@@ -282,7 +282,8 @@
            (let ((fn (checked-compile
                       `(lambda (x)
                          (declare (optimize speed) (fixnum x))
-                         (,name x 0)))))
+                         (,name x 0))
+                      :allow-warnings t)))
              (assert-error (funcall fn 1) division-by-zero))))
     (mapc #'frob '(mod truncate rem / floor ceiling))))
 
@@ -475,7 +476,7 @@
                                 `(lambda ,vars
                                    (declare (notinline ,op))
                                    (,op ,@args))
-                                :allow-style-warnings (eq op '/))))
+                                :allow-warnings (eq op '/))))
                      (loop repeat 3
                            do (let* ((call-args (loop repeat (length vars)
                                                       collect (- (random 21) 10)))
@@ -841,14 +842,11 @@
                      '(#x9516A7 #x2531b4 0 0))))))
 
 (with-test (:name :truncate-by-zero-derivation)
-  (assert
-   (not (equal (cadr
-                (cdaddr (sb-kernel:%simple-fun-type
-                         (checked-compile
-                          `(lambda ()
-                             (truncate 5 0))
-                          :allow-style-warnings t))))
-               '(integer 0 0)))))
+  (assert-type
+   (lambda ()
+     (declare (muffle-conditions warning))
+     (truncate 5 0))
+   nil))
 
 (with-test (:name :truncate-by-zero-derivation.2)
   (checked-compile

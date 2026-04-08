@@ -4953,7 +4953,7 @@
 
 (with-test (:name :unused-tns-erased-types)
   (checked-compile-and-assert
-      (:optimize :safe)
+      (:optimize :safe :allow-warnings t)
       '(lambda (x)
         (declare ((integer 10 20) x))
         (let ((q (truncate (/ x 0))))

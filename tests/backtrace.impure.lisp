@@ -224,43 +224,6 @@
              (sb-thread:condition-wait q m)))))
      `((sb-thread::%condition-wait ,q ,m t nil nil nil nil nil nil)))))
 
-;;; Division by zero was a common error on PPC. It depended on the
-;;; return function either being before INTEGER-/-INTEGER in memory,
-;;; or more than MOST-POSITIVE-FIXNUM bytes ahead. It also depends on
-;;; INTEGER-/-INTEGER calling SIGNED-TRUNCATE. I believe Raymond Toy
-;;; says that the Sparc backend (at least for CMUCL) inlines this, so
-;;; if SBCL does the same this test is probably not good for the
-;;; Sparc.
-;;;
-;;; Disabling tail call elimination on this will probably ensure that
-;;; the return value (to the flet or the enclosing top level form) is
-;;; more than MOST-POSITIVE-FIXNUM with the current spaces on OS X.
-;;; Enabling it might catch other problems, so do it anyway.
-(flet ((optimized ()
-         (declare (optimize (speed 2) (debug 1))) ; tail call elimination
-         (declare (muffle-conditions style-warning))
-         (/ 42 0))
-       (not-optimized ()
-         (declare (optimize (speed 1) (debug 3))) ; no tail call elimination
-         (declare (muffle-conditions style-warning))
-         (/ 42 0))
-       (test (fun)
-         (declare (optimize (speed 1) (debug 3))) ; no tail call elimination
-         (funcall fun)))
-
-  (with-test (:name (:backtrace :divide-by-zero :bug-346)
-                    :skipped-on :interpreter)
-    (assert-backtrace (lambda () (test #'optimized))
-                      `((/ 42 &rest)
-                        ((flet test :in ,*p*) ,#'optimized))))
-
-  (with-test (:name (:backtrace :divide-by-zero :bug-356)
-                    :skipped-on :interpreter)
-    (assert-backtrace (lambda () (test #'not-optimized))
-                      `((/ 42 &rest)
-                        ((flet not-optimized :in ,*p*))
-                        ((flet test :in ,*p*) ,#'not-optimized)))))
-
 (defun throw-test ()
   (throw 'no-such-tag t))
 (with-test (:name (:backtrace :throw :no-such-tag)
