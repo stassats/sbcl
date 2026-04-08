@@ -2383,7 +2383,9 @@
                         (interval-high number-interval)
                         (interval-low divisor-interval)
                         (interval-high divisor-interval))))
-             (specifier-type (if (listp res) res 'integer))))
+             (if (eq res t)
+                 *empty-type*
+                 (specifier-type (if (listp res) res 'integer)))))
           (t
            (multiple-value-bind (quot conservative)
                (if (and (member (interval-high divisor-interval) '(1 1f0 1d0))
@@ -2412,7 +2414,7 @@
                 (numberp (interval-high divisor-interval))
                 (zerop (interval-low divisor-interval))
                 (zerop (interval-high divisor-interval)))
-           nil)
+           *empty-type*)
           ((eq rem-type 'integer)
            ;; Since the remainder type is INTEGER, both args are
            ;; INTEGERs.
