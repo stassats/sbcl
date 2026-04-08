@@ -1842,11 +1842,11 @@
            (fail))
           ((types-equal-or-intersect value-type to-type))
           ((csubtypep to-type (specifier-type 'sequence))
-           (unless (csubtypep to-type (specifier-type 'sequence))
+           (unless (csubtypep value-type (specifier-type 'sequence))
              (fail)))
           ((eql type-specifier 'character)
            (unless (types-equal-or-intersect value-type
-                                             (specifier-type 'string))
+                                             (specifier-type '(or symbol (string 1))))
              (fail)))
           ((csubtypep to-type (specifier-type 'complex))
            (unless (types-equal-or-intersect value-type
