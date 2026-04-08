@@ -962,7 +962,7 @@ sweep_fixedobj_pages(int raise)
         // we try to do less work than for pages that need it.
         if (!(fixedobj_pages[page].gens & relevant_genmask)) {
             // Scan for old->young pointers, and WP if there are none.
-            if (ENABLE_PAGE_PROTECTION && !fixedobj_page_wp(page)
+            if (!fixedobj_page_wp(page)
                 && fixedobj_pages[page].gens > 1
                 && can_wp_fixedobj_page(page, keep_gen, new_gen)) {
                 SET_WP_FLAG(page, WRITE_PROTECT);
@@ -981,7 +981,7 @@ sweep_fixedobj_pages(int raise)
 
         // wp_it is 1 if we should try to write-protect it now.
         // If already write-protected, skip the tests.
-        int wp_it = ENABLE_PAGE_PROTECTION && !fixedobj_page_wp(page);
+        int wp_it = !fixedobj_page_wp(page);
         int gen;
         do {
             if (fixnump(*obj)) { // was already a hole
@@ -1050,7 +1050,7 @@ sweep_text_pages(int raise)
         int genmask = text_page_genmask[page];
         if (!(genmask & relevant_genmask)) { // Has nothing in oldspace or newspace.
             // Scan for old->young pointers, and WP if there are none.
-            if (ENABLE_PAGE_PROTECTION && text_page_touched(page)
+            if (text_page_touched(page)
                 && text_page_genmask[page] > 1
                 && can_wp_text_page(page)) {
                 text_page_touched_bits[page/32] &= ~(1U<<(page & 31));
@@ -1065,7 +1065,7 @@ sweep_text_pages(int raise)
         int any_kept = 0; // was anything moved to the kept generation
         // wp_it is 1 if we should try to write-protect it now.
         // If already write-protected, skip the tests.
-        int wp_it = ENABLE_PAGE_PROTECTION && text_page_touched(page);
+        int wp_it = text_page_touched(page);
         sword_t size;
         int gen;
 
@@ -1186,7 +1186,7 @@ void immobile_space_coreparse(uword_t fixedobj_len,
                 sword_t size = object_size2(obj, header);
                 fixedobj_pages[page].attr.parts.obj_align = size;
                 fixedobj_pages[page].gens |= 1 << immobile_obj_gen_bits(obj);
-                if (gen != 0 && ENABLE_PAGE_PROTECTION)
+                if (gen != 0)
                     fixedobj_pages[page].attr.parts.flags = WRITE_PROTECT;
                 break;
             }
@@ -1234,7 +1234,7 @@ void immobile_space_coreparse(uword_t fixedobj_len,
 
     // Set the WP bits for pages occupied by the core file.
     // (There can be no inter-generation pointers.)
-    if (gen != 0 && ENABLE_PAGE_PROTECTION) {
+    if (gen != 0) {
         low_page_index_t page;
         for (page = 0 ; page <= n_pages ; ++page)
             text_page_touched_bits[page/32] &= ~(1U<<(page & 31));
