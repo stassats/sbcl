@@ -5983,7 +5983,7 @@
                               (cond ((or (float-safe-p)
                                          (loop for arg in args
                                                do
-                                               (if (lvar-csubtypep arg (and number (not (or (eql 0) (complex ratio)))))
+                                               (if (lvar-csubtypep arg (and number (not (or (eql 0) (complex rational)))))
                                                    (setf good arg)
                                                    (setf all-good nil))
                                                finally (return all-good)))
@@ -6107,7 +6107,7 @@
                            (sin (*)
                             (when (or (float-safe-p)
                                       (lvar-csubtypep (first args)
-                                                      (and number (not (or (eql 0) (complex ratio))))))
+                                                      (and number (not (or (eql 0) (complex rational))))))
                               (negate-lvar (first args) test any-branch)))))))))
         (negate-lvar x test any-branch)))))
 
@@ -9468,7 +9468,7 @@
            (give-up-ir1-transform)))))
 
 (deftransform parse-integer ((string &key (start 0) end radix junk-allowed)
-                             (t &key (:radix (constant-arg (or null (member 10 16))))
+                             (t &key (:radix (constant-arg (member 10 16)))
                                 (:start t) (:end t) (:junk-allowed t)))
   `(,(if (and radix
               (= (lvar-value radix) 16))
@@ -10291,7 +10291,7 @@
     (let* ((min (reduce #'min keys))
            (max (reduce #'max keys))
            (table-size (1+ (- max min)))
-           ;; TOOD: this size could be reduced now. For spread-out fixnum keys,
+           ;; TODO: this size could be reduced now. For spread-out fixnum keys,
            ;; we'll use a perfect hash, making the table exactly sized.
            ;; So the situation where low load factor is beneficial are few.
            (size-limit (* (length keys) 2)))
