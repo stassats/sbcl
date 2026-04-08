@@ -2467,7 +2467,6 @@
                    (ash (the (signed-byte ,(* 2 sb-vm:n-word-bits)) x)
                         ,(- sb-vm:n-word-bits)))))))
 
-
 (with-test (:name :truncate-by-zero-type)
   (assert-type
    (lambda (n x)
@@ -2475,3 +2474,18 @@
               ((and integer (not (member 1 -1))) x))
      (truncate n x))
    (values (integer -4 4) (integer -9 9) &optional)))
+
+
+(with-test (:name :floor-by-integer-type)
+  (assert-type
+   (lambda (n x)
+     (declare ((integer -5 5) n)
+              (integer x))
+     (floor n x))
+   (values (integer -5 5) integer &optional))
+  (assert-type
+   (lambda (n x)
+     (declare ((rational -6 5) n)
+              (integer x))
+     (ceiling n x))
+   (values (integer -6 6) rational &optional)))

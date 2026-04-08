@@ -2615,17 +2615,24 @@
            (defun ,q-aux (number-type divisor-type &optional float)
              (let* ((number-interval (numeric-type->interval number-type))
                     (divisor-interval (numeric-type->interval divisor-type))
-                    (div (interval-div number-interval divisor-interval))
-                    (quot (if float
-                              (,(symbolicate "F" q-name) div number-interval divisor-interval)
-                              (,q-name div))))
-               (make-numeric-type :class (if float
-                                             'float
-                                             'rational)
-                                  :format float
-                                  :low (interval-low quot)
-                                  :high (interval-high quot)
-                                  :normalize-zeros nil)))
+                    (div (interval-div number-interval divisor-interval
+                                       (and (rational-type-p number-type)
+                                            (integer-type-p divisor-type)))))
+               (flet ((make-quot (div)
+                        (let ((quot (if float
+                                        (,(symbolicate "F" q-name) div number-interval divisor-interval)
+                                        (,q-name div))))
+                          (make-numeric-type :class (if float
+                                                        'float
+                                                        'rational)
+                                             :format float
+                                             :low (interval-low quot)
+                                             :high (interval-high quot)
+                                             :normalize-zeros nil))))
+                 (if (listp div)
+                     (type-union (make-quot (first div))
+                                 (make-quot (second div)))
+                     (make-quot div)))))
            ;; Compute type of remainder.
            (defun ,r-aux (number-type divisor-type &optional same)
              (declare (ignore same))
