@@ -1488,7 +1488,11 @@
                (let* ((zero (intervals-zero top bot))
                       (top-range (interval-range-info top zero))
                       (bot-range (interval-range-info bot zero)))
-                 (cond ((null bot-range)
+                 (cond ((and integer
+                             (eql (interval-low bot) 0)
+                             (eql (interval-high bot) 0))
+                        nil)
+                        ((null bot-range)
                         (if integer
                             (multiple-value-bind (bot- bot+) (interval-split zero bot t t)
                               (let ((r- (interval-div top bot-))
@@ -1524,10 +1528,10 @@
                         (make-interval
                          :low (bound-div (interval-low top) (interval-high bot) t)
                          :high (let ((top-high (interval-high top)))
-                                   (if (and (numberp top-high)
-                                            (zerop top-high))
-                                       zero
-                                       (bound-div top-high (interval-low bot) nil)))))
+                                 (if (and (numberp top-high)
+                                          (zerop top-high))
+                                     zero
+                                     (bound-div top-high (interval-low bot) nil)))))
                        (t
                         (bug "excluded case in INTERVAL-DIV")))))))
     (interval-div top bot)))
@@ -2120,17 +2124,19 @@
                       (interval-div x-interval y-interval
                                     (and (memq (numeric-type-class x) '(integer rational))
                                          y-integerp)))))
-           (cond ((consp result)
-                  (type-union (make-numeric-type :class (numeric-type-class result-type)
-                                                 :format (numeric-type-format result-type)
-                                                 :low (interval-low (first result))
-                                                 :high (interval-high (first result))
-                                                 :normalize-zeros nil)
-                              (make-numeric-type :class (numeric-type-class result-type)
-                                                 :format (numeric-type-format result-type)
-                                                 :low (interval-low (second result))
-                                                 :high (interval-high (second result))
-                                                 :normalize-zeros nil)))
+           (cond ((null result)
+                  *empty-type*)
+                 ((consp result)
+                     (type-union (make-numeric-type :class (numeric-type-class result-type)
+                                                    :format (numeric-type-format result-type)
+                                                    :low (interval-low (first result))
+                                                    :high (interval-high (first result))
+                                                    :normalize-zeros nil)
+                                 (make-numeric-type :class (numeric-type-class result-type)
+                                                    :format (numeric-type-format result-type)
+                                                    :low (interval-low (second result))
+                                                    :high (interval-high (second result))
+                                                    :normalize-zeros nil)))
                  (t
                   ;; If the result type is a float, we need to be sure to coerce
                   ;; the bounds into the correct type.
@@ -2384,10 +2390,13 @@
                                            :low (interval-low quot)
                                            :high (interval-high quot)
                                            :normalize-zeros nil))))
-               (if (listp div)
-                   (type-union (make-quot (first div))
-                               (make-quot (second div)))
-                   (make-quot div)))))
+               (cond ((null div)
+                      *empty-type*)
+                     ((listp div)
+                      (type-union (make-quot (first div))
+                                  (make-quot (second div))))
+                     (t
+                      (make-quot div))))))
           (t
            (multiple-value-bind (quot conservative)
                (if (and (member (interval-high divisor-interval) '(1 1f0 1d0))
@@ -2631,10 +2640,13 @@
                                              :low (interval-low quot)
                                              :high (interval-high quot)
                                              :normalize-zeros nil))))
-                 (if (listp div)
-                     (type-union (make-quot (first div))
-                                 (make-quot (second div)))
-                     (make-quot div)))))
+                 (cond ((null div)
+                        *empty-type*)
+                       ((listp div)
+                        (type-union (make-quot (first div))
+                                    (make-quot (second div))))
+                       (t
+                        (make-quot div))))))
            ;; Compute type of remainder.
            (defun ,r-aux (number-type divisor-type &optional same)
              (declare (ignore same))

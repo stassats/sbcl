@@ -2473,7 +2473,13 @@
      (declare ((integer -9 9) n)
               ((and integer (not (member 1 -1))) x))
      (truncate n x))
-   (values (integer -4 4) (integer -9 9) &optional)))
+   (values (integer -4 4) (integer -9 9) &optional))
+  (assert-type
+   (lambda (n x)
+     (declare ((integer -9 9) n)
+              ((and integer (not (member 1 -1))) x))
+     (/ n x))
+   (rational -9/2 9/2)))
 
 
 (with-test (:name :floor-by-integer-type)
