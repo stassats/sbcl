@@ -443,8 +443,12 @@
          ;; default can be :assumed, PRESENT-P disambiguates "defaulted" from
          ;; "known" to have made an existence assumption.
          (when present-p
-           (warn "defining setf macro for ~S when ~S was previously ~
-             treated as a function" name setf-fn-name)))
+           ;; This mimics the behavior of %DEFMACRO.
+           (style-warn "~S is being redefined as a setf macro ~
+                       when it was previously assumed to be a function."
+                       name)
+           (undefine-fun-name setf-fn-name)
+           (clear-info :function :where-from setf-fn-name)))
         ;; This is a useless and unavoidable warning during self-build.
         ;; cf. similar disabling of warning in WARN-IF-SETF-MACRO.
         #-sb-xc-host

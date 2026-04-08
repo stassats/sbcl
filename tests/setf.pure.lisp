@@ -119,14 +119,19 @@
                     (setf (getf y :y 0) 4)
                     (setf (get 'z :z 0) 4)))))
 
-(with-test (:name :setf-fun-and-macro-full-warn)
+(with-test (:name :setf-fun-and-macro-style-warn)
   ;; make the compiler assume existence of #'(setf shoe-color)
   (handler-bind ((warning #'muffle-warning))
-      (compile nil '(lambda (x) (setf (shoe-color x) 'cordovan))))
-  ;; now we get a full warning because the macro was seen too late.
-  (assert (typep (handler-case (eval '(defsetf shoe-color set-shoe-color))
-                   (warning (c) c))
-                 '(and warning (not style-warning)))))
+    (compile nil '(lambda (x) (setf (shoe-color x) 'cordovan))))
+  (let ((warning nil))
+    ;; We get a STYLE-WARNING because the macro was seen too late ...
+    (handler-bind ((warning (lambda (w) (setq warning w))))
+      (eval '(defsetf shoe-color set-shoe-color)))
+    (assert (typep warning 'style-warning))
+    ;; but only the first time around.
+    (assert (eq (handler-case (eval '(defsetf shoe-color set-shoe-color))
+                  (warning (c) c))
+                'shoe-color))))
 
 (with-test (:name :setf-fun-and-macro-style-1)
   (eval '(defun (setf shoe-size) (new x) x new))
