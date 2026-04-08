@@ -1127,3 +1127,13 @@
          (equalp l '(A . "FOO")))
     (('(A . "FoO")) t)
     (('(B . "FOO")) nil)))
+
+(with-test (:name :replace-vector-return)
+  (let ((v (make-array 8 :fill-pointer 5)))
+   (checked-compile-and-assert
+       ()
+       `(lambda (v s)
+          (replace v s))
+     ((v '(1 2)) v)
+     ((v #(2 3)) v)
+     ((v #9*1) v))))
