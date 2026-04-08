@@ -3,7 +3,8 @@
 ;;; ref in SB-ALIEN::*STRUCT-TYPE-CACHE which will get GCed.
 (define-alien-type nil (struct myalien))
 
-(with-test (:name :no-alien-sap-call)
+(with-test (:name :no-alien-sap-call
+                  :skipped-on (and (not :sb-thread) :x86-64))
   (let ((lines
          (ctu:disassembly-lines
           (compile nil

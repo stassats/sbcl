@@ -190,7 +190,9 @@
   (define-vop (dynbind)
     (:args (val :scs (any-reg descriptor-reg))
            (symbol :scs (descriptor-reg)))
+    (:arg-refs value-ref)
     (:temporary (:sc unsigned-reg) temp bsp)
+    (:vop-var vop)
     (:generator 5
       (load-binding-stack-pointer bsp)
       (loadw temp symbol symbol-value-slot other-pointer-lowtag)
@@ -198,17 +200,24 @@
       (store-binding-stack-pointer bsp)
       (storew temp bsp (- binding-value-slot binding-size))
       (storew symbol bsp (- binding-symbol-slot binding-size))
-      (emit-gengc-barrier symbol nil temp)
-      (storew val symbol symbol-value-slot other-pointer-lowtag)))
+      (pseudo-atomic (:elide-if #+immobile-space
+                                (not (symbol-set-barrier-p symbol value-ref))
+                                #-immobile-space t)
+        (emit-symbol-write-barrier vop symbol temp value-ref)
+        (storew val symbol symbol-value-slot other-pointer-lowtag))))
 
   (define-vop (unbind)
     (:temporary (:sc unsigned-reg) symbol value bsp)
+    (:vop-var vop)
     (:generator 0
       (load-binding-stack-pointer bsp)
       (loadw symbol bsp (- binding-symbol-slot binding-size))
-      (emit-gengc-barrier symbol nil value) ; VALUE is the card-mark temp
-      (loadw value bsp (- binding-value-slot binding-size))
-      (storew value symbol symbol-value-slot other-pointer-lowtag)
+      (pseudo-atomic (:elide-if #+immobile-space
+                                (not (symbol-set-barrier-p symbol nil))
+                                #-immobile-space t)
+        (emit-symbol-write-barrier vop symbol value nil)
+        (loadw value bsp (- binding-value-slot binding-size))
+        (storew value symbol symbol-value-slot other-pointer-lowtag))
       (storew 0 bsp (- binding-symbol-slot binding-size))
       (storew 0 bsp (- binding-value-slot binding-size))
       (inst sub bsp (* binding-size n-word-bytes))
