@@ -45,20 +45,21 @@
 
 ;;; Return the index of NAME+DATAP in the table, adding it if it doesn't exist.
 (defun ensure-alien-linkage-index (name datap)
-  (let* ((name (possibly-base-stringize name))
-         (key (if datap (list name) name))
+  (let* ((key (if datap (list name) name))
          (info *linkage-info*)
          (ht (car info)))
+    (declare (dynamic-extent key))
     (or (with-system-mutex ((hash-table-lock ht))
           (or (gethash key ht)
               (let* ((index (hash-table-count ht))
                      (capacity (floor sb-vm:alien-linkage-space-size
-                                      sb-vm:alien-linkage-table-entry-size)))
+                                      sb-vm:alien-linkage-table-entry-size))
+                     (name (logically-readonlyize (possibly-base-stringize name)))
+                     (key (if datap (list name) name)))
                 (when (< index capacity)
                   (multiple-value-bind (defined real-address) (dlsym-wrapper t)
                     (unless defined (push key (cdr info)))
                     (arch-write-linkage-table-entry index real-address (if datap 1 0))
-                    (logically-readonlyize name)
                     (setf (gethash key ht) index))))))
         (error "Linkage-table full (~D entries): cannot link ~S."
                (hash-table-count ht) name))))
