@@ -179,10 +179,15 @@
 ;;;  - static for efficiency of access but need not be
 ;;; On #+sb-thread builds, these are not static, because access to them
 ;;; is via the TLS, not the symbol.
+;;; The default for all these is NIL if unspecified.
 (defconstant-eqx per-thread-c-interface-symbols
     (hash-cons
      '((*free-interrupt-context-index* 0)
        (sb-sys:*allow-with-interrupts* t)
+       ;; Being closely related to *INTERRUPTS-ENABLED*, the unblock-mumble var feels
+       ;; right at home here, though is not read from C. The reason it's needed here is
+       ;; that START-LISP uses WITHOUT-INTERRUPTS before INIT-THREAD-LOCAL-STORAGE.
+       sb-unix::*unblock-deferrables-on-enabling-interrupts-p*
        (sb-sys:*interrupts-enabled* t)
        sb-sys:*interrupt-pending*
        #+sb-safepoint sb-sys:*thruption-pending*

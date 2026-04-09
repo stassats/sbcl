@@ -136,7 +136,6 @@
           *trace-output* stream))
   (show-and-call !signal-function-cold-init)
   (show-and-call !printer-control-init) ; needed before first instance of FORMAT or WRITE-STRING
-  (setq sb-unix::*unblock-deferrables-on-enabling-interrupts-p* nil) ; needed by LOAD-LAYOUT called by CLASSES-INIT
   (setq *print-length* 6
         *print-level* 3)
   (/show "testing '/SHOW" *print-length* *print-level*) ; show anything
@@ -159,7 +158,13 @@
   (show-and-call !function-names-init)
   (show-and-call !pathname-cold-init)
 
-  ;; And now *CURRENT-THREAD*
+  ;; There is a very subtle (and slightly undiscoverable) chicken-and-egg situation
+  ;; which could occur when calling INIT-MAIN-THREAD during cold-init but presumably
+  ;; not after the core is produced: anything in *THREAD-LOCAL-SPECIALS* must
+  ;; have its initialization form evaluable.  This is surely fine for constants
+  ;; but not as clear for *HANDLER-CLUSTERS* which takes its value from
+  ;; **INITIAL-HANDLER-CLUSTERS**. As it happens, we're ok, but that's just one
+  ;; example, so sometimes you have to be careful with DEFINE-THREAD-LOCAL.
   (sb-thread::init-main-thread)
 
   (show-and-call !hash-table-cold-init)

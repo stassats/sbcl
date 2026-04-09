@@ -65,19 +65,8 @@
 ;;; would not cut it, as upon leaving WITHOUT-INTERRUPTS the pending
 ;;; handlers is run with stuff from the function in which this is
 ;;; still on the stack.
-(defvar *unblock-deferrables-on-enabling-interrupts-p* nil)
-
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (dolist (symbol '(*unblock-deferrables-on-enabling-interrupts-p*
-                    *interrupts-enabled*
-                    *interrupt-pending*
-                    #+sb-safepoint *thruption-pending*
-                    *allow-with-interrupts*))
-    ;; Force these to be always bound despite absence of a compile-time binding.
-    ;; (Avoid accidentally installing a value into symbol->value in cold-load)
-    ;; Not only are they always bound, 4 of them always have a thread-local value.
-    ;; We don't as yet have a way to elide the check for no-tls-value though.
-    (setf (info :variable :always-bound symbol) :always-bound)))
+;;; This is defined as a per-thread-c-interface symbol though C never reads it.
+(defvar *unblock-deferrables-on-enabling-interrupts-p*)
 
 (defmacro without-interrupts (&body body)
   "Executes BODY with all deferrable interrupts disabled. Deferrable
