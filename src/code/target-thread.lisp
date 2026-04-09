@@ -381,6 +381,7 @@ created and old ones may exit at any time."
           #+sb-thread *current-thread*)) ; an ordinary read of the TLS
     ;; Run the macro-generated function which writes some values into the TLS,
     ;; most especially *CURRENT-THREAD*.
+    (setf *initial-thread* thread)
     (init-thread-local-storage thread)
     (setf (%instance-layout thread) #.(find-layout 'thread)
           (thread-%name thread) name
@@ -392,7 +393,6 @@ created and old ones may exit at any time."
     (setf sb-impl::*exit-lock* (make-mutex :name "Exit Lock")
           sb-vm::*allocator-mutex* (make-mutex :name "Allocator")
           *make-thread-lock* (make-mutex :name "Make-Thread Lock"))
-    (setf *initial-thread* thread)
     (setf *joinable-threads* nil)
     (setq *session* (new-session thread))
     (setq *all-threads*

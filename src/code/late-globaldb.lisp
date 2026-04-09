@@ -103,7 +103,10 @@
   ;; may exhibit sporadic crashes under the LLVM interceptors which change the sa_flags in
   ;; struct sigaction before passing along the syscall argument. (How is that reasonable?)
   #+tls-load-indirect
-  (when (= (extern-alien "enable_tls_indirection_preinit" char) 1)
+  (when (or (= (extern-alien "enable_tls_indirection_preinit" char) 1)
+            ;; Try to avoid TLS indirection traps. This is no guarantee, just best effort.
+            (thread-ephemeral-p thread)
+            (main-thread-p))
     (do ((symbolmap (int-sap (ash sb-vm::*tls-symbol-map* sb-vm:n-fixnum-tag-bits)))
          (i (- (symbol-tls-index '*package*) 8) (+ i 16)) ; step by 2 words
          (end (- (ash sb-vm::*free-tls-index* sb-vm:n-fixnum-tag-bits) 8)))
