@@ -2507,3 +2507,13 @@
               (integer b))
      (truncate a b))
    (values (integer -5 5) (rational -5 4) &optional)))
+
+(with-test (:name :ash-modfx-constant-fold)
+  (checked-compile-and-assert
+      ()
+      `(lambda (b)
+         (declare (fixnum b))
+         (when (eq b (1- sb-vm:n-fixnum-bits))
+           (ldb (byte sb-vm:n-fixnum-bits 0) (ash 1 b))))
+    (((1- sb-vm:n-fixnum-bits)) (ash 1 (1- sb-vm:n-fixnum-bits)))
+    ((0) nil)))

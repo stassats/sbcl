@@ -1983,7 +1983,7 @@ and the number of 0 bits if INTEGER is negative."
 
 #+(or x86 x86-64 arm arm64)
 (defun sb-vm::ash-left-modfx (integer amount)
-  (let ((fixnum-width (- sb-vm:n-word-bits sb-vm:n-fixnum-tag-bits)))
+  (let ((fixnum-width sb-vm:n-fixnum-bits))
     (etypecase integer
       (fixnum (sb-c::mask-signed-field fixnum-width (ash integer amount)))
       (integer (sb-c::mask-signed-field fixnum-width (ash (sb-c::mask-signed-field fixnum-width integer) amount))))))
@@ -1993,9 +1993,7 @@ and the number of 0 bits if INTEGER is negative."
     (ldb (byte 64 0) (ash integer amount)))
 
   (defun sb-vm::ash-modfx (integer amount)
-    (if (minusp integer)
-        (sb-c::mask-signed-field sb-vm:n-fixnum-bits (ash integer amount))
-        (logand most-positive-fixnum (ash integer amount)))))
+    (sb-c::mask-signed-field sb-vm:n-fixnum-bits (ash integer amount))))
 
 (defun sb-vm::truncate-mod64 (a b)
   (multiple-value-bind (q r) (truncate a b)
