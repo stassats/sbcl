@@ -321,22 +321,33 @@
            (conset-add-constraint-to-eql gen 'typep var (specifier-type '(not null)) nil consequent)))))))
 
 ;;; If the remainder is non-zero then X can't be zero.
+;;; And the divisior is (not (integer -1 1))
 (defoptimizer (truncate constraint-propagate-back) ((x d) node nth-value kind constraint gen consequent alternative)
-  (let ((var (ok-lvar-lambda-var x gen)))
+  (let ((var (ok-lvar-lambda-var x gen))
+        (divisor-var (ok-lvar-lambda-var d gen)))
     (cond
       ((and var
             (eql nth-value 1)
-            (csubtypep (lvar-type x) (specifier-type 'integer))
-            (csubtypep (lvar-type d) (specifier-type 'integer)))
+            (lvar-csubtypep x integer)
+            (lvar-csubtypep d integer))
        (case kind
          (eql
           (when (and (constant-p constraint)
                      (eql (constant-value constraint) 0)
                      alternative)
-            (conset-add-constraint-to-eql gen 'typep var (specifier-type '(and integer (not (eql 0)))) nil alternative)))
+            (conset-add-constraint-to-eql gen 'typep var (specifier-type '(and integer (not (eql 0)))) nil alternative)
+            (when divisor-var
+              (conset-add-constraint-to-eql gen 'typep divisor-var (specifier-type '(and integer (not (integer -1 1)))) nil alternative))))
          (>
-          (when (csubtypep (lvar-type constraint) (specifier-type '(integer 0)))
-            (conset-add-constraint-to-eql gen 'typep var (specifier-type '(integer 1)) nil consequent)))))
+          (when (lvar-csubtypep constraint (integer 0))
+            (conset-add-constraint-to-eql gen 'typep var (specifier-type '(integer 1)) nil consequent)
+            (when divisor-var
+              (conset-add-constraint-to-eql gen 'typep divisor-var (specifier-type '(and integer (not (integer -1 1)))) nil consequent))))
+         (<
+          (when (lvar-csubtypep constraint (integer * 0))
+            (conset-add-constraint-to-eql gen 'typep var (specifier-type '(integer * -1)) nil consequent)
+            (when divisor-var
+              (conset-add-constraint-to-eql gen 'typep divisor-var (specifier-type '(and integer (not (integer -1 1)))) nil consequent))))))
       ((eq kind 'typep)
        (if (eql nth-value 1)
            (cond ((and (csubtypep constraint (specifier-type 'integer))

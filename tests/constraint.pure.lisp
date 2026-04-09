@@ -535,18 +535,31 @@
     '(values integer &optional))))
 
 (with-test (:name :truncate-zero-remainder)
-  (assert
-   (type-specifiers-equal
-    (caddr
-     (sb-kernel:%simple-fun-type
-      (checked-compile
-       `(lambda (x y)
-          (declare (integer x y))
-          (multiple-value-bind (q r) (truncate x y)
-            (if (zerop r)
-                (error "~a" q)
-                x))))))
-    '(values (or (integer * -1) (integer 1)) &optional))))
+  (assert-type
+   (lambda (x y)
+     (declare (integer x y))
+     (multiple-value-bind (q r) (truncate x y)
+       (if (zerop r)
+           (error "~a" q)
+           (values x y))))
+   (values (or (integer * -1) (integer 1))
+           (or (integer * -2) (integer 2)) &optional))
+  (assert-type
+   (lambda (x y)
+     (declare (integer x y))
+     (multiple-value-bind (q r) (truncate x y)
+       (if (> r 0)
+           (values x y)
+           (error "~a" q))))
+   (values (integer 1) (or (integer * -2) (integer 2)) &optional))
+  (assert-type
+   (lambda (x y)
+     (declare (integer x y))
+     (multiple-value-bind (q r) (truncate x y)
+       (if (< r 0)
+           (values x y)
+           (error "~a" q))))
+   (values (integer * -1) (or (integer * -2) (integer 2)) &optional)))
 
 (with-test (:name :vector-length-var)
   (assert
