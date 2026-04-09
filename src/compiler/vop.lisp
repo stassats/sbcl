@@ -870,18 +870,11 @@
   (wired-map 0 :type sb-vm:finite-sc-offset-map))
 (declaim (freeze-type storage-base finite-sb-template finite-sb))
 
-;;; Give this a toplevel value so that it can be declaimed ALWAYS-BOUND.
-;;; The compiler will never look at the toplevel value though.
-(defvar *finite-sbs*
-  #-sb-xc-host
-  (make-array #.(count :non-packed *backend-sbs* :key #'sb-kind :test #'neq)
-              :initial-element (make-unbound-marker)))
-#-sb-xc-host
-(progn
-  (declaim (type (simple-vector #.(length *finite-sbs*)) *finite-sbs*)
-           (always-bound *finite-sbs*))
-  (eval-when (:compile-toplevel :load-toplevel :execute)
-    (setf (info :variable :wired-tls '*finite-sbs*) :always-thread-local)))
+;;; Give this a per-thread initial value so that it can be declaimed ALWAYS-BOUND.
+;;; The compiler will never see that value. It does not have to be type-correct,
+;;; and in fact unbound-marker works.
+(sb-impl:define-thread-local *finite-sbs* (make-unbound-marker))
+#-sb-xc-host (declaim (type (simple-vector #.(length *finite-sbs*)) *finite-sbs*))
 
 ;;; All these are SETFable
 (defmacro finite-sb-current-size (sb)
