@@ -321,7 +321,7 @@
            (conset-add-constraint-to-eql gen 'typep var (specifier-type '(not null)) nil consequent)))))))
 
 ;;; If the remainder is non-zero then X can't be zero.
-;;; And the divisior is (not (integer -1 1))
+;;; And the divisor is (not (integer -1 1))
 (defoptimizer (truncate constraint-propagate-back) ((x d) node nth-value kind constraint gen consequent alternative)
   (let ((var (ok-lvar-lambda-var x gen))
         (divisor-var (ok-lvar-lambda-var d gen)))
@@ -330,24 +330,78 @@
             (eql nth-value 1)
             (lvar-csubtypep x integer)
             (lvar-csubtypep d integer))
-       (case kind
-         (eql
-          (when (and (constant-p constraint)
-                     (eql (constant-value constraint) 0)
-                     alternative)
-            (conset-add-constraint-to-eql gen 'typep var (specifier-type '(and integer (not (eql 0)))) nil alternative)
-            (when divisor-var
-              (conset-add-constraint-to-eql gen 'typep divisor-var (specifier-type '(and integer (not (integer -1 1)))) nil alternative))))
-         (>
-          (when (lvar-csubtypep constraint (integer 0))
-            (conset-add-constraint-to-eql gen 'typep var (specifier-type '(integer 1)) nil consequent)
-            (when divisor-var
-              (conset-add-constraint-to-eql gen 'typep divisor-var (specifier-type '(and integer (not (integer -1 1)))) nil consequent))))
-         (<
-          (when (lvar-csubtypep constraint (integer * 0))
-            (conset-add-constraint-to-eql gen 'typep var (specifier-type '(integer * -1)) nil consequent)
-            (when divisor-var
-              (conset-add-constraint-to-eql gen 'typep divisor-var (specifier-type '(and integer (not (integer -1 1)))) nil consequent))))))
+       (flet ((derive-quot (target &optional sign)
+                ;; If the remainder is non-zero then the divisor is at least 2
+                (let* ((q (first (mv-bind-vars (node-lvar node))))
+                       (q-var (and (ok-lambda-var q)
+                                   ;; In lieu of knowing if it's still EQ
+                                   (not (lambda-var-sets q))
+                                   q)))
+                  (when q-var
+                    (let* ((x-type (lvar-type x))
+                           (x-int (type-approximate-interval x-type t))
+                           (d-type (type-intersection
+                                    (lvar-type d)
+                                    (specifier-type '(and integer (not (integer -1 1))))))
+                           (min (or (multiple-value-bind (left right)
+                                        (if (numeric-union-type-p d-type)
+                                            (sb-kernel::numeric-union-min-abs-bounds d-type)
+                                            (values -2 2))
+                                      (cond ((and left right)
+                                             (min (abs left)
+                                                  (abs right)))
+                                            (left
+                                             (abs left))
+                                            (right
+                                             (abs right)))))))
+                      (when x-int
+                        ;; Not interested in even bounds
+                        (let ((new-low (and (interval-low x-int)
+                                            (< (interval-low x-int) 0)
+                                            (zerop (rem (interval-low x-int) min))
+                                            (1+ (interval-low x-int))))
+                              (new-high (and (interval-high x-int)
+                                             (> (interval-high x-int) 0)
+                                             (zerop (rem (interval-high x-int) min))
+                                             (1- (interval-high x-int)))))
+                          (when (or new-low new-high)
+                            (setf x-type
+                                  (make-numeric-type :class 'integer
+                                                     :low (or new-low
+                                                              (interval-low x-int))
+                                                     :high (or new-high
+                                                               (interval-high x-int)))))))
+
+                      (when sign
+                        (setf x-type (type-intersection x-type sign)))
+                      (let ((type (%two-arg-derive-type x-type d-type
+                                                        #'truncate-derive-type-quot-aux)))
+                        (when (and type
+                                   (not (numeric-type-without-bounds-p type)))
+                          (conset-add-constraint-to-eql gen 'typep q-var
+                                                        type
+                                                        nil target))))))))
+         (case kind
+           (eql
+            (when (and (constant-p constraint)
+                       (eql (constant-value constraint) 0)
+                       alternative)
+              (conset-add-constraint-to-eql gen 'typep var (specifier-type '(and integer (not (eql 0)))) nil alternative)
+              (derive-quot alternative)
+              (when divisor-var
+                (conset-add-constraint-to-eql gen 'typep divisor-var (specifier-type '(and integer (not (integer -1 1)))) nil alternative))))
+           (>
+            (when (lvar-csubtypep constraint (integer 0))
+              (conset-add-constraint-to-eql gen 'typep var (specifier-type '(integer 1)) nil consequent)
+              (derive-quot consequent (specifier-type '(integer 1)))
+              (when divisor-var
+                (conset-add-constraint-to-eql gen 'typep divisor-var (specifier-type '(and integer (not (integer -1 1)))) nil consequent))))
+           (<
+            (when (lvar-csubtypep constraint (integer * 0))
+              (conset-add-constraint-to-eql gen 'typep var (specifier-type '(integer * -1)) nil consequent)
+              (derive-quot consequent (specifier-type '(integer * -1)))
+              (when divisor-var
+                (conset-add-constraint-to-eql gen 'typep divisor-var (specifier-type '(and integer (not (integer -1 1)))) nil consequent)))))))
       ((eq kind 'typep)
        (if (eql nth-value 1)
            (cond ((and (csubtypep constraint (specifier-type 'integer))

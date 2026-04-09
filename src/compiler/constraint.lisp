@@ -589,15 +589,18 @@
         (inherit-constraints (eql2) var1 constraints target))
       t)))
 
+(declaim (inline ok-lambda-var))
+(defun ok-lambda-var (lambda-var)
+  (when (and (lambda-var-p lambda-var)
+             (lambda-var-constraints lambda-var))
+    lambda-var))
+
 ;;; If REF is to a LAMBDA-VAR with CONSTRAINTs (i.e. we can do flow
 ;;; analysis on it), then return the LAMBDA-VAR, otherwise NIL.
 (declaim (inline ok-ref-lambda-var))
 (defun ok-ref-lambda-var (ref)
   (declare (type ref ref))
-  (let ((leaf (ref-leaf ref)))
-    (when (and (lambda-var-p leaf)
-               (lambda-var-constraints leaf))
-      leaf)))
+  (ok-lambda-var (ref-leaf ref)))
 
 ;;; See if LVAR's single USE is a REF to a LAMBDA-VAR and they are EQL
 ;;; according to CONSTRAINTS. Return LAMBDA-VAR if so.

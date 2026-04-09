@@ -323,7 +323,8 @@
                       do (return (values (lvar-dest lvar) lvar ref))))
               (values dest lvar)))))))
 
-(defun mv-bind-dest (lvar nth-value &optional single-use)
+
+(defun mv-bind-vars (lvar &optional single-use)
   (when (and lvar
              (or (not single-use)
                  (atom (lvar-uses lvar))))
@@ -331,13 +332,18 @@
       (when (and (mv-combination-p dest)
                  (eq (basic-combination-kind dest) :local))
         (let ((fun (combination-lambda dest)))
-          (let* ((var (nth nth-value (lambda-vars fun)))
-                 (refs (leaf-refs var)))
-            (when (and refs
-                       (not (cdr refs))
-                       (not (lambda-var-sets var)))
-              (when (functional-kind-eq fun mv-let)
-                (let-lvar-dest (node-lvar (car refs)) single-use)))))))))
+          (when (functional-kind-eq fun mv-let)
+            (lambda-vars fun)))))))
+
+(defun mv-bind-dest (lvar nth-value &optional single-use)
+  (let ((vars (mv-bind-vars lvar single-use)))
+    (when vars
+      (let* ((var (nth nth-value vars))
+             (refs (leaf-refs var)))
+        (when (and refs
+                   (not (cdr refs))
+                   (not (lambda-var-sets var)))
+          (let-lvar-dest (node-lvar (car refs)) single-use))))))
 
 (defun mv-bind-unused-p (lvar nth-value)
   (when lvar
