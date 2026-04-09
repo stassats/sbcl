@@ -45,7 +45,8 @@
 
 ;;; Return the index of NAME+DATAP in the table, adding it if it doesn't exist.
 (defun ensure-alien-linkage-index (name datap)
-  (let* ((key (if datap (list name) name))
+  (let* ((name (possibly-base-stringize name))
+         (key (if datap (list name) name))
          (info *linkage-info*)
          (ht (car info)))
     (or (with-system-mutex ((hash-table-lock ht))
