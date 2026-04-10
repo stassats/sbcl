@@ -217,14 +217,14 @@
 (define-source-transform append (&rest lists)
   (case (length lists)
     (0 nil)
-    (1 (car lists))
+    (1 `(prog1 ,(car lists)))
     (2 `(sb-impl::append2 ,@lists))
     (t (values nil t))))
 
 (define-source-transform nconc (&rest lists)
   (case (length lists)
     (0 ())
-    (1 (car lists))
+    (1 `(prog1 ,(car lists)))
     (t (values nil t))))
 
 ;;; (append nil nil nil fixnum) => fixnum
