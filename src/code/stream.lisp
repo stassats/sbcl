@@ -679,7 +679,7 @@
   (stream-api-dispatch (stream :output)
     :native (return-from write-char (funcall (ansi-stream-cout stream) stream character))
     :simple (s-%write-char stream character)
-    :gray (stream-write-char stream character))
+    :gray (stream-write-char stream (the character character)))
   character)
 
 (defun terpri (&optional (stream *standard-output*))
@@ -714,7 +714,7 @@
                              ,@(when (eq name '%write-line)
                                  '((funcall (ansi-stream-cout stream) stream #\newline))))
               :simple (,(symbolicate "S-" name) stream data start end)
-              :gray (progn (stream-write-string stream data start end)
+              :gray (progn (stream-write-string stream (the string data) start end)
                            ,@(when (eq name '%write-line)
                                '((stream-write-char stream #\newline))))))
           string)))
@@ -773,7 +773,7 @@
   (stream-api-dispatch (stream)
     :native (return-from write-byte (funcall (ansi-stream-bout stream) stream integer))
     :simple (s-%write-byte stream integer)
-    :gray (stream-write-byte stream integer))
+    :gray (stream-write-byte stream (the integer integer)))
   integer)
 
 
@@ -1599,7 +1599,7 @@ benefit of the function GET-OUTPUT-STREAM-STRING."
            nil))))
 
 (defun string-sout (stream string start end)
-  (declare (explicit-check string)
+  (declare (string string)
            (type index start end))
   ;; FIXME: this contains about 7 OBJECT-NOT-INDEX error traps.
   ;; We should be able to check once up front that the string-stream will not

@@ -159,7 +159,7 @@
                             (eof-error-p t)
                             eof-value
                             recursive-p)
-  (declare (type (or character boolean) peek-type) (explicit-check))
+  (declare (explicit-check stream))
   (stream-api-dispatch (stream :input)
     :simple (let ((char (s-%peek-char stream peek-type eof-error-p eof-value)))
               ;; simple-streams -%PEEK-CHAR always ignored RECURSIVE-P
@@ -169,18 +169,18 @@
         (ansi-stream-peek-char peek-type stream eof-error-p eof-value
                                recursive-p)
     :gray
-        (let ((char
-               (generalized-peeking-mechanism
-                peek-type :eof char
-                (if (null peek-type)
-                    (stream-peek-char stream)
-                    (stream-read-char stream))
-                :eof
-                (if (null peek-type)
-                    ()
-                    (stream-unread-char stream char))
-                ()
-                (eof-or-lose stream eof-error-p eof-value))))
+        (let* ((char
+                 (generalized-peeking-mechanism
+                     peek-type :eof char
+                     (if (null peek-type)
+                         (stream-peek-char stream)
+                         (stream-read-char stream))
+                     :eof
+                     (if (null peek-type)
+                         ()
+                         (stream-unread-char stream char))
+                     ()
+                     (eof-or-lose stream eof-error-p eof-value))))
           (if (eq char eof-value)
               char
               (the character char)))))
