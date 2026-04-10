@@ -1842,7 +1842,7 @@
            (fail))
           ((types-equal-or-intersect value-type to-type))
           ((csubtypep to-type (specifier-type 'sequence))
-           (unless (csubtypep value-type (specifier-type 'sequence))
+           (unless (types-equal-or-intersect value-type (specifier-type 'sequence))
              (fail)))
           ((eql type-specifier 'character)
            (unless (types-equal-or-intersect value-type
