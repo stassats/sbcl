@@ -454,6 +454,9 @@ is either numeric or alphabetic."
                         ((>= i (length more-characters)) t)
                       (do-rest-arg ((c2) more-characters i)
                         (when ,test
+                          ;; Check the remaining characters before returning NIL
+                          (do-rest-arg ((n) more-characters (1+ i))
+                            (the character n))
                           (return-from ,name nil))))
                     ;; CHAR-NOT-EQUAL has explicit check attribute
                     (progn (the character character) t)))))
