@@ -66,17 +66,20 @@
                   #-sb-xc-host ; don't redefine CL builtins!
                   (defun ,name (pred first-seq &rest more-seqs)
                     ,doc
-                    (declare (dynamic-extent pred))
-                    (flet ((map-me (&rest rest)
-                             (let ((value (apply pred rest)))
-                               (,found-test value
-                                 (return-from ,name
-                                   ,(if (eq found-result :value)
-                                        'value
-                                        found-result))))))
-                      (declare (inline map-me))
-                      (apply #'%map nil #'map-me first-seq more-seqs)
-                      ,unfound-result)))))
+                    (declare (dynamic-extent pred)
+                             (explicit-check))
+                    (let ((pred (%coerce-callable-to-fun pred)))
+                      (flet ((map-me (&rest rest)
+                               (let ((value (apply pred rest)))
+                                 (,found-test value
+                                              (return-from ,name
+                                                ,(if (eq found-result :value)
+                                                     'value
+                                                     found-result))))))
+                        (declare (inline map-me)
+                                 (dynamic-extent #'map-me))
+                        (apply #'%map nil #'map-me first-seq more-seqs)
+                        ,unfound-result))))))
 
   (defquantifier some when :value :unfound-result nil
    :doc "Apply PREDICATE to the 0-indexed elements of the sequences, then
