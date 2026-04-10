@@ -1083,16 +1083,22 @@ of specialized arrays is supported."
                       length rank))
              (loop for i below length
                    for s = (fast-&rest-nth i subscripts)
-                   always (and (typep s '(and fixnum unsigned-byte))
-                               (< s (%array-dimension array i))))))
+                   always (cond ((typep s '(and fixnum unsigned-byte))
+                                 (< s (%array-dimension array i)))
+                                (t
+                                 (the integer s)
+                                 nil)))))
           ((/= length 1)
            (error "Wrong number of subscripts, ~W, for array of rank 1."
                   length))
           (t
            (let ((subscript (fast-&rest-nth 0 subscripts)))
-             (and (typep subscript '(and fixnum unsigned-byte))
-                  (< subscript
-                     (length (truly-the (simple-array * (*)) array)))))))))
+             (cond ((typep subscript '(and fixnum unsigned-byte))
+                    (< subscript
+                       (length (truly-the (simple-array * (*)) array))))
+                   (t
+                    (the integer subscript)
+                    nil)))))))
 
 (defun array-row-major-index (array &rest subscripts)
   (declare (dynamic-extent subscripts))
