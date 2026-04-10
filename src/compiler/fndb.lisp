@@ -142,9 +142,9 @@
     (t &optional lexenv-designator)
   (values form &optional boolean))
 
-(defknown compiler-macro-function (t &optional lexenv-designator)
+(defknown compiler-macro-function ((or symbol cons) &optional lexenv-designator)
   (or function null)
-  (flushable))
+  ())
 
 ;;;; from the "Declarations" chapter:
 

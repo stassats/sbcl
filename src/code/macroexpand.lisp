@@ -158,6 +158,7 @@
 (defun compiler-macro-function (name &optional env)
   "If NAME names a compiler-macro in ENV, return the expansion function, else
 return NIL. Can be set with SETF when ENV is NIL."
+  (declare (explicit-check name))
   (legal-fun-name-or-type-error name)
   ;; CLHS 3.2.2.1: Creating a lexical binding for the function name
   ;; not only creates a new local function or macro definition, but
