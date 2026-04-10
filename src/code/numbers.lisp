@@ -872,11 +872,14 @@ The second returned value is the remainder."
   (declare (number number) (explicit-check))
   (if more-numbers
       (do ((n number (nth i more-numbers))
-            (i 0 (1+ i)))
+           (i 0 (1+ i)))
           ((>= i (length more-numbers))
            t)
         (do-rest-arg ((n2) more-numbers i)
           (when (= n n2)
+            ;; Type check the remaining numbers before returning NIL
+            (do-rest-arg ((n) more-numbers (1+ i))
+              (the number n))
             (return-from /= nil))))
       t))
 
