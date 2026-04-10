@@ -149,6 +149,33 @@
                         (object-slot-ea symbol symbol-value-slot other-pointer-lowtag))
         value val-temp))))
 
+(define-vop (%cas-symbol-global-value)
+  (:translate %cas-symbol-global-value #-sb-thread %compare-and-swap-symbol-value)
+  (:args (symbol :scs (descriptor-reg immediate) :to (:result 0))
+         (old :scs (descriptor-reg any-reg constant immediate))
+         (new :scs (descriptor-reg any-reg)))
+  ;; RAX purposely conflicts with OLD instead of being born exactly when OLD dies
+  ;; because RAX serves as the temporary for computing the card mark address.
+  (:temporary (:sc descriptor-reg :offset rax-offset :to (:result 0)) rax)
+  (:results (result :scs (descriptor-reg any-reg)))
+  (:policy :fast-safe)
+  (:vop-var vop)
+  (:node-var node)
+  (:generator 15
+    (pseudo-atomic (:elide-if (and #+immobile-space
+                                   (not (symbol-set-barrier-p symbol (vop-nth-arg 2 vop)))))
+      (emit-symbol-write-barrier vop symbol rax (vop-nth-arg 2 vop))
+      (if (sc-is old immediate) (move-immediate rax (immediate-tn-repr old)) (move rax old))
+      (let ((ea (if (sc-is symbol immediate)
+                    (symbol-slot-ea (tn-value symbol) symbol-value-slot)
+                    (symbol-value-slot-ea symbol))))
+        (inst cmpxchg :lock ea new)))
+    (unless (or (and (sc-is symbol immediate) (sb-c::always-boundp (tn-value symbol) node))
+                (policy node (= safety 0)))
+      (inst cmp :byte rax unbound-marker-widetag)
+      (inst jmp :e (generate-error-code vop 'unbound-symbol-error symbol)))
+    (move result rax)))
+
 #-sb-thread
 (progn
   (define-vop (symbol-value symbol-global-value)
@@ -165,27 +192,6 @@
       (inst cmp :byte (object-slot-ea
                  symbol symbol-value-slot other-pointer-lowtag)
             unbound-marker-widetag)))
-
-  (define-vop (%compare-and-swap-symbol-value)
-    (:translate %compare-and-swap-symbol-value %cas-symbol-global-value)
-    (:args (symbol :scs (descriptor-reg) :to (:result 0))
-           (old :scs (descriptor-reg any-reg constant immediate))
-           (new :scs (descriptor-reg any-reg)))
-    (:temporary (:sc descriptor-reg :offset rax-offset :to (:result 0)) rax)
-    (:results (result :scs (descriptor-reg any-reg)))
-    (:policy :fast-safe)
-    (:vop-var vop)
-    (:node-var node)
-    (:generator 15
-      (emit-symbol-write-barrier vop symbol rax (vop-nth-arg 2 vop))
-      (if (sc-is old immediate)
-          (move-immediate rax (immediate-tn-repr old))
-          (move rax old))
-      (inst cmpxchg :lock (object-slot-ea symbol symbol-value-slot other-pointer-lowtag) new)
-      (unless (policy node (= safety 0))
-        (inst cmp :byte rax unbound-marker-widetag)
-        (inst jmp :e (generate-error-code vop 'unbound-symbol-error symbol)))
-      (move result rax)))
 
   (define-vop (dynbind)
     (:args (val :scs (any-reg descriptor-reg))

@@ -11,10 +11,6 @@
 
 (in-package "SB-VM")
 
-(defmacro symbol-value-slot-ea (sym)    ; SYM is a TN
-  `(ea (- (* symbol-value-slot n-word-bytes) other-pointer-lowtag)
-       ,sym))
-
 (defun emit-lea-symbol-value-slot (ea-tn symbol) ; dest, src
   (if (sc-is symbol immediate)
       (inst mov ea-tn (make-fixup (tn-value symbol) :immobile-symbol
@@ -39,36 +35,6 @@
       `(%cas-symbol-global-value symbol old new)
       (sb-c::give-up-ir1-transform)))
 
-(flet ((emit-cas (ea symbol old new rax result pa vop &aux (node (sb-c::vop-node vop)))
-         (if (sc-is old immediate) (move-immediate rax (immediate-tn-repr old)) (move rax old))
-         (inst cmpxchg :lock ea new)
-         (when pa (emit-end-pseudo-atomic))
-         (unless (or (and (sc-is symbol immediate) (sb-c::always-boundp (tn-value symbol) node))
-                     (policy node (= safety 0)))
-           (inst cmp :byte rax unbound-marker-widetag)
-           (inst jmp :e (generate-error-code vop 'unbound-symbol-error symbol)))
-         (move result rax)))
-(define-vop (%cas-symbol-global-value)
-  (:translate %cas-symbol-global-value)
-  (:args (symbol :scs (descriptor-reg immediate) :to (:result 0))
-         (old :scs (descriptor-reg any-reg constant immediate))
-         (new :scs (descriptor-reg any-reg)))
-  ;; RAX is the temp for computing the card mark, so it has to conflict
-  ;; with OLD and therefore the default lifetime spec is fine
-  (:temporary (:sc descriptor-reg :offset rax-offset :to (:result 0)) rax)
-  (:results (result :scs (descriptor-reg any-reg)))
-  (:policy :fast-safe)
-  (:vop-var vop)
-  (:generator 10
-    ;; There's an error trap in EMIT-CAS which mustn't be inside PSEUDO-ATOMIC
-    (let ((pa #+immobile-space (symbol-set-barrier-p symbol (vop-nth-arg 2 vop))))
-      (when pa (emit-begin-pseudo-atomic))
-      (emit-symbol-write-barrier vop symbol rax (vop-nth-arg 2 vop))
-      (emit-cas (if (sc-is symbol immediate)
-                    (symbol-slot-ea (tn-value symbol) symbol-value-slot)
-                    (symbol-value-slot-ea symbol))
-                symbol old new rax result pa vop))))
-
 (define-vop (%compare-and-swap-symbol-value)
   (:translate %compare-and-swap-symbol-value)
   (:args (symbol :scs (descriptor-reg immediate) :to (:result 0))
@@ -81,6 +47,7 @@
   (:results (result :scs (descriptor-reg any-reg)))
   (:policy :fast-safe)
   (:vop-var vop)
+  (:node-var node)
   (:generator 15
   ;; This code has two pathological cases: NO-TLS-VALUE-MARKER
   ;; or UNBOUND-MARKER as NEW: in either case we would end up
@@ -95,16 +62,20 @@
     ;; IF this is CAS of a thread-local value, then pseudo-atomic is not needed,
     ;; but trying to skip the p-a (to "optimize") is just silly because we have
     ;; to assume that this is NOT thread-local for CAS to have any merit.
-    (let ((pa #+immobile-space (symbol-set-barrier-p symbol (vop-nth-arg 2 vop)))
-          (cas (gen-label)))
-      (when pa (emit-begin-pseudo-atomic))
-      (inst cmp :qword (ea cell) no-tls-value-marker)
-      (inst jmp :ne CAS)
-      ;; GLOBAL
-      (emit-symbol-write-barrier vop symbol cell (vop-nth-arg 2 vop))
-      (emit-lea-symbol-value-slot cell symbol)
-      (emit-label CAS)
-      (emit-cas (ea cell) symbol old new rax result pa vop)))))
+    (let ((pa #+immobile-space (symbol-set-barrier-p symbol (vop-nth-arg 2 vop))))
+      (pseudo-atomic (:elide-if (not pa))
+        (inst cmp :qword (ea cell) no-tls-value-marker)
+        (inst jmp :ne CAS)
+        (emit-symbol-write-barrier vop symbol cell (vop-nth-arg 2 vop))
+        (emit-lea-symbol-value-slot cell symbol)
+        CAS
+        (if (sc-is old immediate) (move-immediate rax (immediate-tn-repr old)) (move rax old))
+        (inst cmpxchg :lock (ea cell) new))
+      (unless (or (and (sc-is symbol immediate) (sb-c::always-boundp (tn-value symbol) node))
+                  (policy node (= safety 0)))
+        (inst cmp :byte rax unbound-marker-widetag)
+        (inst jmp :e (generate-error-code vop 'unbound-symbol-error symbol)))
+      (move result rax))))
 
 ;;; The :tls-load-indirect feature is, in most situations, an improvement over "direct"
 ;;; access (contrary to what indirection implies, but I couldn't settle on a better name).

@@ -18,6 +18,10 @@
         (ea (+ (static-symbol-offset symbol) offset) null-tn)
         (ea (make-fixup symbol :immobile-symbol offset)))))
 
+(defmacro symbol-value-slot-ea (sym)    ; SYM is a TN
+  `(ea (- (* symbol-value-slot n-word-bytes) other-pointer-lowtag)
+       ,sym))
+
 ;;; The GC card table base is either an imm8 displacement from NULL-TN, or that
 ;;; plus one backend page if #+sb-safepoint. The reason for sliding the table up
 ;;; with #+sb-safepoint is that the safepoint trap address wants to be an imm8 away
