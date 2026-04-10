@@ -441,7 +441,7 @@
            (call-ansi-stream-misc stream :unread character)))))
 
 (defun unread-char (character &optional (stream *standard-input*))
-  (declare (explicit-check))
+  (declare (explicit-check stream))
   (stream-api-dispatch (stream :input)
     :simple (s-%unread-char stream character)
     :native (ansi-stream-unread-char character stream)
