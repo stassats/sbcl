@@ -1602,7 +1602,7 @@
 (defknown make-broadcast-stream (&rest stream) broadcast-stream (unsafely-flushable))
 (defknown make-concatenated-stream (&rest stream) concatenated-stream (unsafely-flushable))
 (defknown make-two-way-stream (stream stream) two-way-stream (unsafely-flushable))
-(defknown make-echo-stream (stream stream) echo-stream (flushable))
+(defknown make-echo-stream (stream stream) echo-stream (unsafely-flushable))
 (defknown make-string-input-stream (string &optional index sequence-end)
   sb-impl::string-input-stream
   (flushable))

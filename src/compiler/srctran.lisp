@@ -135,7 +135,9 @@
 (define-source-transform list (&rest args)
   (if args (values nil t) (values nil nil)))
 (define-source-transform list* (arg &rest others)
-  (if others (values nil t) (values arg nil)))
+  (if others
+      (values nil t)
+      `(prog1 ,arg)))
 ;;; Use LIST* in lieu of CONS so that there are only 2 low-level allocators
 ;;; instead of 3. Strictly speaking, LIST is redundant as well.
 (define-source-transform cons (x y) `(list* ,x ,y))
