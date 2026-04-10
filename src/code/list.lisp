@@ -1009,15 +1009,15 @@
 
 (defun union (list1 list2 &key key (test nil testp) (test-not nil notp))
   "Return the union of LIST1 and LIST2."
-  (declare (explicit-check))
-  (declare (dynamic-extent key test test-not))
+  (declare (dynamic-extent key test test-not)
+           (explicit-check key test test-not))
   (when (and testp notp)
     (error ":TEST and :TEST-NOT were both supplied."))
-  ;; "The result list may be eq to either list-1 or list-2 if appropriate."
-  ;; (and a 1000-element list unioned with NIL should not cons a hash-table)
-  (cond ((null list1) (return-from union list2))
-        ((null list2) (return-from union list1)))
   (with-member-test (member-test)
+    ;; "The result list may be eq to either list-1 or list-2 if appropriate."
+    ;; (and a 1000-element list unioned with NIL should not cons a hash-table)
+    (cond ((null list1) (return-from union list2))
+          ((null list2) (return-from union list1)))
     (let ((n1 (length list1))
           (n2 (length list2)))
       (if (hashing-p notp testp test n1 n2)
@@ -1036,13 +1036,13 @@
 
 (defun nunion (list1 list2 &key key (test nil testp) (test-not nil notp))
   "Destructively return the union of LIST1 and LIST2."
-  (declare (explicit-check))
-  (declare (dynamic-extent key test test-not))
+  (declare (dynamic-extent key test test-not)
+           (explicit-check key test test-not))
   (when (and testp notp)
     (error ":TEST and :TEST-NOT were both supplied."))
-  (cond ((null list1) (return-from nunion list2))
-        ((null list2) (return-from nunion list1)))
   (with-member-test (member-test)
+    (cond ((null list1) (return-from nunion list2))
+          ((null list2) (return-from nunion list1)))
     (binding* ((n1 (length list1))
                (n2 (length list2))
                ((short long) (if (< n1 n2) (values list1 list2) (values list2 list1))))
@@ -1068,12 +1068,12 @@
 (defun intersection (list1 list2
                      &key key (test nil testp) (test-not nil notp))
   "Return the intersection of LIST1 and LIST2."
-  (declare (explicit-check))
-  (declare (dynamic-extent key test test-not))
+  (declare (dynamic-extent key test test-not)
+           (explicit-check key test test-not))
   (when (and testp notp)
     (error ":TEST and :TEST-NOT were both supplied."))
-  (when (and list1 list2)
-    (with-member-test (member-test)
+  (with-member-test (member-test)
+    (when (and list1 list2)
       (let ((res nil))
         (dolist (elt list1)
           (when (funcall member-test elt list2 key test)
@@ -1083,12 +1083,12 @@
 (defun nintersection (list1 list2
                       &key key (test nil testp) (test-not nil notp))
   "Destructively return the intersection of LIST1 and LIST2."
-  (declare (explicit-check))
-  (declare (dynamic-extent key test test-not))
+  (declare (dynamic-extent key test test-not)
+           (explicit-check key test test-not))
   (when (and testp notp)
     (error ":TEST and :TEST-NOT were both supplied."))
-  (when (and list1 list2)
-    (with-member-test (member-test)
+  (with-member-test (member-test)
+    (when (and list1 list2)
       (let ((res nil)
             (list1 list1))
         (do () ((endp list1))
@@ -1100,42 +1100,42 @@
 (defun set-difference (list1 list2
                        &key key (test nil testp) (test-not nil notp))
   "Return the elements of LIST1 which are not in LIST2."
-  (declare (explicit-check))
-  (declare (dynamic-extent key test test-not))
+  (declare (dynamic-extent key test test-not)
+           (explicit-check key test test-not))
   (when (and testp notp)
     (error ":TEST and :TEST-NOT were both supplied."))
-  (if list2
-      (with-member-test (member-test)
+  (with-member-test (member-test)
+    (if list2
         (let ((res nil))
           (dolist (elt list1)
             (unless (funcall member-test elt list2 key test)
               (push elt res)))
-          res))
-      list1))
+          res)
+        list1)))
 
 (defun nset-difference (list1 list2
                         &key key (test nil testp) (test-not nil notp))
   "Destructively return the elements of LIST1 which are not in LIST2."
-  (declare (explicit-check))
-  (declare (dynamic-extent key test test-not))
+  (declare (dynamic-extent key test test-not)
+           (explicit-check key test test-not))
   (when (and testp notp)
     (error ":TEST and :TEST-NOT were both supplied."))
-  (if list2
-      (with-member-test (member-test)
+  (with-member-test (member-test)
+    (if list2
         (let ((res nil)
               (list1 list1))
           (do () ((endp list1))
             (if (funcall member-test (car list1) list2 key test)
                 (setf list1 (cdr list1))
                 (shiftf list1 (cdr list1) res list1)))
-          res))
-      list1))
+          res)
+        list1)))
 
 (defun set-exclusive-or (list1 list2
                          &key key (test nil testp) (test-not nil notp))
   "Return new list of elements appearing exactly once in LIST1 and LIST2."
-  (declare (explicit-check))
-  (declare (dynamic-extent key test test-not))
+  (declare (dynamic-extent key test test-not)
+           (explicit-check key test test-not))
   (when (and testp notp)
     (error ":TEST and :TEST-NOT were both supplied."))
   (let ((result nil))
@@ -1157,8 +1157,8 @@
                           &key key (test #'eql testp) (test-not #'eql notp))
   "Destructively return a list with elements which appear but once in LIST1
    and LIST2."
-  (declare (explicit-check))
-  (declare (dynamic-extent key test test-not))
+  (declare (dynamic-extent key test test-not)
+           (explicit-check key test test-not))
   (when (and testp notp)
     (error ":TEST and :TEST-NOT were both supplied."))
   (let ((key (and key (%coerce-callable-to-fun key)))
@@ -1216,8 +1216,8 @@
 
 (defun subsetp (list1 list2 &key key (test #'eql testp) (test-not nil notp))
   "Return T if every element in LIST1 is also in LIST2."
-  (declare (explicit-check))
-  (declare (dynamic-extent key test test-not))
+  (declare (dynamic-extent key test test-not)
+           (explicit-check key test test-not))
   (when (and testp notp)
     (error ":TEST and :TEST-NOT were both supplied."))
   (with-member-test (member-test)
