@@ -1140,6 +1140,8 @@
     (error ":TEST and :TEST-NOT were both supplied."))
   (let ((result nil))
     (with-member-test (member-test)
+      (cond ((null list1) (return-from set-exclusive-or list2))
+            ((null list2) (return-from set-exclusive-or list1)))
       (dolist (elt list1)
         (unless (funcall member-test elt list2 key test)
           (push elt result)))
@@ -1165,6 +1167,8 @@
         (test (if testp (%coerce-callable-to-fun test) test))
         (test-not (if notp (%coerce-callable-to-fun test-not) test-not)))
     (declare (type function test test-not))
+    (cond ((null list1) (return-from nset-exclusive-or list2))
+          ((null list2) (return-from nset-exclusive-or list1)))
     ;; The outer loop examines LIST1 while the inner loop examines
     ;; LIST2. If an element is found in LIST2 "equal" to the element
     ;; in LIST1, both are spliced out. When the end of LIST1 is
