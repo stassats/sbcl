@@ -1,7 +1,7 @@
 #include "interr.h"
 #include <stdio.h>
 
-int main(int argc, char *argv[], char *envp[])
+int __attribute__((weak)) main(int argc, char *argv[], char *envp[])
 {
     extern int initialize_lisp(int argc, char *argv[], char *envp[]);
 #ifdef TRACE_MMAP_SYSCALLS
