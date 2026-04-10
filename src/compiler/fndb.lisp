@@ -1255,7 +1255,7 @@
   (foldable flushable call))
 
 (defknown acons (t t t) cons (movable flushable))
-(defknown pairlis (t t &optional t) list (flushable))
+(defknown pairlis (list list &optional list) list (flushable))
 
 (defknown (rassoc assoc)
     (t proper-list &key
@@ -2507,9 +2507,10 @@
 (defknown (slot-boundp slot-exists-p) (t symbol) boolean)
 (defknown sb-pcl::set-slot-value (t symbol t) t (any))
 
-(defknown find-class (symbol &optional t lexenv-designator) (or class null) ())
+;;; Not checking for lexenv-designator, it's ignored and checking doesn't provide much value
+(defknown find-class (symbol &optional t t) (or class null) ())
 (defknown class-of (t) class (flushable))
-(defknown class-name (class) symbol (flushable))
+(defknown class-name (class) symbol (unsafely-flushable))
 
 (defknown finalize
     (t (function-designator () *) &key (:dont-save t))

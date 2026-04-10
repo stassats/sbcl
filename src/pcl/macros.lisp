@@ -70,9 +70,11 @@
                            (or (condition-classoid-p classoid)
                                (defstruct-classoid-p classoid)))
                   (ensure-non-standard-class symbol classoid))))))
-      (when errorp
+
+      (progn
         (check-class-name symbol)
-        (error 'class-not-found-error :name symbol))))
+        (when errorp
+          (error 'class-not-found-error :name symbol)))))
 
 (defun find-class (symbol &optional (errorp t) environment)
   (declare (ignore environment) (explicit-check))
