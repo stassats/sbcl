@@ -1,7 +1,11 @@
 #include "interr.h"
 #include <stdio.h>
 
-int __attribute__((weak)) main(int argc, char *argv[], char *envp[])
+int
+#if !(defined LISP_FEATURE_WIN32 && !defined __clang__)
+__attribute__((weak))
+#endif
+main(int argc, char *argv[], char *envp[])
 {
     extern int initialize_lisp(int argc, char *argv[], char *envp[]);
 #ifdef TRACE_MMAP_SYSCALLS
