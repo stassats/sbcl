@@ -3920,17 +3920,36 @@
 
 ;; (ash (unsigned-byte 128) -64) produces a word sized result
 (when-vop-existsp (:translate ash-right-two-words)
-  (deftransform ash ((integer amount) * signed-word :node node :important nil)
+  (deftransform ash ((integer amount) (t fixnum) signed-word :node node :important nil)
     (if (or (word-sized-lvar-p integer)
             (combination-matches 'logand `(* ,most-positive-word) (node-dest node)))
         (give-up-ir1-transform)
         `(mask-signed-field ,sb-vm:n-word-bits (logand (ash integer amount) ,most-positive-word))))
 
-  (deftransform ash ((integer amount) * word :node node :important nil)
+  (deftransform ash ((integer amount) (t fixnum) word :node node :important nil)
     (if (or (word-sized-lvar-p integer)
             (combination-matches 'logand `(* ,most-positive-word) (node-dest node)))
         (give-up-ir1-transform)
-        `(logand (ash integer amount) ,most-positive-word))))
+        `(logand (ash integer amount) ,most-positive-word)))
+
+  (deftransform ash ((integer amount) (t (integer * 0)) signed-word
+                     :node node :important nil)
+    (when (word-sized-lvar-p amount)
+      (give-up-ir1-transform))
+    (delay-ir1-transform node :ir1-phases)
+    `(ash integer (if (fixnump amount)
+                      (truly-the fixnum amount)
+                      most-negative-fixnum)))
+
+
+  (deftransform ash ((integer amount) (t (integer * 0)) word
+                     :node node :important nil)
+    (when (word-sized-lvar-p amount)
+      (give-up-ir1-transform))
+    (delay-ir1-transform node :ir1-phases)
+    `(if (fixnump amount)
+         (ash integer (truly-the fixnum amount))
+         0)))
 
 (defoptimizers fold-p (expt sb-kernel::intexp) ((base power))
   (or (typep base '(and number

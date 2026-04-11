@@ -2465,7 +2465,12 @@
   (assert (not (ctu:ir1-named-calls
                 `(lambda (x)
                    (ash (the (signed-byte ,(* 2 sb-vm:n-word-bits)) x)
-                        ,(- sb-vm:n-word-bits)))))))
+                        ,(- sb-vm:n-word-bits))))))
+  (assert (not (ctu:ir1-named-calls
+                `(lambda (x p3)
+                   (declare (type (integer * ,(- sb-vm:n-word-bits)) p3)
+                            ((unsigned-byte ,(* (- sb-vm:n-word-bits 4) 2)) x))
+                   (ash x p3))))))
 
 (with-test (:name :truncate-by-zero-type)
   (assert-type
