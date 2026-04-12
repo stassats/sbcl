@@ -2174,7 +2174,7 @@ core and return a descriptor to it."
       (gethash (descriptor-bits des) *cold-symbols*)
     (declare (type symbol symbol))
     (unless found-p
-      (error "no warm symbol"))
+      (error "no warm symbol for ~S" des))
     symbol))
 
 ;;; like CL:CAR, CL:CDR, and CL:NULL but for cold values
@@ -2410,15 +2410,6 @@ Legal values for OFFSET are -4, -8, -12, ..."
 
 (defun code-jump-table-words (code)
   (ldb (byte 14 0) (read-bits-wordindexed code (code-header-words code))))
-
-(declaim (ftype (sfunction (descriptor sb-vm:word (or sb-vm:word
-                                                      sb-vm:signed-word)
-                                       keyword keyword)
-                           descriptor)
-                cold-fixup))
-(defun cold-fixup (code-object after-header value kind flavor)
-  (sb-vm:fixup-code-object code-object after-header value kind flavor)
-  code-object)
 
 (defun alien-linkage-table-note-symbol (symbol-name datap)
   "Register a symbol and return its address or index in proto-linkage-table."
@@ -3041,7 +3032,7 @@ Legal values for OFFSET are -4, -8, -12, ..."
                       '(#xE8 #xE9)))
          (push (list kind offset name) *asm-deferred-fixups*))
         (t
-         (cold-fixup
+         (sb-vm:fixup-code-object
            code-obj offset
            (ecase flavor
              #+linkage-space
