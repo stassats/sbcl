@@ -363,16 +363,16 @@ should not be used."
                          ;; race with the SIGCHLD signal handler.
                          (multiple-value-bind (status code core)
                              (waitpid (process-pid proc))
-                           (when (and status
-                                      (not (process-closed-p proc)))
-                             (wake-serve-event proc)
-                             (setf (process-%status proc) status)
-                             (setf (process-%exit-code proc) code)
-                             (when (process-status-hook proc)
-                               (push proc changed))
-                             (when (member status '(:exited :signaled))
-                               (setf (process-core-dumped proc) core)
-                               t))))
+                           (when status
+                             (unless (process-closed-p proc)
+                               (wake-serve-event proc)
+                               (setf (process-%status proc) status)
+                               (setf (process-%exit-code proc) code)
+                               (when (process-status-hook proc)
+                                 (push proc changed))
+                               (setf (process-core-dumped proc) core))
+                             (and (member status '(:exited :signaled))
+                                  t))))
                        #+win32
                        (lambda (proc)
                          (let ((handle (process-handle proc)))
@@ -395,7 +395,8 @@ should not be used."
     ;; but in the Windows implementation it would be deeply bad.
     (dolist (proc changed)
       (let ((hook (process-status-hook proc)))
-        (funcall hook proc)))))
+        (when hook
+          (funcall hook proc))))))
 
 ;;;; RUN-PROGRAM and close friends
 
