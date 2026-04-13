@@ -258,21 +258,20 @@
 (defun extract-name-type-and-version (namestr start end escape-char)
   (declare (type simple-string namestr)
            (type index start end))
-  (flet ((escape-p (i)
-           (and (>= i start) (char= (aref namestr i) escape-char))))
-    (let ((last-dot
-            (loop for i from (1- end) downto (1+ start)
-                  when (and (char= (aref namestr i) #\.)
-                            (or (not (escape-p (1- i)))
-                                (escape-p (- i 2))))
-                  return i)))
-      (if last-dot
-          (values (maybe-make-pattern namestr start last-dot escape-char)
-                  (maybe-make-pattern namestr (1+ last-dot) end escape-char)
-                  :newest)
-          (values (maybe-make-pattern namestr start end escape-char)
-                  nil
-                  :newest)))))
+  (let ((last-dot
+          (loop for i from (1- end) downto (1+ start)
+                when (and (char= (aref namestr i) #\.)
+                          (evenp (loop for i from (1- i) downto start
+                                       while (char= (char namestr i) escape-char)
+                                       count t)))
+                return i)))
+    (if last-dot
+        (values (maybe-make-pattern namestr start last-dot escape-char)
+                (maybe-make-pattern namestr (1+ last-dot) end escape-char)
+                :newest)
+        (values (maybe-make-pattern namestr start end escape-char)
+                nil
+                :newest))))
 
 
 ;;;; Grabbing the kind of file when we have a native-namestring.
