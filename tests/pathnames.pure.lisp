@@ -1052,4 +1052,6 @@
   #+win32
   (progn
     (assert (equal (pathname-name (pathname "^^^.abc")) "^.abc"))
-    (assert (not (pathname-type (pathname "^^^.abc"))))))
+    (assert (not (pathname-type (pathname "^^^.abc")))))
+  (let ((p #-win32 #p"a*\\.c" #+win32 #p"a*^.c"))
+    (assert (equal (pathname (namestring p)) p))))

@@ -168,39 +168,42 @@
   (let ((length 0)
         (complicated nil))
     (declare (type index length))
-    (labels ((needs-escaping-p (char index)
+    (labels ((needs-escaping-p (char index start-p)
                (or (char= char #\*) (char= char #\?)
                    (char= char #\[) (char= char escape-char)
                    (case escape-dot
-                     (:unless-at-start (and (plusp index) (char= char #\.)))
+                     (:unless-at-start
+                      (and (or (not start-p)
+                               (plusp index))
+                           (char= char #\.)))
                      ((t) (char= char #\.)))))
-             (inspect-fragment (fragment)
+             (inspect-fragment (fragment start-p)
                (etypecase fragment
                  ((eql :wild)
                   (incf length)
                   t)
                  (simple-string
                   (incf length (length fragment))
-                  (Loop with complicated = nil
+                  (loop with complicated = nil
                         for char across (the simple-string fragment)
                         for i from 0
-                        when (needs-escaping-p char i)
+                        when (needs-escaping-p char i start-p)
                         do (setf complicated t)
                            (incf length)
                         finally (return complicated)))
                  (pattern
-                  (mapcar (lambda (piece)
-                            (etypecase piece
-                              (simple-string
-                               (inspect-fragment piece))
-                              ((member :multi-char-wild :single-char-wild)
-                               (incf length 1)
-                               t)
-                              ((cons (eql :character-set))
-                               (incf length (+ 2 (length (cdr piece))))
-                               t)))
-                          (pattern-pieces fragment))))))
-      (setf complicated (inspect-fragment thing))
+                  (loop for first = t then nil
+                        for piece in (pattern-pieces fragment)
+                        collect (etypecase piece
+                                  (simple-string
+                                   (inspect-fragment piece first))
+                                  ((member :multi-char-wild :single-char-wild)
+                                   (incf length 1)
+                                   t)
+                                  ((cons (eql :character-set))
+                                   (incf length (+ 2 (length (cdr piece))))
+                                   t)))))))
+      (setf complicated (inspect-fragment thing t))
       (unless complicated
         (return-from unparse-physical-piece thing))
       (let ((result (make-string length))
@@ -214,34 +217,35 @@
                    (declare (string string))
                    (setf (subseq result index) string)
                    (incf index (length string)))
-                 (unparse-fragment (fragment)
+                 (unparse-fragment (fragment start-p)
                    (etypecase fragment
                      ((eql :wild)
                       (output-character #\*))
                      (simple-string
                       (loop for char across (the simple-string fragment)
                             for i from 0
-                            when (needs-escaping-p char i)
+                            when (needs-escaping-p char i start-p)
                             do (output-character escape-char)
                             do (output-character char)))
                      (pattern
-                      (mapc (lambda (piece piece-complicated)
-                              (etypecase piece
-                                (simple-string
-                                 (if piece-complicated
-                                     (unparse-fragment piece)
-                                     (output-string piece)))
-                                ((eql :multi-char-wild)
-                                 (output-character #\*))
-                                ((eql :single-char-wild)
-                                 (output-character #\?))
-                                ((cons (eql :character-set))
-                                 (output-character #\[)
-                                 (output-string (cdr piece))
-                                 (output-character #\]))))
-                            (pattern-pieces fragment) complicated)))))
+                      (loop for first = t then nil
+                            for piece in (pattern-pieces fragment)
+                            for piece-complicated in complicated
+                            do (etypecase piece
+                                 (simple-string
+                                  (if piece-complicated
+                                      (unparse-fragment piece first)
+                                      (output-string piece)))
+                                 ((eql :multi-char-wild)
+                                  (output-character #\*))
+                                 ((eql :single-char-wild)
+                                  (output-character #\?))
+                                 ((cons (eql :character-set))
+                                  (output-character #\[)
+                                  (output-string (cdr piece))
+                                  (output-character #\]))))))))
           (declare (inline output-character output-string))
-          (unparse-fragment thing))
+          (unparse-fragment thing t))
         result))))
 
 (defun make-matcher (piece)
