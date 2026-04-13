@@ -650,8 +650,9 @@ should not be used."
     (loop for (arg . rest) on args
           do
           (cond ((and escape
-                      (find-if (lambda (c) (find c '(#\Space #\Tab #\")))
-                               arg))
+                      (or (equal arg "")
+                          (find-if (lambda (c) (find c '(#\Space #\Tab #\")))
+                                   arg)))
                  (escape-arg arg str))
                 (t
                  (write-string arg str)))
