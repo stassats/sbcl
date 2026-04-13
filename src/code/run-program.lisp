@@ -288,34 +288,16 @@ PROCESS."
   process)
 
 #-win32
-;;; Find the current foreground process group id.
-(defun find-current-foreground-process (proc)
-  (with-alien ((result int))
-    (multiple-value-bind
-          (wonp error)
-        (sb-unix:unix-ioctl (fd-stream-fd (process-pty proc))
-                            sb-unix:TIOCGPGRP
-                            (alien-sap (addr result)))
-      (unless wonp
-        (error "TIOCPGRP ioctl failed: ~S" (strerror error)))
-      result))
-  (process-pid proc))
-
-#-win32
 (defun process-kill (process signal &optional (whom :pid))
   "Hand SIGNAL to PROCESS. If WHOM is :PID, use the kill Unix system call. If
-   WHOM is :PROCESS-GROUP, use the killpg Unix system call. If WHOM is
-   :PTY-PROCESS-GROUP deliver the signal to whichever process group is
-   currently in the foreground.
+   WHOM is :PROCESS-GROUP, use the killpg Unix system call.
    Returns T if successful, otherwise returns NIL and error number (two values)."
-  (let ((pid (ecase whom
-               ((:pid :process-group)
-                (process-pid process))
-               (:pty-process-group
-                (find-current-foreground-process process)))))
-    (let ((result (if (eq whom :process-group)
-                      (sb-unix:unix-killpg pid signal)
-                      (sb-unix:unix-kill pid signal))))
+  (let ((pid (process-pid process)))
+    (let ((result (ecase whom
+                    (:process-group
+                     (sb-unix:unix-killpg pid signal))
+                    (:pid
+                     (sb-unix:unix-kill pid signal)))))
       (or (zerop result)
           (values nil (sb-unix::get-errno))))))
 
