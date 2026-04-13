@@ -123,7 +123,16 @@
                  ((char= char #\[)
                   (flush-pending-regulars)
                   (let ((close-bracket
-                          (position #\] namestr :start index :end end)))
+                          (loop with escaping = nil
+                                for i from index below end
+                                for char = (char namestr i)
+                                thereis (cond (escaping
+                                               (setf escaping nil))
+                                              ((char= char escape-char)
+                                               (setf escaping t)
+                                               nil)
+                                              ((char= char #\])
+                                               i)))))
                     (unless close-bracket
                       (error 'namestring-parse-error
                              :complaint "#\\[ with no corresponding #\\]"

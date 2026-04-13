@@ -1027,3 +1027,10 @@
     (assert (equal (merge-pathnames (enough-namestring pathname defaults) defaults)
                    (merge-pathnames (parse-namestring namestring nil defaults) defaults)))
     (assert (equal ";FOO.LISP" (enough-namestring pathname defaults)))))
+
+(with-test (:name :[-escaping)
+  (assert (pathname-match-p "n" (opaque-identity #p"[n\\]a]")))
+  (assert (pathname-match-p "]" (opaque-identity #p"[n\\]a]")))
+  (assert (pathname-match-p "a" (opaque-identity #p"[n\\]a]")))
+  (assert (not (pathname-match-p "c" (opaque-identity #p"[n\\]a]"))))
+  (assert (pathname-match-p "ab" (opaque-identity #p"[n\\]a]b"))))
