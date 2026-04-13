@@ -2418,7 +2418,7 @@ Legal values for OFFSET are -4, -8, -12, ..."
                          *cold-foreign-symbol-table*
                          (hash-table-count *cold-foreign-symbol-table*))))
     #+x86-64 index
-    #-x86-64 (sb-vm::alien-linkage-table-entry-address index)))
+    #-x86-64 (sb-vm::alien-linkage-index-to-addr index)))
 
 (defun foreign-symbols-to-core ()
   (flet ((to-core (list transducer target-symbol)
@@ -3951,10 +3951,10 @@ III. initially undefined function references (alphabetically):
   (format t "~%~|~%IX. alien linkage table:~2%")
   (dolist (entry (sort (sb-int:%hash-table-alist *cold-foreign-symbol-table*)
                        #'< :key #'cdr))
-    (let ((name (car entry)))
+    (let* ((name (car entry)) (datap (listp name)))
       (format t " ~:[   ~;(D)~] ~8x = ~a~%"
-              (listp name)
-              (sb-vm::alien-linkage-table-entry-address (cdr entry))
+              datap
+              (sb-vm::alien-linkage-index-to-addr (cdr entry) datap)
               (car (ensure-list name)))))
 
   #+sb-thread

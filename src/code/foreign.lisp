@@ -134,7 +134,7 @@ The returned address is always a linkage-table address.
 Symbols are entered into the linkage-table if they aren't there already."
   (declare (ignorable datap))
   (let ((index (ensure-alien-linkage-index name datap)))
-    (values (sb-vm::alien-linkage-table-entry-address index) t)))
+    (values (sb-vm::alien-linkage-index-to-addr index) t)))
 
 (defun foreign-symbol-sap (symbol &optional datap)
   "Returns a SAP corresponding to the foreign symbol. DATAP must be true if the
@@ -179,8 +179,7 @@ symbol designates a variable. May enter the symbol into the linkage-table."
               addr
               (+ sb-vm:alien-linkage-space-start (1- sb-vm:alien-linkage-space-size)))
       (return-from sap-foreign-symbol
-        (alien-linkage-index-to-name
-         (sb-vm::alien-linkage-index-from-address addr))))
+        (alien-linkage-index-to-name (sb-vm::alien-linkage-index-from-addr addr))))
     #+os-provides-dladdr
     (with-alien ((info (struct dl-info
                                (filename c-string)

@@ -3426,7 +3426,7 @@
                  (if (eql addend sb-vm::+nil-indirect+) (+ nil-based-disp 8) nil-based-disp)))
               (:rel32 ; subkind is meaningless - this is a PC-relative fixup.
                ;; must be ASM codeblob if #-immobile-space
-               (sb-vm::alien-linkage-table-entry-address value)))
+               (sb-vm::alien-linkage-index-to-addr value)))
             addend 0))))
   ;; Preprocess the value based on FLAVOR and the implicit addend at the
   ;; fixup location.  The addend will be zero for most <KIND,FLAVOR> pairs.

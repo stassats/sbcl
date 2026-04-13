@@ -250,8 +250,8 @@
     (let ((cur-nfp (current-nfp-tn vop)))
       (when cur-nfp
         (store-stack-tn nfp-save cur-nfp))
-      ;; (alien-linkage-table-entry-address 0) is "call-into-c" in mips-assem.S
-      (inst lw tramp null-tn (- (alien-linkage-table-entry-address 0) nil-value))
+      ;; (alien-linkage-index-to-addr 0) is "call-into-c" in mips-assem.S
+      (inst lw tramp null-tn (- (alien-linkage-index-to-addr 0) nil-value))
       (inst nop)
       (inst jal tramp)
       (inst move cfunc function)
