@@ -173,17 +173,14 @@ symbol designates a variable. May enter the symbol into the linkage-table."
                        (when (= value index) (return-from found key))))))))
     (if (listp key) (car key) key)))
 
-(declaim (maybe-inline sap-foreign-symbol))
 (defun sap-foreign-symbol (sap)
-  (declare (ignorable sap))
   (let ((addr (sap-int sap)))
-    (declare (ignorable addr))
     (when (<= sb-vm:alien-linkage-space-start
               addr
-              (+ sb-vm:alien-linkage-space-start sb-vm:alien-linkage-space-size))
+              (+ sb-vm:alien-linkage-space-start (1- sb-vm:alien-linkage-space-size)))
       (return-from sap-foreign-symbol
         (alien-linkage-index-to-name
-         (sb-vm::alien-linkage-table-index-from-address addr))))
+         (sb-vm::alien-linkage-index-from-address addr))))
     #+os-provides-dladdr
     (with-alien ((info (struct dl-info
                                (filename c-string)
@@ -201,14 +198,9 @@ symbol designates a variable. May enter the symbol into the linkage-table."
       ;; However: We now try to allow libdl to acquire its internal locks in a GCing
       ;; thread, which means that we need all user threads to agree not to stop
       ;; for GC in the midst of _any_ libdl call.
-      (let ((err (sb-vm:with-pseudo-atomic-foreign-calls
-                     (alien-funcall dladdr addr (addr info)))))
-        (if (zerop err)
-            nil
-            (slot info 'symbol))))
-    ;; FIXME: Even in the absence of dladdr we could search the
-    ;; static foreign symbols (and *linkage-info*, for that matter).
-    ))
+      (unless (zerop (sb-vm:with-pseudo-atomic-foreign-calls
+                         (alien-funcall dladdr addr (addr info))))
+        (slot info 'symbol)))))
 
 ;;; There 2 vars are not defglobal, as defglobal implies always-bound.
 (declaim (global *runtime-dlhandle* *shared-objects*))

@@ -490,7 +490,7 @@
            (or (when (<= sb-vm:alien-linkage-space-start addr
                          (+ sb-vm:alien-linkage-space-start
                             (1- sb-vm:alien-linkage-space-size)))
-                 (let* ((index (sb-vm::alien-linkage-table-index-from-address addr))
+                 (let* ((index (sb-vm::alien-linkage-index-from-address addr))
                         (name (sb-impl::alien-linkage-index-to-name index)))
                    (note (lambda (s) (format s "&~A" name)) dstate)))
                (unless (sb-kernel:immobile-space-addr-p addr)

@@ -81,7 +81,7 @@
     (:down (- space-end (* (1+ i) alien-linkage-table-entry-size)))))
 
 #-sb-xc-host
-(defun alien-linkage-table-index-from-address (addr)
+(defun alien-linkage-index-from-address (addr)
   (ecase alien-linkage-table-growth-direction
     (:up   (floor (- addr alien-linkage-space-start) alien-linkage-table-entry-size))
     (:down (1- (floor (- space-end addr) space-end))))))
