@@ -642,9 +642,7 @@
               (inst stwu stack-pointer stack-pointer (- frame-size))
 
               ;; And make the call.
-              (load-address-into
-               r0
-               (foreign-symbol-address "callback_wrapper_trampoline"))
+              (load-address-into r0 (callback_wrapper_trampoline))
               (inst mtlr r0)
               (inst blrl)
 
@@ -786,7 +784,7 @@
                 (inst stw r0 sp (* 2 n-word-bytes)) ; FIXME: magic constant
                 (inst stwu sp sp (- frame-size))
                 ;; Make the call
-                (load-address-into r0 (foreign-symbol-address "callback_wrapper_trampoline"))
+                (load-address-into r0 (callback_wrapper_trampoline))
                 (inst mtlr r0)
                 (inst blrl))
               ;; We're back!  Restore sp and lr, load the return value from just

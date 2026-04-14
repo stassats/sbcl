@@ -426,7 +426,7 @@ and a pointer to the arguments."
             (inst sw ra sp (- n-frame-bytes n-word-bytes))
 
             ;; Setup the args and make the call.
-            (inst li t9 (foreign-symbol-address "callback_wrapper_trampoline"))
+            (inst li t9 (callback_wrapper_trampoline))
             (inst li a0 (fixnumize index))
             (inst addu a1 sp n-frame-bytes)
             (inst jal t9)

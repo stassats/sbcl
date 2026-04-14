@@ -407,7 +407,7 @@ pointer to the arguments."
               (inst push eax)                       ; arg1
               (inst push (ash index 2))             ; arg0
 
-              (inst mov eax (foreign-symbol-address "callback_wrapper_trampoline"))
+              (inst mov eax (callback_wrapper_trampoline))
               (inst call eax)
 
               ;; now put the result into the right register

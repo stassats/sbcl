@@ -117,14 +117,12 @@ symbol in the linkage table, and never returns an address in the linkage-table."
 ;;; It's not our problem that shared objects aren't loadable, but we get the
 ;;; flexibility of recompiling C without recompiling Lisp.
 ;;;
-;;; This function is somewhat badly named, because when DATAP is true,
-;;; the answer is not really the address of NAME, but rather the address
-;;; of the word in the alien-linkage-table holding the address of NAME.
-;;; (This would be better off named ALIEN-LINKAGE-ADDRESS)
+;;; This would be better off named ALIEN-LINKAGE-ADDRESS because the answer is not
+;;; the address of NAME, but rather the address of the word in the alien-linkage-table
+;;; holding the address of NAME, or a callable address in the linkage table.
 ;;; Unfortunately we can not rename it, because CFFI uses it, which is weird
 ;;; because the use is from a function named %FOREIGN-SYMBOL-POINTER which is
-;;; documented to return "a pointer to a foreign symbol NAME."
-;;; which it certainly does not do in all cases.
+;;; documented to return "a pointer to a foreign symbol NAME." which this isn't.
 (defun foreign-symbol-address (name &optional datap)
   "Returns the address of the foreign symbol NAME. DATAP must be true if the
 symbol designates a variable.

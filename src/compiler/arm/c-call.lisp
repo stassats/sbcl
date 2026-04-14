@@ -505,7 +505,7 @@
         (inst mov r2-tn nsp-tn)
 
         ;; Call
-        (load-immediate-word r3-tn (foreign-symbol-address "callback_wrapper_trampoline"))
+        (load-immediate-word r3-tn (callback_wrapper_trampoline))
         (inst blx r3-tn)
 
         ;; Result now on top of stack, put it in the right register

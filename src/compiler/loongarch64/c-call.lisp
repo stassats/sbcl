@@ -303,7 +303,7 @@
               (mapcar #'make-gpr '(4 5 6 7 1 3))
             (inst addi.d sp sp (- n-frame-bytes))
             (inst st.d ra sp (- n-frame-bytes n-word-bytes))
-            (inst li a3 (foreign-symbol-address "callback_wrapper_trampoline"))
+            (inst li a3 (callback_wrapper_trampoline))
             (inst li a0 (fixnumize index))
             (inst addi.d a1 sp n-frame-bytes)
             (inst addi.d a2 sp n-callee-register-args-bytes)

@@ -671,3 +671,6 @@
   `(let ((*location-context* ',value))
      (emit-error-break sb-assem::*current-vop* cerror-trap (error-number-or-lose 'sb-kernel::mprint-error)
                        (list ,value))))
+
+(defmacro callback_wrapper_trampoline ()
+    '(foreign-symbol-address "callback_wrapper_trampoline"))

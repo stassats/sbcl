@@ -412,14 +412,10 @@
 
               ;; And make the call.
               #+little-endian
-              (load-address-into
-               r0
-               (foreign-symbol-address "callback_wrapper_trampoline"))
+              (load-address-into r0 (callback_wrapper_trampoline))
               #+big-endian
               (destructuring-bind (r2 r12) (mapcar #'make-gpr '(2 12))
-                (load-address-into
-                 r12
-                 (foreign-symbol-address "callback_wrapper_trampoline"))
+                (load-address-into r12 (callback_wrapper_trampoline))
                 (inst ld r0 r12 0)
                 (inst ld r2 r12 8))
               (inst mtlr r0)
