@@ -1918,7 +1918,7 @@
                 (unless (if (eql (car annotation) 'function-designator)
                             (let ((fun (or (lvar-fun-name arg t)
                                            (and (constant-lvar-ignore-types-p arg)
-                                                (lvar-value arg)))))
+                                                (lvar-value arg t)))))
                               (and fun
                                    (constant-fold-arg-p fun)))
                             (constant-lvar-ignore-types-p arg))
