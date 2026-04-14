@@ -130,7 +130,6 @@ Returns a secondary value T for historical reasons.
 
 The returned address is always a linkage-table address.
 Symbols are entered into the linkage-table if they aren't there already."
-  (declare (ignorable datap))
   (let ((index (ensure-alien-linkage-index name datap)))
     (values (sb-vm::alien-linkage-index-to-addr index datap) t)))
 
