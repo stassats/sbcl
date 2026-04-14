@@ -50,7 +50,8 @@
 
 ;;; Used for interning parts of SLOT-NAME-LISTS, as part of
 ;;; PV-TABLE interning -- just to save space.
-(define-load-time-global *slot-name-lists* (make-hashset 64 #'list-elts-eq #'sxhash))
+(define-load-time-global *slot-name-lists*
+    (make-hashset 64 #'list-elts-eq #'sb-c::hash-list-of-symbols))
 
 ;;; Used for interning PV-TABLES, keyed by the SLOT-NAME-LISTS
 ;;; used.

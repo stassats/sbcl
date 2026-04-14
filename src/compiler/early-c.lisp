@@ -203,14 +203,27 @@ possible.")
         ;; And who knows what the host considers "simple".
         #-sb-xc-host (not simple-array)))
 
+(defun hash-list-of-symbols (list) ; or "nonexternalizably-hash-..."
+  ;; We don't emulate sb-xc:sxhash thoroughly enough to hash compound names
+  ;; (lists are rejected) but it doesn't actually matter what the hash is
+  ;; for duplicate name detection.
+  #+sb-xc-host (cl:sxhash list)
+  ;; SXHASH requires symbols whose print-names are the same to hash the same.
+  ;; That's not a requirement of the fun-name-hashset, so use SYMBOL-HASH here
+  ;; which contains 10 pseudorandom bits if 64-bit word size, fewer if 32-bit.
+  ;; If someone using 32-bit SBCL complains, we can mix in PACKAGE-ID too.
+  #-sb-xc-host
+  (named-let recurse ((x list))
+    (typecase x
+      (symbol (symbol-hash x))
+      ;; sure this could be made iterative, but the lists in question are short
+      (cons (mix (recurse (car x)) (recurse (cdr x))))
+      (t (sxhash x))))) ; nonstandard function name, oh well (string?)
+
 (defun make-fun-name-hashset ()
   (make-hashset 32
                 (lambda (a b) (or (eq a b) (and (consp a) (consp b) (equal a b))))
-                ;; We don't emulate sb-xc:sxhash thoroughly enough to hash compound names
-                ;; (lists are rejected) but it doesn't actually matter what the hash is
-                ;; for duplicate name detection.
-                #+sb-xc-host #'cl:sxhash
-                #-sb-xc-host #'sxhash))
+                #'hash-list-of-symbols))
 
 (defstruct (compilation (:constructor make-compilation
                                       (&optional msan-unpoison
