@@ -245,7 +245,7 @@
                               (declare (type (mod 53) k))
                               (cond ((> k 20)
                                      (let* ((shift (- 52 k))
-                                            (j (logand (ash lo (- shift))))
+                                            (j (ash lo (- shift)))
                                             (j2 (ash j shift)))
                                        (declare (type (mod 32) shift)
                                                 (type (unsigned-byte 32) j j2))

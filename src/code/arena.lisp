@@ -70,15 +70,14 @@
 ;;; an arena, obtained via malloc(). Allocations within a block are
 ;;; contiguous but the blocks can be discontiguous.
 #+system-tlabs
-(declaim (ftype (sfunction (fixnum &optional fixnum fixnum &key (:hidable boolean))
+(declaim (ftype (sfunction ((and (integer 65536) fixnum)
+                            &optional (and (integer 32768) fixnum) fixnum &key (:hidable boolean))
                            arena) new-arena))
 (defun new-arena (size &optional (growth-amount size) (max-extensions 7)
                        &key hidable)
-  (declare (ignorable growth-amount max-extensions hidable))
-  (assert (>= size 65536))
-  (assert (>= growth-amount 32768))
   "Create a new arena of SIZE bytes which can be grown additively by GROWTH-AMOUNT
 one or more times, not to exceed MAX-EXTENSIONS times"
+  (declare (ignorable growth-amount max-extensions hidable))
   #-system-tlabs :placeholder
   #+system-tlabs
   (let ((huge ; a request exceeding strictly this size gets separately allocated
