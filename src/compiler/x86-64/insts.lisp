@@ -3415,19 +3415,30 @@
   (case flavor
     (:linkage-cell (setf addend 0))
     ((:foreign :foreign-dataref)
-     (let ((disp (* value alien-linkage-table-entry-size)))
-       (setf value
-            (ecase kind
-              (:abs32
-               #+immobile-space disp
-               #-immobile-space
-               (let ((nil-based-disp
-                      (- disp (+ sb-vm::nil-value-offset sb-vm:alien-linkage-space-size))))
-                 (if (eql addend sb-vm::+nil-indirect+) (+ nil-based-disp 8) nil-based-disp)))
-              (:rel32 ; subkind is meaningless - this is a PC-relative fixup.
-               ;; must be ASM codeblob if #-immobile-space
-               (sb-vm::alien-linkage-index-to-addr value)))
-            addend 0))))
+     ;; VALUE is an _index_ into the linkage table (unlike for other achitectures where it
+     ;; is an address) and ADDEND is a boolean flag. This unique convention in contrast
+     ;; to the other architectures supports relocatable alien linkage space.
+     (setf value
+           (let ((datap (eq flavor :foreign-dataref)))
+             (ecase kind
+               (:abs32
+                ;; If immobile-space exists, :ABS32 foreign fixups occur only from dynamic-space
+                ;; because otherwise a PC-relative fixup is better. In movable code, the table's
+                ;; base address is loaded into RBX so that fixup amount is only the displacement.
+                #+immobile-space (sb-vm::alien-linkage-element-offset value datap)
+                ;; Without immobile space the alien linkage table is acessed based off NIL. The
+                ;; usual call is "LEA RBX, [NIL-disp] ; CALL RBX" where the value in RBX conveys
+                ;; the alien name if undefined.  "CALL [NIL-disp]" also works, skipping an extra
+                ;; JMP, however it can only be used for calls to the C runtime which are always
+                ;; defined. This mode is indicated with ADDEND = +NIL-INDIRECT+.
+                #-immobile-space
+                (let ((datap (or datap (= addend sb-vm::+nil-indirect+))))
+                  (- (sb-vm::alien-linkage-index-to-addr value datap) sb-vm:nil-value)))
+             (:rel32 ; PC-relative
+              ;; Without #+immobile-space, the :REL32 kind is rare- it occurs only when
+              ;; calling from Lisp asm routines to the C runtime.
+              (sb-vm::alien-linkage-index-to-addr value datap))))
+           addend 0)))
   ;; Preprocess the value based on FLAVOR and the implicit addend at the
   ;; fixup location.  The addend will be zero for most <KIND,FLAVOR> pairs.
   (setq value

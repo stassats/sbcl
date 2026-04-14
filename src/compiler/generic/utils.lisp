@@ -73,6 +73,44 @@
       (not (static-symbol-p symbol))
       (not (null (info :variable :wired-tls symbol)))))
 
+#+x86-64
+;;; Alien linkage entries are bundled into groups of 16. Within a group, all pointer words
+;;; are adjacent, followed by the jump instructions corresponding to them (if relevant).
+;;; To see why this is more favorable to the CPU, consider trying to bring 8 consecutive
+;;; alien linkage entries into the CPU's L1 cache, and suppose cache lines are 64 bytes.
+;;; With I & D interleaved, 4 entries x 16 bytes per entry = 64 bytes. Those 64 bytes consume
+;;; both an L1 icache line _and_ an L1 dcache line. i.e identical bytes are in two caches.
+;;; Therefore 8 entries consume 4 lines.  However the same 8 entries using separated I & D
+;;; consume only 1 icache line and 1 dcache line, so 8 entries consume 2 lines.
+;;; Conclusion: non-interleaving improves theoretical density in L1 cache.
+;;; Though this is conditioned for x86-64, any of the architectures could (and probably
+;;; should) use a piecewise linear map from alien linkage index to table element, because
+;;; spacing data away from instructions by >1 cache line is generally the right thing.
+(symbol-macrolet ((entries-per-group 16))
+(defun alien-linkage-element-offset (i datap)
+  (multiple-value-bind (group-number index-in-group) (floor i entries-per-group)
+    (+ (* group-number entries-per-group alien-linkage-table-entry-size)
+       (if datap
+           ;; return the address of the indirection word
+           (* index-in-group sb-vm:n-word-bytes)
+           ;; return the address of the JMP instruction
+           (+ (* entries-per-group sb-vm:n-word-bytes) ; skip over N indirection words
+              (* index-in-group 8)))))) ; coincidentally it's 8 bytes for the JMP+padding
+
+(defun alien-linkage-index-from-addr (addr)
+  (let* ((offset (- addr alien-linkage-space-start))
+         (group-number (floor offset (* entries-per-group alien-linkage-table-entry-size)))
+         (index (* group-number entries-per-group)))
+    (dotimes (i entries-per-group) ; This is a very silly but simple technique
+      (when (or (= offset (alien-linkage-element-offset index nil))
+                (= offset (alien-linkage-element-offset index t)))
+        (return index))
+      (incf index))))
+
+(defun alien-linkage-index-to-addr (i &optional datap)
+  (+ (alien-linkage-element-offset i datap) alien-linkage-space-start)))
+
+#-x86-64 ; alien linkage index -> address mapping is strictly linear
 (symbol-macrolet ((space-end (+ alien-linkage-space-start alien-linkage-space-size)))
 ;;; the address of the linkage table entry for table index I.
 (defun alien-linkage-index-to-addr (i &optional datap)

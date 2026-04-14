@@ -552,16 +552,21 @@ arch_install_interrupt_handlers()
 void
 arch_write_linkage_table_entry(int index, void *target_addr, int datap)
 {
-    char *reloc_addr = (char*)ALIEN_LINKAGE_SPACE_START + index * ALIEN_LINKAGE_TABLE_ENTRY_SIZE;
+    const unsigned int entries_per_group = 16;
+    unsigned int major_index = (unsigned int)index / entries_per_group;
+    unsigned int minor_index = (unsigned int)index % entries_per_group;
+    char* group_base = (major_index * entries_per_group * ALIEN_LINKAGE_TABLE_ENTRY_SIZE)
+                       + (char*)ALIEN_LINKAGE_SPACE_START;
+    char* data = group_base + minor_index*8;
+    *(uword_t*)data = (uword_t)target_addr;
+    int inst_offset = entries_per_group*N_WORD_BYTES + minor_index*8;
+    char *inst = inst_offset + group_base;
     if (datap) {
-        *(uword_t *)reloc_addr = (uword_t)target_addr;
-        return;
+        *(uword_t*)inst = (uword_t)0x0000000000841F0F; // 8-byte NOP
+    } else {
+        *(uword_t*)inst = (uword_t)0x90660000000025FF; // JMP [RIP+disp] + 2-byte NOP
+        UNALIGNED_STORE32((inst+2), (char*)data - (inst+6)); // inst length is 6
     }
-    reloc_addr[0] = 0xFF; /* Opcode for near jump to absolute reg/mem64. */
-    reloc_addr[1] = 0x25; /* ModRM #b00 100 101, i.e. RIP-relative. */
-    UNALIGNED_STORE32((reloc_addr+2), 2); /* 32-bit displacement field = 2 */
-    reloc_addr[6] = 0x66; reloc_addr[7] = 0x90; /* 2-byte NOP */
-    *(void**)(reloc_addr+8) = target_addr;
 }
 
 /* These setup and check *both* the sse2 and x87 FPUs. While lisp code

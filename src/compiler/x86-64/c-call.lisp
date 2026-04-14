@@ -583,24 +583,6 @@ Floats are passed in integer registers."
     (16 (sign-extend x size))
     (32 (sign-extend x size))))
 
-;;; There is a troublesome assumption about alien code linkage entries, namely that you
-;;; can reference entry + 8 to extract the actual address of the C function.
-;;; This is not ideal, for two distinct reasons:
-;;;
-;;; (1) The linkage entry should contain instructions for GC yieldpoint cooperation,
-;;; removing such instructions from call out sites. (You have to inform the GC that
-;;; a thread is leaving managed code and entering code that won't execute yieldpoints.)
-;;; Clearly this won't work if jumping into the middle of the linkage entry is allowed.
-;;;
-;;; (2) The CPU has separate I+D caches, and there is a cost to shuttling data between
-;;; them. Jumping to an alien linkage entries as they are puts the whole entry into the I
-;;; cache (presumably) when the second word should instead be in the D cache.
-;;; To optimally structure the entries, all JMPs should precede all data words, like so:
-;;;   jmp [RIP+disp]
-;;;   jmp [RIP+disp]
-;;;   ...
-;;;   data ...
-;;; And were such change made, it would cease to be valid to jump to an entry + 8.
 (define-vop (foreign-symbol-sap)
   (:translate foreign-symbol-sap)
   (:policy :fast-safe)

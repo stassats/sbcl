@@ -517,8 +517,7 @@
                (return-from print-mem-ref))
               ((<= alien-start disp (1- alien-end))
                (let ((name (sb-impl::alien-linkage-index-to-name
-                            (floor (- disp alien-start)
-                                   sb-vm:alien-linkage-table-entry-size))))
+                            (sb-vm::alien-linkage-index-from-addr (+ disp sb-vm:nil-value)))))
                  (note (lambda (s) (format s "&~A" name)) dstate))
                (return-from print-mem-ref)))))
 
@@ -531,7 +530,8 @@
                (not (machine-ea-index value))
                (integerp (machine-ea-disp value)))
       (let ((name (sb-impl::alien-linkage-index-to-name
-                   (floor (machine-ea-disp value) sb-vm:alien-linkage-table-entry-size))))
+                   (sb-vm::alien-linkage-index-from-addr
+                    (+ (machine-ea-disp value) sb-vm:alien-linkage-space-start)))))
         (note (lambda (s) (format s "&~A" name)) dstate)))
     (setf (sb-disassem::dstate-known-register-contents dstate) nil)
 
@@ -559,7 +559,8 @@
               (aver (= (reg-num (regrm-inst-reg dchunk-zero dstate)) sb-vm::rbx-offset))
               (let* ((disp (ldb (byte 32 8) (sb-disassem::dstate-previous-chunk dstate)))
                      (name (sb-impl::alien-linkage-index-to-name
-                            (floor disp sb-vm:alien-linkage-table-entry-size))))
+                            (sb-vm::alien-linkage-index-from-addr
+                             (+ disp sb-vm:alien-linkage-space-start)))))
                 (setf (sb-disassem::dstate-known-register-contents dstate) (cons 'alien name))))
             (return-from print-mem-ref
               (note (lambda (s) (princ sym s)) dstate))))))

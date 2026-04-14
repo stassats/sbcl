@@ -205,7 +205,11 @@
 (defun c-linkage-sym-from-addr (addr core)
   ;; assumption: alien-linkage-table-growth-direction is :UP for the platform
   (let* ((alien-ls-start (- (bounds-high (core-linkage-bounds core)) alien-linkage-space-size))
-         (entry-index (/ (- addr alien-ls-start) (core-alien-linkage-entry-size core))))
+         (entry-index
+          (sb-vm::alien-linkage-index-from-addr
+           ;; The host's LINKAGE-SPACE-START is allowed to differ from the address
+           ;; implied by the core, but the index-from-addr logic can be reused.
+           (+ sb-vm:alien-linkage-space-start (- addr alien-ls-start)))))
     (setf (bit (core-alien-linkage-symbol-usedp core) entry-index) 1)
     (let ((symbol (aref (core-alien-linkage-symbols core) entry-index)))
       (if (listp symbol)
@@ -1518,7 +1522,9 @@ lisp_fun_linkage_space: .zero ~:*~D
     (dolist (x *c-linkage-redirects*)
       (let* ((index (position (cdr x) (core-alien-linkage-symbols core)
                               :test (lambda (a b) (and (stringp b) (string= a b)))))
-             (addr (+ alien-ls-start (* (core-alien-linkage-entry-size core) index))))
+             (addr (+ alien-ls-start
+                      (sb-vm::alien-linkage-index-to-addr index)
+                      (- sb-vm:alien-linkage-space-start))))
         (rplaca x addr)))
     (with-pinned-objects (inst-buffer)
       (do ((sap (vector-sap inst-buffer))
