@@ -747,7 +747,7 @@ requires exactly~;accepts at most~] one argument" keyword syntax-group)
       (:named
        (error "The DEFSTRUCT option :NAMED takes no arguments."))
       (:initial-offset
-       (setf (dd-offset dd) arg)) ; FIXME: disallow (:INITIAL-OFFSET NIL)
+       (setf (dd-offset dd) (the index arg)))
       (:pure
        (setf (dd-flags dd) (logior (logandc2 (dd-flags dd) +dd-pure+)
                                    (if arg +dd-pure+ 0))))
