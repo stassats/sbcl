@@ -1905,12 +1905,9 @@ bootstrapping.
       (when (and mff (consp name) (eq (car name) 'slow-method))
         (let ((fast-name `(fast-method ,@(cdr name))))
           (set-fun-name mff fast-name))))
-    (when plist
-      (let ((plist plist))
-        (let ((snl (getf plist :slot-name-lists)))
-          (when snl
-            (setf (method-plist-value method :pv-table)
-                  (intern-pv-table :slot-name-lists snl))))))))
+    (binding* ((snl (getf plist :slot-name-lists) :exit-if-null))
+      (setf (method-plist-value method :pv-table)
+            (intern-pv-table :slot-name-lists snl)))))
 
 (defun analyze-lambda-list (lambda-list)
   (multiple-value-bind (llks required optional rest keywords)
