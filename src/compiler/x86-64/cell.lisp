@@ -306,7 +306,9 @@
   #-immobile-space (:temporary (:sc unsigned-reg) temp)
   (:vop-var vop)
   (:generator 1
-   (pseudo-atomic () ; assume software card marking
+   ;; If the OBJECT is an immobile symbol, this has to pseudo-atomic. But equally importantly
+   ;; with #+permgen this MUST NOT be pseudo-atomic, because REMSET-INSERT uses pseudo-atomic.
+   (pseudo-atomic (:elide-if (or #-immobile-space t))
     (gcbar)
     ;; I think this has :LOCK because I want the 3 lowest bits to be
     ;; flags which might undergo concurrent modification.
@@ -320,7 +322,7 @@
   #-immobile-space (:temporary (:sc unsigned-reg) temp)
   (:vop-var vop)
   (:generator 1
-   (pseudo-atomic () ; assume software card marking
+   (pseudo-atomic (:elide-if (or #-immobile-space t))
     (gcbar)
     (storew function object fdefn-fun-slot other-pointer-lowtag)
     (unless (and (sc-is linkage-val immediate) (zerop (tn-value linkage-val)))
