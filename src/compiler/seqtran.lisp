@@ -769,16 +769,23 @@
       (give-up-ir1-transform)))
   `(delq item list))
 
+(flet ((transform (cond)
+         `(do ((x list (cdr x))
+               (splice '()))
+           ((endp x) list)
+           (cond (,cond
+                  (if (null splice)
+                      (setq list (cdr x))
+                      (rplacd splice (cdr x))))
+                 (t (setq splice x))))))
+
 (deftransform delete-if ((pred list) (t list))
   "open code"
-  '(do ((x list (cdr x))
-        (splice '()))
-       ((endp x) list)
-     (cond ((funcall pred (car x))
-            (if (null splice)
-                (setq list (cdr x))
-                (rplacd splice (cdr x))))
-           (t (setq splice x)))))
+  (transform '(funcall pred (car x))))
+
+(deftransform delete-if-not ((pred list) (t list))
+  "open code"
+  (transform '(not (funcall pred (car x))))))
 
 (deftransform fill ((seq item &key (start 0) (end nil))
                     (list t &key (:start t) (:end t)))
