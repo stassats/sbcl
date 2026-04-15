@@ -707,7 +707,9 @@ avoiding atexit(3) hooks, etc. Otherwise exit(2) is called."
              (select (int-sap 0)))))))
 
 ;;; Lisp-side implementations of FD_FOO macros.
-(declaim (inline fd-set fd-clr fd-isset fd-zero))
+(declaim (inline fd-set fd-clr fd-isset fd-zero)
+         (ftype (function ((integer 0 (#.fd-setsize)) t))
+                fd-set fd-clr fd-isset))
 (defun fd-set (offset fd-set)
   (multiple-value-bind (word bit) (floor offset
                                             sb-vm:n-machine-word-bits)

@@ -406,7 +406,7 @@
 (defun expected-n-empty-buckets (n-keys n-buckets)
   (let ((b (coerce n-buckets 'double-float)))
     ;; https://www.randomservices.org/random/urn/Birthday.html states
-    ;; that the expected number of empy buckets ("excluded values") is
+    ;; that the expected number of empty buckets ("excluded values") is
     ;; (* B (EXPT (- 1 (/ B)) N-KEYS)). Here we compute a very tight
     ;; upper bound on that (its limit at infinite size), which is
     ;; slightly faster. Use %EXP because bound derivation for EXP
@@ -2022,7 +2022,7 @@ multiple threads accessing the same hash-table without locking."
             ;; pointer. In other words, even if the vector were considered a root,
             ;; it wouldn't matter from a heap consistency perspective because it would
             ;; not transitively enliven anything, but you can't stop people from using
-            ;; SVREF on it past the high water mark. To to make things safe,
+            ;; SVREF on it past the high water mark. To make things safe,
             ;; we sort of have to zero-fill.
             ;; Also fwiw, it would be necessary to fix verify_range() to understand
             ;; that it MUST NOT verify past the hwm, and similary the low-level debugger
@@ -2495,7 +2495,7 @@ nnnn 1_    any       linear scan (don't try to read when rehash already in progr
        ;; it's the other way around.
        (declare (type (or fixnum maybe-truncated-hash) hash0))
        (dx-flet ((body ()
-                   ;; Delaying the transfer of culled cells could causee the linked list
+                   ;; Delaying the transfer of culled cells could cause the linked list
                    ;; denoting the cells to itself be promoted into a higher generation.
                    ;; Ideally the list would be off-heap and not subject to GC. Attempting to
                    ;; do that would engender two other problems: (1) knowing when to free the list
