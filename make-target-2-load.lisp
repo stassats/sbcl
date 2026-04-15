@@ -363,8 +363,9 @@ Please check that all strings which were not recognizable to the compiler
 (setq sb-c::*policy* (copy-structure sb-c::**baseline-policy**))
 
 ;;; Adjust READTABLE-BASE-CHAR-PREFERENCE back to the advertised default.
-(dolist (rt (list sb-impl::*standard-readtable* *debug-readtable*))
-  (setf (readtable-base-char-preference rt) :symbols))
+(handler-bind ((sb-int:standard-readtable-modified-error #'continue))
+  (dolist (rt (list sb-impl::*standard-readtable* *debug-readtable*))
+    (setf (readtable-base-char-preference rt) :symbols)))
 ;;; Change the internal constructor's default too.
 (let ((dsd sb-kernel::(find 'sb-impl::%readtable-string-preference
                             (dd-slots (find-defstruct-description 'readtable))
@@ -545,4 +546,5 @@ Please check that all strings which were not recognizable to the compiler
 #+(and x86-64 (not sb-devel)) (sb-ext:fold-identical-code :aggressive t :preserve-docstrings t)
 
 ;; See comments in 'readtable.lisp'
-(setf (readtable-base-char-preference *readtable*) :symbols)
+(handler-bind ((sb-int:standard-readtable-modified-error #'continue))
+  (setf (readtable-base-char-preference *readtable*) :symbols))

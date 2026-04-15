@@ -278,6 +278,7 @@ be interned (returned, respectively) as required. The default is :SYMBOLS."
 (defun (setf readtable-base-char-preference) (new-value readtable)
   (declare (type (member :symbols :strings :both nil) new-value))
   "Sets the READTABLE-BASE-CHAR-PREFERENCE of the given READTABLE."
+  (assert-not-standard-readtable readtable '(setf readtable-base-char-preference))
   (setf (%readtable-symbol-preference readtable)
         (if (member new-value '(:symbols :both)) 'base-char 'character)
         (%readtable-string-preference readtable)
