@@ -769,7 +769,7 @@ requires exactly~;accepts at most~] one argument" keyword syntax-group)
     (case (dd-type dd)
       (structure
        (when (dd-offset dd)
-         (error ":OFFSET can't be specified unless :TYPE is specified."))
+         (error ":INITIAL-OFFSET can't be specified unless :TYPE is specified."))
        #-compact-instance-header
        (unless (dd-include dd)
          ;; FIXME: It'd be cleaner to treat no-:INCLUDE as defaulting
