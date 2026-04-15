@@ -306,16 +306,11 @@
   #-immobile-space (:temporary (:sc unsigned-reg) temp)
   (:vop-var vop)
   (:generator 1
-   (pseudo-atomic (:elide-if (or #-immobile-space t))
+   (pseudo-atomic () ; assume software card marking
     (gcbar)
-    (inst cmp :byte (ea (- other-pointer-lowtag) object) fdefn-widetag)
-    (inst jmp :ne SYMBOL)
-    (inst mov :dword (ea (- 4 other-pointer-lowtag) object) index)
-    (inst jmp CELL-SET)
-    SYMBOL
-    (inst or :dword :lock
-          (object-slot-ea object symbol-hash-slot other-pointer-lowtag) index)
-    CELL-SET
+    ;; I think this has :LOCK because I want the 3 lowest bits to be
+    ;; flags which might undergo concurrent modification.
+    (inst or :dword :lock (object-slot-ea object fdefn-bits-slot other-pointer-lowtag) index)
     (inst mov (ea linkage-cell) linkage-val))))
 (define-vop (set-fname-fun)
   (:args (object :scs (descriptor-reg))
@@ -325,7 +320,7 @@
   #-immobile-space (:temporary (:sc unsigned-reg) temp)
   (:vop-var vop)
   (:generator 1
-   (pseudo-atomic (:elide-if (or #-immobile-space t))
+   (pseudo-atomic () ; assume software card marking
     (gcbar)
     (storew function object fdefn-fun-slot other-pointer-lowtag)
     (unless (and (sc-is linkage-val immediate) (zerop (tn-value linkage-val)))

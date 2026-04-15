@@ -1041,7 +1041,7 @@ scav_fdefn(lispobj *where, lispobj __attribute__((unused)) object)
 {
     struct fdefn *fdefn = (struct fdefn *)where;
 #ifdef LISP_FEATURE_LINKAGE_SPACE
-    scavenge(where + 1, 3); // name, padding, function
+    scavenge(where + 2, 2); // 'name' and 'fun'
     scav_linkage_cell(fdefn_linkage_index(fdefn));
 #else
     scavenge(where + 1, 2); // 'name' and 'fun'

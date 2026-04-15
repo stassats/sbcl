@@ -11,7 +11,9 @@
 
 (in-package "SB-VM")
 
-(eval-when (:compile-toplevel) (aver (= symbol-fdefn-slot fdefn-fun-slot)))
+(eval-when (:compile-toplevel)
+  (aver (= symbol-hash-slot fdefn-bits-slot))
+  (aver (= symbol-fdefn-slot fdefn-fun-slot)))
 
 (deftype linkage-index () `(unsigned-byte ,n-linkage-index-bits))
 
@@ -35,14 +37,12 @@
 (declaim (ftype function unbypass-linkage))
 
 (defun fname-linkage-index (fname)
-  (etypecase fname
-    ((and symbol (not null))
-     (ldb (byte n-linkage-index-bits symbol-linkage-index-pos)
-          (with-pinned-objects (fname)
-            (#+big-endian sap-ref-word #+little-endian sap-ref-32
+  (declare (type (or (and symbol (not null)) fdefn) fname))
+  (ldb (byte n-linkage-index-bits symbol-linkage-index-pos)
+       (with-pinned-objects (fname)
+         (#+big-endian sap-ref-word #+little-endian sap-ref-32
              (int-sap (get-lisp-obj-address fname))
              (- (ash symbol-hash-slot word-shift) other-pointer-lowtag)))))
-    (fdefn (ash (get-header-data fname) -24))))
 
 (macrolet ((entry-addr (index f)
              `(values #+ppc64 (truly-the word
@@ -107,10 +107,8 @@
                   (let ((simply-callable (ensure-simplistic (fdefn-fun fname) fname)))
                     (with-pinned-objects (simply-callable)
                       (multiple-value-bind (entrypoint cell) (entry-addr index simply-callable)
-                        ;; SYMBOL-LINKAGE-INDEX-POS is 3 so do the vop a favor and shift
-                        ;; the index into position. FDEFNs can do without a pre-shift.
-                        (let ((index
-                               (if (symbolp fname) (ash index symbol-linkage-index-pos) index)))
+                        ;; Shift INDEX left so it doesn't require a vop temp
+                        (let ((index (ash index symbol-linkage-index-pos)))
                           (%primitive set-fname-linkage-index fname index cell entrypoint)))))
                   index)))))
       (bug "No more linkage table cells available. Rebuild SBCL with a larger table size")))

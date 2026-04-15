@@ -314,17 +314,9 @@
   (:vop-var vop)
   (:generator 1
     (gcbar)
-    (load-type temp object (- other-pointer-lowtag))
-    (inst cmpwi temp fdefn-widetag)
-    (inst beq FDEFN)
-    ;; SYMBOL
     (loadw temp object symbol-hash-slot other-pointer-lowtag)
     (inst or temp temp index)
     (storew temp object symbol-hash-slot other-pointer-lowtag)
-    (inst b CELL-SET)
-    FDEFN
-    (inst stw index object (- #+little-endian 4 other-pointer-lowtag))
-    CELL-SET
     (inst std linkage-val linkage-cell 0)))
 (define-vop (set-fname-fun)
   (:args (object :scs (descriptor-reg))

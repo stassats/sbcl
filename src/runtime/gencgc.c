@@ -2229,13 +2229,7 @@ static lispobj* range_dirty_p(lispobj* where, lispobj* limit, generation_index_t
         }
 #endif
 #ifdef LISP_FEATURE_LINKAGE_SPACE
-        else if (widetag == SYMBOL_WIDETAG) {
-            struct symbol* s = (void*)where;
-            if (!ptr_ok_to_writeprotect(linkage_cell_function(symbol_linkage_index(s)), gen))
-                return where;
-            // Process the value and info slots normally, and the bit-packed package ID + name
-            // can't be younger, so that slot's contents are irrelevant
-        } else if (widetag == FDEFN_WIDETAG) {
+        else if (widetag == SYMBOL_WIDETAG || widetag == FDEFN_WIDETAG) {
             struct fdefn* f = (void*)where;
             if (!ptr_ok_to_writeprotect(linkage_cell_function(fdefn_linkage_index(f)), gen))
                 return where;

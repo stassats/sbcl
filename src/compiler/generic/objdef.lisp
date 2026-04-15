@@ -224,8 +224,8 @@ during backtrace.
   ;;   or closure tramp.
     (raw-addr :c-type "char *"))
   #+linkage-space
-  #((name :ref-trans fdefn-name)
-    (unused)
+  #((bits)
+    (name :ref-trans fdefn-name)
     (fun)))
 
 ;;; a simple function (as opposed to hairier things like closures

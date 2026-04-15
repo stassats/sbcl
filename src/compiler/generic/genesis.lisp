@@ -1261,12 +1261,7 @@ core and return a descriptor to it."
     (if (zerop (descriptor-bits fun)) *nil-descriptor* fun)))
 
 #+linkage-space
-(macrolet ((index-word-and-byte-posn (x)
-             `(ecase (descriptor-widetag ,x)
-                (,sb-vm:symbol-widetag
-                 (values sb-vm:symbol-hash-slot sb-vm::symbol-linkage-index-pos))
-                (,sb-vm:fdefn-widetag
-                 (values 0 32)))))
+(progn
 (defvar *fname-table*
   (make-array 6000 :initial-element 0 :fill-pointer 1 :adjustable nil))
 
@@ -1281,19 +1276,17 @@ core and return a descriptor to it."
 (defun fname-linkage-index (fname) ; modeled on the code in 'src/code/linkage-space'
   (let ((des (coerce-to-cold-fname fname)))
     (cond ((cold-null des) 0)
-          (t (multiple-value-bind (wordindex byte-pos) (index-word-and-byte-posn des)
-               (ldb (byte sb-vm:n-linkage-index-bits byte-pos)
-                    (read-bits-wordindexed des wordindex)))))))
+          (t (ldb (byte sb-vm:n-linkage-index-bits sb-vm::symbol-linkage-index-pos)
+                  (read-bits-wordindexed des sb-vm:symbol-hash-slot))))))
 
 (defun ensure-linkage-index (fname)
   (let* ((des (coerce-to-cold-fname fname))
          (index (fname-linkage-index des)))
     (when (zerop index)
       (setq index (vector-push-extend des *fname-table*))
-      (multiple-value-bind (wordindex byte-pos) (index-word-and-byte-posn des)
-        (let* ((oldbits (read-bits-wordindexed des wordindex))
-               (newbits (logior oldbits (ash index byte-pos))))
-          (write-wordindexed/raw des wordindex newbits)))
+      (let* ((oldbits (read-bits-wordindexed des sb-vm:symbol-hash-slot))
+             (newbits (logior oldbits (ash index sb-vm::symbol-linkage-index-pos))))
+        (write-wordindexed/raw des sb-vm:symbol-hash-slot newbits))
       (assert (= (fname-linkage-index fname) index)))
     index)))
 

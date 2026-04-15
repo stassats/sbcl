@@ -101,11 +101,7 @@ extern void unbind_to_here(lispobj *bsp,void *thread);
 
 #ifdef LISP_FEATURE_LINKAGE_SPACE
 static inline unsigned int fdefn_linkage_index(struct fdefn* f) {
-#ifdef LISP_FEATURE_BIG_ENDIAN
-    return ((unsigned int*)f)[0]; // upper 4 bytes of header
-#else
-    return ((unsigned int*)f)[1]; // same
-#endif
+    return (f->bits >> WORD_SHIFT) & ((1<<N_LINKAGE_INDEX_BITS)-1);
 }
 #ifdef LISP_FEATURE_RELOCATABLE_STATIC_SPACE
 extern uword_t STATIC_SPACE_START; // for self-containedness of this header
@@ -113,7 +109,7 @@ extern uword_t STATIC_SPACE_START; // for self-containedness of this header
 static inline unsigned int symbol_linkage_index(struct symbol* s) {
     // never look at NIL's hash slot's low bits
     if ((uword_t)s == (STATIC_SPACE_START + NIL_SYMBOL_SLOTS_OFFSET)) return 0;
-    return (s->hash >> WORD_SHIFT) & ((1<<N_LINKAGE_INDEX_BITS)-1);
+    return fdefn_linkage_index((struct fdefn*)s);
 }
 
 static lispobj __attribute__((unused)) symbol_function(struct symbol* s) {
