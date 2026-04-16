@@ -109,29 +109,29 @@
          (- other-pointer-lowtag))
       null-tn))
 
+(macrolet ((load-value ()
+             `(if (sc-is object immediate)
+                  (inst mov value (symbol-slot-ea (tn-value object) symbol-value-slot))
+                  (loadw value object symbol-value-slot other-pointer-lowtag))))
 (define-vop (fast-symbol-global-value)
   (:args (object :scs (descriptor-reg immediate)))
   (:results (value :scs (descriptor-reg any-reg)))
   (:policy :fast)
   (:translate symbol-global-value)
-  (:generator 4
-    (cond ((sc-is object immediate)
-           (inst mov value (symbol-slot-ea (tn-value object) symbol-value-slot)))
-          (t
-           (loadw value object symbol-value-slot other-pointer-lowtag)))))
+  (:generator 4 (load-value)))
 
 (define-vop (symbol-global-value)
   (:policy :fast-safe)
   (:translate symbol-global-value)
-  (:args (object :scs (descriptor-reg) :to (:result 1)))
+  (:args (object :scs (descriptor-reg immediate) :to (:result 1)))
   (:results (value :scs (descriptor-reg any-reg)))
   (:vop-var vop)
   (:save-p :compute-only)
   (:generator 9
     (let ((err-lab (generate-error-code vop 'unbound-symbol-error object)))
-      (loadw value object symbol-value-slot other-pointer-lowtag)
+      (load-value)
       (inst cmp :byte value unbound-marker-widetag)
-      (inst jmp :e err-lab))))
+      (inst jmp :e err-lab)))))
 
 (define-vop (%set-symbol-global-value)
   (:args (symbol :scs (descriptor-reg immediate))
@@ -145,8 +145,8 @@
                               #-immobile-space t)
       (emit-symbol-write-barrier vop symbol val-temp (vop-nth-arg 1 vop))
       (emit-store (if (sc-is symbol immediate)
-                        (symbol-slot-ea (tn-value symbol) symbol-value-slot)
-                        (object-slot-ea symbol symbol-value-slot other-pointer-lowtag))
+                      (symbol-slot-ea (tn-value symbol) symbol-value-slot)
+                      (object-slot-ea symbol symbol-value-slot other-pointer-lowtag))
         value val-temp))))
 
 (define-vop (%cas-symbol-global-value)
