@@ -216,8 +216,6 @@
                     pathname-name escape-char
                     :escape-dot (when (not pathname-type) :unless-at-start))))
         (when type-needed
-          (unless (pathname-component-present-p pathname-type)
-            (lose))
           (strings ".")
           (strings (unparse-physical-piece pathname-type
                                            escape-char :escape-dot t))))

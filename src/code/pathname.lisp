@@ -91,4 +91,4 @@
       :unspecific
       (%pathname-host-or-device pathname)))
 
-(defun %pathname-directory (pathname) (car (%pathname-dir+hash pathname)))
+(defun %pathname-directory (pathname) (truly-the list (car (%pathname-dir+hash pathname))))
