@@ -739,7 +739,7 @@ the operating system native pathname conventions."
                              (simple-string
                               (funcall fun piece))
                              ((cons (eql :character-set))
-                              (funcall fun (cdr piece)))
+                              (cons :character-set (funcall fun (cdr piece))))
                              (t
                               piece)))
                          (pattern-pieces thing))))
