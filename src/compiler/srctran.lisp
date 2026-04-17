@@ -453,6 +453,31 @@
 (defoptimizer (%concatenate-to-vector-subseq externally-checkable-type) ((type &rest args) node lvar)
   (concatenate-subseq-type lvar args))
 
+(defun concatenate-subseq-check-ranges (args node)
+  (loop while args
+        do (let ((arg (pop args)))
+             (when (constant-lvar-p arg)
+               (case (lvar-value arg)
+                 (sb-impl::%subseq
+                  (check-sequence-ranges (pop args) (pop args) (pop args) node))
+                 (sb-impl::%splice
+                  (loop repeat (lvar-value (pop args))
+                        do (pop args)))
+                 (sb-impl::%repeat
+                  (pop args)
+                  (pop args)))))))
+
+(defoptimizer (%concatenate-to-string-subseq ir2-hook) ((&rest args) node)
+  (concatenate-subseq-check-ranges args node))
+(defoptimizer (%concatenate-to-base-string-subseq ir2-hook) ((&rest args) node)
+  (concatenate-subseq-check-ranges args node))
+(defoptimizer (%concatenate-to-list-subseq ir2-hook) ((&rest args) node)
+  (concatenate-subseq-check-ranges args node))
+(defoptimizer (%concatenate-to-simple-vector-subseq ir2-hook) ((&rest args) node)
+  (concatenate-subseq-check-ranges args node))
+(defoptimizer (%concatenate-to-vector-subseq ir2-hook) ((type &rest args) node)
+  (concatenate-subseq-check-ranges args node))
+
 (defoptimizer (%concatenate-to-list derive-type) ((&rest args))
   (loop for arg in args
         for min = (nth-value 1 (sequence-lvar-dimensions arg))
