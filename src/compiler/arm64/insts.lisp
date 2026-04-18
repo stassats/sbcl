@@ -1867,7 +1867,7 @@
           (note-fixup segment :uncond-branch cond-or-label)
           (emit-uncond-branch segment 0 0))
          ((fixup-p label)
-          (note-fixup segment :cond-branch cond-or-label)
+          (note-fixup segment :cond-branch label)
           (emit-cond-branch segment 0 (conditional-opcode cond-or-label)))
          (t
           (emit-back-patch segment 4

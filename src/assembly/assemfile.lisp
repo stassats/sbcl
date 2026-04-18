@@ -137,18 +137,33 @@
     ;; changed to labels. For now, restrict to control transfers.
     (binding* ((patch
                 (when (member (stmt-mnemonic statement)
-                              '("B" "BEQ" "JMP" "CALL") ; KLUDGE
+                              '("B" "BEQ" "JMP" "CALL" "CBZ" "CBNZ" "TBZ" "TBNZ") ; KLUDGE
                               :test 'string=)
                   (member-if (lambda (x)
                                (and (typep x 'fixup)
-                                    (eq (fixup-flavor x) :assembly-routine)
-                                    (eql (fixup-offset x) 0)))
+                                    (eq (fixup-flavor x) :assembly-routine)))
                              (stmt-operands statement)))
                 :exit-if-null)
-               (ep (assoc (fixup-name (car patch)) *entry-points*)))
+               (fixup (car patch))
+               (ep (assoc (fixup-name fixup) *entry-points*)))
       ;; oy. what is (third ep) ? An offset?
       (aver (and ep (= (third ep) 0)))
-      (rplaca patch (second ep)))))
+      (let ((label (second ep)))
+        ;; Make a new label for fixup-offset
+        (unless (eql (fixup-offset fixup) 0)
+          (let* ((target (do ((stmt (stmt-next (section-start section)) (stmt-next stmt)))
+                             ((null stmt)
+                              (error "Label for ~a not found" ep))
+                           (when (eq label (stmt-labels stmt))
+                             (return stmt))))
+                 (new-target
+                   (loop for i from 1
+                         for stmt = (stmt-next target) then (stmt-next stmt)
+                         when (= (fixup-offset fixup) i)
+                         return stmt)))
+            (setf label (gen-label))
+            (add-stmt-labels new-target (list label))))
+        (rplaca patch label)))))
 
 (defun expand-align-option (align)
   (when align

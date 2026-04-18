@@ -509,7 +509,7 @@
 (defun (setf thing) (a b) (declare (ignore b)) a)
 
 (with-test (:name :undefined-restart
-            :skipped-on (not :undefined-fun-restarts))
+            :implemented-on :undefined-fun-restarts)
   (let* ((name (gensym))
          (tail-call (checked-compile `(lambda () (,name)) :allow-style-warnings t))
          (call (checked-compile `(lambda () (1+ (,name))) :allow-style-warnings t))
@@ -539,6 +539,17 @@
       (assert (eq (test-use-value return value-lambda) value-lambda))
       (assert (eq (test-use-value return '(setf thing)) #'(setf thing)))
       (assert (eq (test-use-value return #'(setf thing)) #'(setf thing))))))
+
+(with-test (:name :undefined-restart-call-symbol
+            :implemented-on :undefined-fun-restarts)
+  (handler-bind ((undefined-function (lambda (c) (use-value '- c))))
+    (let ((f (checked-compile `(lambda (m)
+                                 (- (funcall m 2))))))
+      (assert (= (funcall f (gensym)) 2))))
+  (handler-bind ((undefined-function (lambda (c) (use-value '- c))))
+    (let ((f (checked-compile `(lambda (m)
+                                 (funcall m 3)))))
+      (assert (= (funcall f (gensym)) -3)))))
 
 ;;; Assert that the USE-VALUE restart for SYMBOL-FUNCTION
 ;;; lets you specify any function.

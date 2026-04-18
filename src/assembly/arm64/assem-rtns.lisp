@@ -283,14 +283,14 @@
   (inst b :ne not-callable)
 
   (loadw temp fun symbol-fdefn-slot other-pointer-lowtag)
-  (inst cbz temp (make-fixup 'undefined-tramp :assembly-routine))
+  (inst cbz temp (make-fixup 'undefined-tramp :assembly-routine 1))
   (move fun temp)
   (loadw lr-tn fun fdefn-raw-addr-slot other-pointer-lowtag)
   (inst add lr-tn lr-tn 4)
   (inst br lr-tn)
   NOT-CALLABLE
   (inst cmp fun null-tn) ;; NIL doesn't have SYMBOL-WIDETAG
-  (inst b :eq (make-fixup 'undefined-tramp :assembly-routine))
+  (inst b :eq (make-fixup 'undefined-tramp :assembly-routine 1))
   (cerror-call nil 'sb-kernel::object-not-callable-error fun)
   (inst and temp fun lowtag-mask)
   (inst cmp temp fun-pointer-lowtag)
