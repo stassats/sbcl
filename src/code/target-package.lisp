@@ -439,7 +439,7 @@ of :INHERITED :EXTERNAL :INTERNAL."
          (n min-numerator-bits))
     (loop
      (multiple-value-bind (c frac-bits)
-         (sb-c:compute-fastrem-coefficient denominator n :variable)
+         (sb-c:compute-fastrem-coefficient denominator n :minimum)
        (cond ((= frac-bits 32)
               (return (values (ldb (byte n 0) -1) c)))
              ((> frac-bits 32)

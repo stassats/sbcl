@@ -577,7 +577,7 @@
                        (when (<= d (+ (mod 2^F d) (expt 2 L)))
                          (let ((c (ceiling (expt 2 F) d)))
                            (return (values F c))))))))
-    (cond ((eq fraction-bits :variable) ; return the smallest F
+    (cond ((eq fraction-bits :minimum) ; return the smallest F
            (values c smallest-f))
           (t
            ;; Otherwise hardwire F to 32 so the algorithm can use :DWORD
@@ -588,6 +588,12 @@
              (error "Need ~D fraction bits for divisor ~D and ~D bit dividend"
                     smallest-f d n))
            (values (ceiling (expt 2 fraction-bits) d) fraction-bits)))))
+
+(defun type-width-in-bits (ctype)
+  ;; Return (integer-length upper-bound) of numeric type. This is NOT a theoretical
+  ;; smallest N bits needed to encode an element of type in a packed representation
+  ;; (e.g. the interval 5..8 _could_ be stored in 2 bits) but we don't do that.
+  (integer-length (sb-c::interval-high (sb-c::numeric-type->interval ctype))))
 
 (defun env-system-tlab-p (env)
   #-system-tlabs (declare (ignore env))

@@ -2056,13 +2056,13 @@
 
 (define-vop (fast-truncate-c/fixnum=>fixnum fast-safe-arith-op)
   (:translate truncate)
-  (:args (x :scs (any-reg) :target eax))
+  (:args (x :scs (any-reg) :target rax))
   (:info y)
   (:arg-types tagged-num (:constant fixnum))
   (:temporary (:sc signed-reg :offset rax-offset :target quo
-                   :from :argument :to (:result 0)) eax)
+                   :from :argument :to (:result 0)) rax)
   (:temporary (:sc any-reg :offset rdx-offset :target rem
-                   :from :eval :to (:result 1)) edx)
+                   :from :eval :to (:result 1)) rdx)
   (:temporary (:sc any-reg :from :eval :to :result) y-arg)
   (:results (quo :scs (any-reg))
             (rem :scs (any-reg)))
@@ -2070,16 +2070,54 @@
   (:note "inline fixnum arithmetic")
   (:vop-var vop)
   (:generator 30
-    (move eax x)
+   (block nil
+    ;; This ought to be done machine-independently, but there are already 23 transforms
+    ;; on TRUNCATE and I don't understand how they get tried in the optimal order.
+    ;; The benefit of that is we could just invoke the fastrem-32 or fastrem-64 vop
+    ;; rather than having to replicate them inside here.
+    (when (and (not (sb-c::tn-reads quo))
+               (typep y '(unsigned-byte 64))
+               (csubtypep (tn-ref-type (vop-args vop)) (specifier-type '(unsigned-byte 64))))
+      ;; The reason for the concern about inputs is that the general algorithm to accept
+      ;; any 64-bit integer (which as FIXNUM would limit be 62 bits) needs 4 MUL instructions
+      ;; (confirmed by looking at https://github.com/lemire/fastmod)
+      ;; But 2 MUL instructions is enough for reasonable inputs. Both the divisor and the
+      ;; maximum input affect how many bits are needed in intermediate results.
+      (binding* ((numerator-precision
+                  (type-width-in-bits (tn-ref-type (vop-args vop))) :exit-if-null)
+                 ((magic smallest-nbits)
+                  (sb-c:compute-fastrem-coefficient y numerator-precision :minimum))
+                 ((frac-bits operand-size)
+                  ;; "smallest" is how many bits you need for the algorithm to work, assuming
+                  ;; you could actually calculate on bit fields of arbitrary size. But to make it
+                  ;; efficient, you need a fixed-binary-point reciprocal in exactly 32 bits
+                  ;; or exactly 64 bits (or 128, if fully supporting 64-bit ints)
+                  (cond ((<= smallest-nbits 32) (values 32 :dword))
+                        ((<= smallest-nbits 64) (values 64 :qword)))))
+        (when operand-size
+          (when (/= smallest-nbits frac-bits) ; recompute MAGIC to required number of bits
+            (setq magic (sb-c:compute-fastrem-coefficient y numerator-precision frac-bits)))
+          (let ((arg-size (if (<= numerator-precision 31) :dword :qword)))
+            (move rax x arg-size)
+            (inst shr arg-size rax n-fixnum-tag-bits)) ; untag it
+          (inst mul operand-size (register-inline-constant operand-size magic))
+          (inst mul operand-size (register-inline-constant operand-size y))
+          ;; The result might fit into a :DWORD depending on the divisor
+          (let ((res-size (if (<= (integer-length (1- y)) 31) :dword :qword))) ; (tagged)
+            (if (location= rem rdx)
+                (inst shl res-size rem 1)
+                (inst lea res-size rem (ea rdx rdx))))
+          (return))))
+    (move rax x)
     (inst cqo)
     (inst mov y-arg (fixnumize y))
     (inst idiv y-arg)
-    (if (location= quo eax)
-        (inst shl eax n-fixnum-tag-bits)
+    (if (location= quo rax)
+        (inst shl rax n-fixnum-tag-bits)
         (if (= n-fixnum-tag-bits 1)
-            (inst lea quo (ea eax eax))
-            (inst lea quo (ea nil eax (ash 1 n-fixnum-tag-bits)))))
-    (move rem edx)))
+            (inst lea quo (ea rax rax))
+            (inst lea quo (ea nil rax (ash 1 n-fixnum-tag-bits)))))
+    (move rem rdx))))
 
 (define-vop (fast-truncate/unsigned=>unsigned fast-safe-arith-op)
   (:translate truncate)

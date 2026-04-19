@@ -150,3 +150,21 @@
   (loop for divisor from 3 to 10000
         do (format t "divisor=~d~%" divisor)
             (try-fastrem divisor 18)))
+
+(declaim (ftype function remN))
+#+x86-64 ; test the TRUNCATE -> fastrem optimization
+(with-test (:name :test-rem-transform)
+  (dolist (dividend-bits '(24 58))
+    ;; a divisor of 1235 needs too many intermediate bits for dividend-bits=58
+    (dolist (divisor `(3 7 133 ,(if (= dividend-bits 24) 1235 149)))
+      (compile 'remN `(lambda (x) (rem (the (unsigned-byte ,dividend-bits) x) ,divisor)))
+      ;; should not use DIV or IDIV instructions
+      (assert (not (search "DIV" (with-output-to-string (s) (disassemble 'remN :stream s)))))
+      (dotimes (i 10000)
+        (declare (notinline floor))
+        (assert (= (remn i) (nth-value 1 (floor i divisor)))))
+      (let ((max (ash 1 dividend-bits)))
+        (dotimes (i 10000)
+          (let ((x (random max)))
+            (declare (notinline floor))
+            (assert (= (remn x) (nth-value 1 (floor x divisor))))))))))
