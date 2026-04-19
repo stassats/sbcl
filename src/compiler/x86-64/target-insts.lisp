@@ -383,6 +383,7 @@
              (awhen (seg-code (dstate-segment dstate))
                (sb-disassem::points-to-code-constant-p addr it)))
     (ecase width
+      ((nil) nil)
       (:qword (sap-ref-word (int-sap addr) 0))
       (:dword (sap-ref-32 (int-sap addr) 0)))))
 
