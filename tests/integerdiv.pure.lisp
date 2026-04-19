@@ -152,12 +152,13 @@
             (try-fastrem divisor 18)))
 
 (declaim (ftype function remN))
-#+x86-64 ; test the TRUNCATE -> fastrem optimization
-(with-test (:name :test-rem-transform)
+(with-test (:name :test-rem-transform :skipped-on (:not :64-bit)) ; incomplete support for 32-bit
   (dolist (dividend-bits '(24 58))
     ;; a divisor of 1235 needs too many intermediate bits for dividend-bits=58
     (dolist (divisor `(3 7 133 ,(if (= dividend-bits 24) 1235 149)))
-      (compile 'remN `(lambda (x) (rem (the (unsigned-byte ,dividend-bits) x) ,divisor)))
+      (compile 'remN `(lambda (x)
+                        (declare (optimize speed))
+                        (rem (the (unsigned-byte ,dividend-bits) x) ,divisor)))
       ;; should not use DIV or IDIV instructions
       (assert (not (search "DIV" (with-output-to-string (s) (disassemble 'remN :stream s)))))
       (dotimes (i 10000)

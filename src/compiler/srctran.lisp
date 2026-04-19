@@ -5123,6 +5123,30 @@
                     (define-source-transform %multiply-high (x y)
                       `(values (sb-bignum:%multiply ,x ,y))))
 
+(defun try-fastrem-algorithm (numerator-precision divisor)
+  ;; The reason for the concern about inputs is that for the general algorithm to accept
+  ;; any 64-bit integer (if FIXNUM, 62 bits) it needs 4 MUL instructions
+  ;; (confirmed by looking at https://github.com/lemire/fastmod)
+  ;; But 2 MUL instructions are enough for reasonable inputs. Both the divisor and the
+  ;; maximum input affect how many bits are needed in intermediate results.
+  (binding* (((magic smallest-nbits)
+              (sb-c:compute-fastrem-coefficient divisor numerator-precision :minimum))
+             (frac-bits
+              ;; "smallest" is how many bits you need for the algorithm to work, assuming
+              ;; you could actually calculate on bit fields of arbitrary size. But to make it
+              ;; efficient, you need a fixed-binary-point reciprocal in exactly 32 bits
+              ;; or exactly 64 bits (or 128, if fully supporting 64-bit ints)
+              (cond ((<= smallest-nbits 32) 32)
+                    #+64-bit
+                    ((<= smallest-nbits 64) 64))))
+    (when frac-bits
+      (when (/= smallest-nbits frac-bits) ; recompute MAGIC to required number of bits
+        (setq magic (sb-c:compute-fastrem-coefficient divisor numerator-precision frac-bits)))
+      (case frac-bits
+        (32 `(values 0 (sb-vm::fastrem-32 x ,magic ,divisor)))
+        #+64-bit
+        (64 `(values 0 (sb-vm::fastrem-64 x ,magic ,divisor)))))))
+
 ;;; If the divisor is constant and both args are positive and fit in a
 ;;; machine word, replace the division by a multiplication and possibly
 ;;; some shifts and an addition. Calculate the remainder by a second
@@ -5152,7 +5176,15 @@
     (let ((rem (and (mv-bind-unused-p result 0)
                     (mv-bind-dest result 1 t)))
           plusp)
+      ;; When only a remainder is needed, there are two ways of going about it:
+      ;; * Using the well-entrenched divide-by-multiplying technique, compute the quotient and
+      ;;   then subtract the product of (quotient x divisor) from the original input.
+      ;; * The Lemire et. al. technique avoids subtracting.  It also offers a way to determine
+      ;;   divisibility (0 remainder) with 1 fewer step, though our way is fairly good too.
+      ;; Therefore, if just getting a remainder and neither COMBINATION-MATCHES-P is true,
+      ;; we try the Lemire transform before falling back to the traditional way.
       (or
+       ;; Choice 1
        (when (and rem
                   (or (combination-matches 'eq '(* 0) rem)
                       (and (combination-matches '> '(* 0) rem)
@@ -5183,6 +5215,11 @@
                                          `(> (rotate-right-word (truly-the word (logand (* x ,inv) ,max-x))
                                                                 ,zeros)
                                              ,(truncate max-x y)))))))))
+       ;; Choice 2
+       (and rem (binding* ((form (try-fastrem-algorithm (integer-length max-x) y) :exit-if-null))
+                  (erase-node-type node t 0)
+                  form))
+       ;; Choice 3
        `(let* ((quot (truly-the (integer 0 ,(truncate max-x y))
                                 ,(gen-unsigned-div-by-constant-expr y max-x)))
                (rem (truly-the (mod ,y)

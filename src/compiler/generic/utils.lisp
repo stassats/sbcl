@@ -589,13 +589,6 @@
                     smallest-f d n))
            (values (ceiling (expt 2 fraction-bits) d) fraction-bits)))))
 
-(defun type-width-in-bits (ctype)
-  ;; Return (integer-length upper-bound) of numeric type. This is NOT a theoretical
-  ;; smallest N bits needed to encode an element of type in a packed representation
-  ;; (e.g. the interval 5..8 _could_ be stored in 2 bits) but we don't do that.
-  (if (typep ctype 'numeric-union-type)
-      (integer-length (sb-c::interval-high (sb-c::numeric-type->interval ctype)))))
-
 (defun env-system-tlab-p (env)
   #-system-tlabs (declare (ignore env))
   #+system-tlabs
