@@ -2066,6 +2066,7 @@
   (:temporary (:sc any-reg :from :eval :to :result) y-arg)
   (:results (quo :scs (any-reg))
             (rem :scs (any-reg)))
+  (:optional-results quo)
   (:result-types tagged-num tagged-num)
   (:note "inline fixnum arithmetic")
   (:vop-var vop)
@@ -2075,7 +2076,7 @@
     ;; on TRUNCATE and I don't understand how they get tried in the optimal order.
     ;; The benefit of that is we could just invoke the fastrem-32 or fastrem-64 vop
     ;; rather than having to replicate them inside here.
-    (when (and (not (sb-c::tn-reads quo))
+    (when (and (eq (tn-kind quo) :unused)
                (typep y '(unsigned-byte 64))
                (csubtypep (tn-ref-type (vop-args vop)) (specifier-type '(unsigned-byte 64))))
       ;; The reason for the concern about inputs is that the general algorithm to accept
@@ -2112,11 +2113,12 @@
     (inst cqo)
     (inst mov y-arg (fixnumize y))
     (inst idiv y-arg)
-    (if (location= quo rax)
-        (inst shl rax n-fixnum-tag-bits)
-        (if (= n-fixnum-tag-bits 1)
-            (inst lea quo (ea rax rax))
-            (inst lea quo (ea nil rax (ash 1 n-fixnum-tag-bits)))))
+    (unless (eq (tn-kind quo) :unused)
+      (if (location= quo rax)
+          (inst shl rax n-fixnum-tag-bits)
+          (if (= n-fixnum-tag-bits 1)
+              (inst lea quo (ea rax rax))
+              (inst lea quo (ea nil rax (ash 1 n-fixnum-tag-bits))))))
     (move rem rdx))))
 
 (define-vop (fast-truncate/unsigned=>unsigned fast-safe-arith-op)
