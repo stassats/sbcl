@@ -378,11 +378,13 @@
 
 ;;; Return contents of memory if either it refers to an unboxed code constant
 ;;; or is RIP-relative with a displacement of 0.
-(defun unboxed-constant-ref (dstate addr disp)
+(defun unboxed-constant-ref (dstate addr disp width)
   (when (and (minusp disp)
              (awhen (seg-code (dstate-segment dstate))
                (sb-disassem::points-to-code-constant-p addr it)))
-    (sap-ref-word (int-sap addr) 0)))
+    (ecase width
+      (:qword (sap-ref-word (int-sap addr) 0))
+      (:dword (sap-ref-32 (int-sap addr) 0)))))
 
 (define-load-time-global thread-slot-names
     (let* ((slots (coerce (primitive-object-slots
@@ -497,9 +499,7 @@
                  (maybe-note-assembler-routine addr nil dstate))
                ;; Show the absolute address and maybe the contents.
                (note (format nil "[#x~x]~@[ = #x~x~]"
-                             addr
-                             (case width
-                              (:qword (unboxed-constant-ref dstate addr disp))))
+                             addr (unboxed-constant-ref dstate addr disp width))
                      dstate))))))
 
     ;; Recognize [R12-disp] as a linkage table use (lisp or alien)
