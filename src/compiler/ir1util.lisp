@@ -271,8 +271,9 @@
     (pld lvar)))
 
 (defun let-lvar-dest (lvar &optional single-use)
-  (when (or (not single-use)
-            (atom (lvar-uses lvar)))
+  (when (and lvar
+             (or (not single-use)
+                 (atom (lvar-uses lvar))))
     (let* ((lvar (principal-lvar lvar))
            (dest (and (or (not single-use)
                           (atom (lvar-uses lvar)))
