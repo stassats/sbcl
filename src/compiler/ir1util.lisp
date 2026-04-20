@@ -503,7 +503,7 @@
                       (and (symbolp b)
                            (not (eq a '*))
                            (not (eq b '*))))
-                     ((typep a '(cons (eql (or :type :constant))))
+                     ((typep a '(cons (member :type :constant)))
                       (equal a b))
                      ((and (consp a)
                            (consp b))
@@ -1977,7 +1977,7 @@
                       (single-ref-block-p block1))
             do
             (loop for block2 in rest
-                  when (and (not (block-delete-p block1))
+                  when (and (not (block-delete-p block2))
                             (blocks-equivalent-p block1 block2))
                   do
                   (let* ((ref1 (block-start-node block1))
