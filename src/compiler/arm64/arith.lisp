@@ -736,7 +736,7 @@
          (unless positive
            (inst tbz amount 63 done)
            (inst neg temp amount)
-           (inst lsl result number amount)))
+           (inst lsl result number temp)))
         (positive
          (inst cmp amount n-word-bits)
          (ecase variant

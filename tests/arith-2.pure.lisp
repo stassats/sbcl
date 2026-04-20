@@ -2532,3 +2532,12 @@
     (ash -2 sb-vm:n-fixnum-tag-bits))
    ((10)
     10)))
+
+(with-test (:name :ash-inverted)
+  (checked-compile-and-assert
+   ()
+   `(lambda (x y)
+      (declare ((integer -5 5) y)
+               ((signed-byte 16) x))
+      (ash x (- y)))
+   ((1 -5) 32)))
