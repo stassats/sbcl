@@ -4653,6 +4653,16 @@
                          (truly-the ,rem-type rem)))))
         (give-up-ir1-transform))))
 
+;;; (zerop (mod x y)) => (zerop (rem x y))
+(deftransforms (floor ceiling) ((number divisor) (rational rational) * :result result :node node)
+  (let ((rem (and (mv-bind-unused-p result 0)
+                  (mv-bind-dest result 1 t))))
+    (cond ((combination-matches 'eq '(* 0) rem)
+           (erase-node-type node (values-specifier-type '(values integer rational &optional)))
+           `(truncate number divisor))
+          (t
+           (give-up-ir1-transform)))))
+
 (deftransform ceiling ((number divisor) ((and unsigned-byte fixnum) (and unsigned-byte fixnum)) * :result result)
   (if (and result
            (lvar-single-value-p result))
