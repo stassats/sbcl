@@ -2522,3 +2522,13 @@
            (ldb (byte sb-vm:n-fixnum-bits 0) (ash 1 b))))
     (((1- sb-vm:n-fixnum-bits)) (ash 1 (1- sb-vm:n-fixnum-bits)))
     ((0) nil)))
+
+(with-test (:name :mask-signed-field-fixnum-result)
+  (checked-compile-and-assert
+   ()
+   `(lambda (x)
+      (truly-the fixnum (sb-c::mask-signed-field sb-vm:n-word-bits x)))
+   (((* most-positive-fixnum (ash 2 sb-vm:n-fixnum-tag-bits)))
+    (ash -2 sb-vm:n-fixnum-tag-bits))
+   ((10)
+    10)))

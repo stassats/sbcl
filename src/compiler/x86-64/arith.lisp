@@ -4375,10 +4375,16 @@
     (:vop-var vop)
     (:generator 6
       (move r x)
-      (inst sar r n-fixnum-tag-bits)
-      (inst jmp :nc (if (> width n-fixnum-bits)
-                        DONE
-                        DO))
+      (cond ((and (sc-is r any-reg)
+                  (= width n-word-bits))
+             (inst test :byte r fixnum-tag-mask)
+             (inst jmp :z DONE))
+            (t
+             (inst sar r n-fixnum-tag-bits)
+             (inst jmp :nc (if (> width n-fixnum-bits)
+                               DONE
+                               DO))))
+
       (let* ((integerp (eq (tn-kind temp) :unused))
              (error (unless integerp
                       (generate-error-code vop 'object-not-integer-error x))))
@@ -4398,7 +4404,7 @@
            (cond
              ((zerop shift)
               (when (sc-is r any-reg)
-                (inst sar r n-fixnum-tag-bits)))
+                (inst shl r n-fixnum-tag-bits)))
              (t
               (inst shl r shift)
               (inst sar r (if (sc-is r any-reg)
