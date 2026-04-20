@@ -645,7 +645,7 @@
            (if (plusp amount)
                (inst lsl result number amount)
                (inst asr result number (- amount))))
-          ((= amount 64)
+          ((> amount 0)
            (inst mov result 0))
           (t
            (inst asr result number 63)))))
