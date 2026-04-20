@@ -436,11 +436,11 @@
       (sub
        (setf op 'add
              y (- (sb-c::mask-signed-field n-word-bits y))))))
-  ;; FIXME: What is (ash -1 63) for ? this comment within doesn't match the test.
-  (when (and (eq op 'sub) (and (integerp y) (not (eql y (ash -1 63)))))
-    ;; If Y is -2147483648 then the negation is not (signed-byte 32).
-    ;; How likely is someone to subtract that?
-    (setq op 'add y (- y)))
+  (cond ((and (eq op 'sub) (and (integerp y) (not (eql y (ash -1 31)))))
+         ;; If Y is -2147483648 then the negation is not (signed-byte 32).
+         (setq op 'add y (- y)))
+        ((and (eq op 'add) (eql y (ash 1 31)))
+         (setq op 'sub y (- y))))
 
   ;; Oversized integers need to become RIP-relative constants
   (when (integerp x) (setq x (constantize x)))
