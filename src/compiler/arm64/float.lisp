@@ -92,14 +92,13 @@
 
 (define-vop (move-from-double)
   (:args (x :scs (double-reg) :to :save))
-  (:results (y))
   (:note "float to pointer coercion")
   (:temporary (:scs (non-descriptor-reg) :offset lr-offset) lr)
   (:results (y :scs (descriptor-reg)))
   (:generator 13
     (with-fixed-allocation (y lr
                             double-float-widetag
-                            double-float-value-slot)
+                            double-float-size)
       (storew x y double-float-value-slot other-pointer-lowtag))))
 
 (define-move-vop move-from-double :move (double-reg) (descriptor-reg))
@@ -564,7 +563,7 @@
   (frob > :gt >/single-float-zero >/double-float-zero nil)
   (frob <= :ls <=/single-float-zero <=/double-float-zero nil)
   (frob >= :ge >=/single-float-zero >=/double-float-zero nil)
-  (frob = :eq eql/single-float-zero eql/double-float-zero t))
+  (frob = :eq =/single-float-zero =/double-float-zero t))
 
 (macrolet ((define-complex-float-=
                (complex-complex-name complex-real-name real-complex-name
@@ -705,7 +704,7 @@
       (signed-stack
        (sc-case res
          (single-reg
-          (loadw res (current-nfp-tn vop) (tn-offset res)))
+          (loadw res (current-nfp-tn vop) (tn-offset bits)))
          (single-stack
           (unless (location= bits res)
             (loadw temp (current-nfp-tn vop) (tn-offset bits))
@@ -815,7 +814,7 @@
        (inst fmov hi-bits float)
        (inst asr hi-bits hi-bits 32))
       (double-stack
-        (inst ldr (32-bit-reg hi-bits)
+        (inst ldrsw (32-bit-reg hi-bits)
               (@ (current-nfp-tn vop)
                  (load-store-offset
                   (+ (tn-byte-offset float)
