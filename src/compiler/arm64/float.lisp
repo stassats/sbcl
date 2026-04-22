@@ -704,7 +704,7 @@
       (signed-stack
        (sc-case res
          (single-reg
-          (loadw res (current-nfp-tn vop) (tn-offset bits)))
+          (loadw res (current-nfp-tn vop) (tn-offset res)))
          (single-stack
           (unless (location= bits res)
             (loadw temp (current-nfp-tn vop) (tn-offset bits))
