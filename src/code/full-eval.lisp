@@ -638,15 +638,15 @@
              (lambda-list (car rest))
              ((forms documentation declarations debug-lambda-list)
               (parse-lambda-headers (cdr rest) :doc-string-allowed t)))
-       (make-interpreted-function :name name
-                                  :lambda-list lambda-list
-                                  :debug-lambda-list
-                                  (if (eq debug-lambda-list :unspecified)
-                                      lambda-list debug-lambda-list)
-                                  :env env :body forms
-                                  :documentation documentation
-                                  :source-location (sb-c::make-definition-source-location)
-                                  :declarations declarations)))
+    (make-interpreted-function :name name
+                               :lambda-list (the list lambda-list)
+                               :debug-lambda-list
+                               (if (eq debug-lambda-list :unspecified)
+                                   lambda-list debug-lambda-list)
+                               :env env :body forms
+                               :documentation documentation
+                               :source-location (sb-c::make-definition-source-location)
+                               :declarations declarations)))
 
 (defun eval-progn (body env)
   (let ((previous-exp nil))
