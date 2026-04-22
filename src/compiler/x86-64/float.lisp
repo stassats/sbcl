@@ -882,7 +882,7 @@
         (inst xorps y (register-inline-constant
                        :oword (logior (ash 1 31) (ash 1 63)))))
   (frob (conjugate/complex-single-float conjugate complex-single-reg complex-single-float)
-        (inst xorpd y (register-inline-constant :oword (ash 1 63))))
+        (inst xorps y (register-inline-constant :oword (ash 1 63))))
   (frob (abs/double-float abs double-reg double-float)
         (inst andpd y (register-inline-constant :oword (ldb (byte 63 0) -1))))
   (frob (abs/single-float abs single-reg single-float)
