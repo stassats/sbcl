@@ -673,13 +673,13 @@
                           ,@(case suffix
                               (-c/unsigned
                                `((:arg-types unsigned-num
-                                             (:constant (and (unsigned-byte 16) (not (integer 0 0)))))))
+                                             (:constant (and (unsigned-byte 16) (not (eql 0)))))))
                               (-c/signed
                                `((:arg-types signed-num
-                                             (:constant (and (unsigned-byte 16) (not (integer 0 0)))))))
+                                             (:constant (and (unsigned-byte 16) (not (eql 0)))))))
                               (-c/fixnum
                                `((:arg-types tagged-num
-                                             (:constant (and (unsigned-byte 14) (not (integer 0 0))))))))
+                                             (:constant (and (unsigned-byte ,(- 16 n-fixnum-tag-bits)) (not (eql 0))))))))
                          (:generator ,cost
                           ;; We could be a lot more sophisticated here and
                           ;; check for possibilities with ANDIS..
@@ -701,9 +701,9 @@
   (:arg-types (:constant (integer 0 29)) tagged-num)
   (:temporary (:scs (any-reg) :to (:result 0)) test)
   (:generator 4
-    (if (< y 14)
+    (if (< y (- 16 n-fixnum-tag-bits))
         (inst andi. test x (ash 1 (+ y n-fixnum-tag-bits)))
-        (inst andis. test x (ash 1 (- y 14))))
+        (inst andis. test x (ash 1 (- y (- 16 n-fixnum-tag-bits)))))
     (inst b? (if not-p :eq :ne) target)))
 
 #+nil (define-vop (fast-logbitp-c/signed fast-conditional-c/signed)
