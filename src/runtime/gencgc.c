@@ -4259,12 +4259,6 @@ int gencgc_handle_wp_violation(__attribute__((unused)) void* context, void* faul
 
     /* Check whether the fault is within the dynamic space. */
     if (page_index == (-1)) {
-#ifdef LISP_FEATURE_IMMOBILE_SPACE
-        extern int immobile_space_handle_wp_violation(void*);
-        if (immobile_space_handle_wp_violation(fault_addr))
-            return 1;
-#endif
-
         /* It can be helpful to be able to put a breakpoint on this
          * case to help diagnose low-level problems. */
         unhandled_sigmemoryfault(fault_addr);

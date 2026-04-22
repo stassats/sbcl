@@ -956,12 +956,6 @@ handle_access_violation(os_context_t *ctx,
     }
 #endif
 
-#ifdef LISP_FEATURE_IMMOBILE_SPACE
-    extern int immobile_space_handle_wp_violation(void*);
-    if (immobile_space_handle_wp_violation(fault_address)) {
-        return 0;
-    }
-#endif
 #ifdef LISP_FEATURE_TLS_LOAD_INDIRECT
     if (handle_tls_deref_trap(ctx, fault_address)) return 0;
 #endif

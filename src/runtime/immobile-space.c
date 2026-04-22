@@ -1372,38 +1372,6 @@ void prepare_immobile_space_for_save(bool verbose)
 
 //// Interface
 
-int immobile_space_handle_wp_violation(void* fault_addr)
-{
-    low_page_index_t page = find_fixedobj_page_index(fault_addr);
-    if (page < 0)
-      return 0; // unhandled
-
-#if 0
-    if (fixedobj_pages[page].attr.parts.obj_align == SYMBOL_SIZE) { // good
-        // Should only experience sigsegv on symbols and not layouts
-        int byte_offset = (char*)fault_addr - (char*)PTR_ALIGN_DOWN(fault_addr, IMMOBILE_CARD_BYTES);
-        int object_offset = byte_offset / 48;
-        struct symbol*s = (void*)((object_offset * 48) +
-                                  (char*)PTR_ALIGN_DOWN(fault_addr, IMMOBILE_CARD_BYTES));
-        fprintf(stderr, "fault @ %p page %d object %p\n",
-                fault_addr, page, s /*, (char*)VECTOR(s->name)->data*/);
-    } else {
-        /* Needed for tracking down logic errors in software marking.
-         * To reach here you of course must use mprotect */
-        lose("Unexpected fault on fixedobj page @ %p. Dropping to ldb", fault_addr);
-    }
-#endif
-    os_protect(PTR_ALIGN_DOWN(fault_addr, IMMOBILE_CARD_BYTES),
-               IMMOBILE_CARD_BYTES, OS_VM_PROT_READ|OS_VM_PROT_WRITE);
-
-    // FIXME: the _CLEARED flag doesn't achieve much if anything.
-    if (!(fixedobj_pages[page].attr.parts.flags & (WRITE_PROTECT|WRITE_PROTECT_CLEARED)))
-        return 0;
-    SET_WP_FLAG(page, WRITE_PROTECT_CLEARED);
-
-    return 1;
-}
-
 /// For defragmentation
 
 static struct tempspace {
