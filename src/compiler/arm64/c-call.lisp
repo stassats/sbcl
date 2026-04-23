@@ -328,53 +328,113 @@
         ;; Large struct: pass by pointer
         (int-arg state 'system-area-pointer sap-reg-sc-number sap-stack-sc-number)
         ;; Small struct: allocate target TNs and return a function to load into them
-        (let ((arg-tns nil)
-              (offsets nil)
-              (offset 0))
-          (dolist (class (sb-alien::struct-classification-register-slots classification))
-            (ecase class
-              (:integer
-               (push (int-arg state 'unsigned-byte-64
-                              unsigned-reg-sc-number
-                              unsigned-stack-sc-number)
-                     arg-tns)
-               (push (cons offset :integer) offsets)
-               (incf offset 8))
-              (:single
-               (push (float-arg state 'single-float
-                                single-reg-sc-number
-                                single-stack-sc-number #+darwin 4)
-                     arg-tns)
-               (push (cons offset :single) offsets)
-               (incf offset 4))
-              (:double
-               (push (float-arg state 'double-float
-                                double-reg-sc-number
-                                double-stack-sc-number)
-                     arg-tns)
-               (push (cons offset :double) offsets)
-               (incf offset 8))))
-          (setf arg-tns (nreverse arg-tns))
-          (setf offsets (nreverse offsets))
-          ;; Return arg-tn-loader with TNs exposed for register allocator
-          (sb-c::make-arg-tn-loader
-           arg-tns
-           (lambda (arg call block nsp)
-             (declare (ignore nsp))
-             (let ((sap-tn (sb-c::lvar-tn call block arg)))
-               (loop for target-tn in arg-tns
-                     for (off . class) in offsets
-                     do (sb-c::emit-and-insert-vop
-                         call block
-                         (sb-c::template-or-lose
-                          (ecase class
-                            (:integer 'sap-ref-64-c)
-                            (:single 'sap-ref-single-c)
-                            (:double 'sap-ref-double-c)))
-                         (sb-c::reference-tn sap-tn nil)
-                         (sb-c::reference-tn target-tn t)
-                         nil
-                         (list off))))))))))
+        (let* ((arg-tns nil)
+               (offsets nil)
+               (offset 0)
+               (slots (sb-alien::struct-classification-register-slots classification))
+               (n-int (count :integer slots))
+               (n-fp (+ (count :single slots) (count :double slots)))
+               stack)
+          ;; Don't split between registers/stack
+          (when (> (+ (arg-state-num-register-args state) n-int) +max-register-args+)
+            (setf (arg-state-num-register-args state) +max-register-args+
+                  stack t))
+          (when (> (+ (arg-state-fp-registers state) n-fp) +max-register-args+)
+            (setf (arg-state-fp-registers state) +max-register-args+
+                  stack t))
+          (cond ((not stack)
+                 (dolist (class slots)
+                   (ecase class
+                     (:integer
+                      (push (int-arg state 'unsigned-byte-64
+                                     unsigned-reg-sc-number
+                                     unsigned-stack-sc-number)
+                            arg-tns)
+                      (push (cons offset :integer) offsets)
+                      (incf offset 8))
+                     (:single
+                      (push (float-arg state 'single-float
+                                       single-reg-sc-number
+                                       single-stack-sc-number #+darwin 4)
+                            arg-tns)
+                      (push (cons offset :single) offsets)
+                      (incf offset 4))
+                     (:double
+                      (push (float-arg state 'double-float
+                                       double-reg-sc-number
+                                       double-stack-sc-number)
+                            arg-tns)
+                      (push (cons offset :double) offsets)
+                      (incf offset 8))))
+                 (setf arg-tns (nreverse arg-tns))
+                 (setf offsets (nreverse offsets))
+                 ;; Return arg-tn-loader with TNs exposed for register allocator
+                 (sb-c::make-arg-tn-loader
+                  arg-tns
+                  (lambda (arg call block nsp)
+                    (declare (ignore nsp))
+                    (let ((sap-tn (sb-c::lvar-tn call block arg)))
+                      (loop for target-tn in arg-tns
+                            for (off . class) in offsets
+                            do (sb-c::emit-and-insert-vop
+                                call block
+                                (sb-c::template-or-lose
+                                 (ecase class
+                                   (:integer 'sap-ref-64-c)
+                                   (:single 'sap-ref-single-c)
+                                   (:double 'sap-ref-double-c)))
+                                (sb-c::reference-tn sap-tn nil)
+                                (sb-c::reference-tn target-tn t)
+                                nil
+                                (list off)))))))
+                (stack
+                 (let* ((bytes (ceiling (sb-alien::alien-type-bits type) n-byte-bits))
+                        (words (/ (sb-alien::struct-classification-size classification)
+                                  n-word-bytes))
+                        (arg-tns (loop repeat words
+                                       collect (int-arg state 'unsigned-byte-64
+                                                        unsigned-reg-sc-number
+                                                        unsigned-stack-sc-number))))
+                   (sb-c::make-arg-tn-loader
+                    arg-tns
+                    (lambda (arg call block nfp)
+                      (let ((sap-tn (sb-c::lvar-tn call block arg)))
+                        (loop for target-tn in arg-tns
+                              for temp = (sb-c:make-representation-tn
+                                          (primitive-type-or-lose 'unsigned-byte-64)
+                                          unsigned-reg-sc-number)
+                              for slot = offset
+                              do
+                              (sb-c::emit-and-insert-vop
+                               call block
+                               (sb-c::template-or-lose
+                                (cond
+                                  ((>= bytes 8)
+                                   (decf bytes 8)
+                                   (incf offset 8)
+                                   'sap-ref-64-c)
+                                  ((>= bytes 4)
+                                   (decf bytes 4)
+                                   (incf offset 4)
+                                   'sap-ref-32-c)
+                                  ((>= bytes 2)
+                                   (decf bytes 2)
+                                   (incf offset 2)
+                                   'sap-ref-16-c)
+                                  (t
+                                   (decf bytes 1)
+                                   (incf offset 1)
+                                   'sap-ref-8-c)))
+                               (sb-c::reference-tn sap-tn nil)
+                               (sb-c::reference-tn temp t)
+                               nil
+                               (list slot))
+                              (sb-c::emit-and-insert-vop
+                               call block
+                               (sb-c::template-or-lose 'move-word-arg)
+                               (sb-c::reference-tn-list (list temp nfp) nil)
+                               (sb-c::reference-tn target-tn t)
+                               nil))))))))))))
 
 (defun make-call-out-tns (type)
   (let ((arg-state (make-arg-state))
