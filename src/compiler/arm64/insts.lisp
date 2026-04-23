@@ -898,6 +898,13 @@
    (emit-bitfield segment +64-bit-size+ #b10 +64-bit-size+
                   immr imms (gpr-offset rn) (gpr-offset rd))))
 
+(define-instruction-macro bfi (rd rn lsb width)
+  `(let ((rd ,rd)
+         (rn ,rn)
+         (lsb ,lsb)
+         (width ,width))
+     (inst bfm rd rn (mod (- lsb) 64) (1- width))))
+
 (define-instruction-macro asr (rd rn shift)
   `(let ((rd ,rd)
          (rn ,rn)
