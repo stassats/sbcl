@@ -703,14 +703,17 @@
                                 do (cond ((>= remaining 8)
                                           (inst ldr temp-tn (@ ptr-tn off))
                                           (inst str temp-tn (@ nsp-tn (+ frame-offset off))))
-                                         ((>= remaining 4)
-                                          (inst ldr (32-bit-reg temp-tn) (@ ptr-tn off))
-                                          (inst str (32-bit-reg temp-tn) (@ nsp-tn (+ frame-offset off))))
                                          (t
+                                          (when (>= remaining 4)
+                                            (inst ldr (32-bit-reg temp-tn) (@ ptr-tn off))
+                                            (inst str (32-bit-reg temp-tn) (@ nsp-tn (+ frame-offset off)))
+                                            (decf remaining 4)
+                                            (incf off 4))
                                           ;; Copy remaining bytes one by one
                                           (loop for b from 0 below remaining
                                                 do (inst ldrb (32-bit-reg temp-tn) (@ ptr-tn (+ off b)))
-                                                   (inst strb (32-bit-reg temp-tn) (@ nsp-tn (+ frame-offset off b)))))))))
+                                                   (inst strb (32-bit-reg temp-tn) (@ nsp-tn (+ frame-offset off b))))
+                                          (return))))))
                        ;; HFA: passed in floating-point registers
                        ((multiple-value-bind (hfa-type hfa-count) (hfa-base-type type)
                           (when hfa-type
@@ -780,13 +783,16 @@
                       do (cond ((>= remaining 8)
                                 (inst ldr temp-tn (@ nsp-tn off))
                                 (inst str temp-tn (@ x8-save-tn off)))
-                               ((>= remaining 4)
-                                (inst ldr (32-bit-reg temp-tn) (@ nsp-tn off))
-                                (inst str (32-bit-reg temp-tn) (@ x8-save-tn off)))
                                (t
+                                (when (>= remaining 4)
+                                  (inst ldr (32-bit-reg temp-tn) (@ nsp-tn off))
+                                  (inst str (32-bit-reg temp-tn) (@ x8-save-tn off))
+                                  (decf remaining 4)
+                                  (incf off 4))
                                 (loop for b from 0 below remaining
                                       do (inst ldrb (32-bit-reg temp-tn) (@ nsp-tn (+ off b)))
-                                         (inst strb (32-bit-reg temp-tn) (@ x8-save-tn (+ off b)))))))
+                                         (inst strb (32-bit-reg temp-tn) (@ x8-save-tn (+ off b))))
+                                (return))))
                 ;; Return the pointer in x0
                 (inst mov r0-tn x8-save-tn)))
              ;; HFA: load into floating-point registers
