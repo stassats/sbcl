@@ -328,13 +328,6 @@ Floats are passed in integer registers."
     (inst mov :qword temp (ea src-offset sap))
     (inst mov :qword (ea dst-offset nsp) temp)))
 
-;;; VOP to move SAP value to integer register (for Windows struct-by-pointer)
-(define-vop (load-sap-int-arg)
-  (:args (sap :scs (sap-reg)))
-  (:results (target :scs (unsigned-reg)))
-  (:generator 1
-    (move target sap)))
-
 ;;; Arg TN generation for record types
 ;;; Called from src/code/c-call.lisp
 
@@ -343,31 +336,26 @@ Floats are passed in integer registers."
 #+win32
 (defun record-arg-tn (type state)
   "Handle struct arguments."
-  (let ((classification (classify-struct type))
-        (arg-tn (int-arg state 'unsigned-byte-64
-                         unsigned-reg-sc-number unsigned-stack-sc-number)))
+  (let* ((classification (classify-struct type))
+         (arg-tn (int-arg state 'unsigned-byte-64
+                          unsigned-reg-sc-number unsigned-stack-sc-number))
+         (temp (and (sc-is arg-tn unsigned-stack)
+                    (sb-c:make-representation-tn (primitive-type-or-lose 'unsigned-byte-64)
+                                                 unsigned-reg-sc-number)))
+         (move-target (or temp arg-tn)))
     (sb-c::make-arg-tn-loader
      (list arg-tn)
      (if (sb-alien::struct-classification-memory-p classification)
          (lambda (arg call block nsp)
-           (declare (ignore nsp))
            (let ((sap-tn (sb-c::lvar-tn call block arg)))
-             (sb-c::emit-and-insert-vop
-              call block
-              (sb-c::template-or-lose 'load-sap-int-arg)
-              (sb-c::reference-tn sap-tn nil)
-              (sb-c::reference-tn arg-tn t)
-              nil
-              nil)))
+             (sb-c::vop sap-int call block sap-tn move-target)
+             (when temp
+               (sb-c::vop move-word-arg call block temp nsp arg-tn))))
          (lambda (arg call block nsp)
-           (declare (ignore nsp))
-           (sb-c::emit-and-insert-vop
-            call block
-            (sb-c::template-or-lose 'load-struct-int-arg)
-            (sb-c::reference-tn (sb-c::lvar-tn call block arg) nil)
-            (sb-c::reference-tn arg-tn t)
-            nil
-            (list 0)))))))
+           (sb-c::vop sap-ref-64 call block (sb-c::lvar-tn call block arg)
+                      (emit-constant 0) move-target)
+           (when temp
+             (sb-c::vop move-word-arg call block temp nsp arg-tn)))))))
 
 ;;; System V: structs >16 bytes copied to stack, <=16 bytes in up to 2
 ;;; registers.
