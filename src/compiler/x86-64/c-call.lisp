@@ -903,254 +903,257 @@ Floats are passed in integer registers."
                                0)))
                  return-slot-count
                  (1+ return-slot-count))))
-      (assemble (segment 'nil)
-        ;; For large struct returns, save the hidden pointer before using it
-        ;; Windows: RCX (first arg register), SysV: RDI (first arg register)
-        (when large-struct-return-p
-          #+win32 (inst push rcx)
-          #-win32 (inst push rdi))
-        ;; Make room on the stack for argument vector.
-        (when (plusp total-arg-bytes)
-          (inst sub rsp total-arg-bytes))
-        ;; Copy arguments from registers/stack to argument vector
-        (dolist (type argument-types)
-          (let* ((arg-size (round-up-to-word (argument-byte-size type)))
-                 ;; A TN pointing to the stack location where the
-                 ;; current argument should be stored for the purposes
-                 ;; of ENTER-ALIEN-CALLBACK.
-                 (target-tn (ea arg-offset rsp))
-                 ;; Offset to C stack args (past return address and our arg vector)
-                 (stack-arg-tn (ea (* (+ 1 arg-slot-count stack-argument-count)
-                                      n-word-bytes) rsp)))
-            (cond
-              ;; Struct types
-              ((sb-alien::alien-record-type-p type)
-               #+win32
-               (let* ((classification (classify-struct type))
-                      (memory-p (sb-alien::struct-classification-memory-p classification))
-                      (struct-size (sb-alien::struct-classification-size classification)))
-                 (cond
-                   ;; Large struct: pointer passed in register
-                   (memory-p
-                    (let ((gpr (pop gprs)))
-                      (pop fprs) ; Windows: consume paired FPR slot
-                      (unless gpr
-                        (incf stack-argument-count)
-                        (setf gpr rax)
-                        (inst mov gpr stack-arg-tn))
-                      ;; gpr now contains pointer to struct; copy struct data to arg vector
-                      ;; Use r11 as scratch (not an arg register) to avoid clobbering other args
+      (symbol-macrolet ((stack-args-offset (* (+ 1 arg-slot-count stack-argument-count
+                                                 (if large-struct-return-p 1 0))
+                                              n-word-bytes)))
+        (assemble (segment 'nil)
+          ;; For large struct returns, save the hidden pointer before using it
+          ;; Windows: RCX (first arg register), SysV: RDI (first arg register)
+          (when large-struct-return-p
+            #+win32 (inst push rcx)
+            #-win32 (inst push rdi))
+          ;; Make room on the stack for argument vector.
+          (when (plusp total-arg-bytes)
+            (inst sub rsp total-arg-bytes))
+          ;; Copy arguments from registers/stack to argument vector
+          (dolist (type argument-types)
+            (let* ((arg-size (round-up-to-word (argument-byte-size type)))
+                   ;; A TN pointing to the stack location where the
+                   ;; current argument should be stored for the purposes
+                   ;; of ENTER-ALIEN-CALLBACK.
+                   (target-tn (ea arg-offset rsp))
+                   ;; Offset to C stack args (past return address and our arg vector)
+                   (stack-arg-tn (ea stack-args-offset rsp)))
+              (cond
+                ;; Struct types
+                ((sb-alien::alien-record-type-p type)
+                 (let* ((classification (classify-struct type))
+                        (memory-p (sb-alien::struct-classification-memory-p classification))
+                        (struct-size (sb-alien::struct-classification-size classification))
+                        (slots (sb-alien::struct-classification-register-slots classification))
+                        (n-int (count :integer slots))
+                        (n-fp (count :double slots)))
+                   (when (or (> n-int (length gprs))
+                             (> n-fp (length fprs)))
+                     ;; Don't mix stack/registers
+                     (setf gprs nil
+                           fprs nil))
+                   #+win32
+                   (cond
+                     ;; Large struct: pointer passed in register
+                     (memory-p
+                      (let ((gpr (pop gprs)))
+                        (pop fprs)  ; Windows: consume paired FPR slot
+                        (unless gpr
+                          (incf stack-argument-count)
+                          (setf gpr rax)
+                          (inst mov gpr stack-arg-tn))
+                        ;; gpr now contains pointer to struct; copy struct data to arg vector
+                        ;; Use r11 as scratch (not an arg register) to avoid clobbering other args
+                        (let ((num-words (ceiling struct-size n-word-bytes)))
+                          (loop for i from 0 below num-words
+                                for dst-off from arg-offset by n-word-bytes
+                                do (inst mov r11 (ea (* i n-word-bytes) gpr))
+                                   (inst mov (ea dst-off rsp) r11)))))
+                     ;; Small struct: single integer register
+                     (t
+                      (let ((gpr (pop gprs)))
+                        (pop fprs)
+                        (unless gpr
+                          (incf stack-argument-count)
+                          (setf gpr rax)
+                          (inst mov gpr stack-arg-tn))
+                        (inst mov (ea arg-offset rsp) gpr))))
+                   #-win32
+                   (cond
+                     ;; Large struct (MEMORY class): passed directly on the C stack
+                     ;; The caller copies the struct to its stack frame
+                     (memory-p
                       (let ((num-words (ceiling struct-size n-word-bytes)))
+                        ;; Copy struct data from C stack to our argument vector
                         (loop for i from 0 below num-words
+                              for src-off = (+ stack-args-offset (* i n-word-bytes))
                               for dst-off from arg-offset by n-word-bytes
-                              do (inst mov r11 (ea (* i n-word-bytes) gpr))
-                                 (inst mov (ea dst-off rsp) r11)))))
-                   ;; Small struct: single integer register
-                   (t
-                    (let ((gpr (pop gprs)))
-                      (pop fprs)
-                      (unless gpr
-                        (incf stack-argument-count)
-                        (setf gpr rax)
-                        (inst mov gpr stack-arg-tn))
-                      (inst mov (ea arg-offset rsp) gpr)))))
-               #-win32
-               (let* ((classification (classify-struct type))
-                      (memory-p (sb-alien::struct-classification-memory-p classification))
-                      (slots (sb-alien::struct-classification-register-slots classification))
-                      (struct-size (sb-alien::struct-classification-size classification)))
-                 (cond
-                   ;; Large struct (MEMORY class): passed directly on the C stack
-                   ;; The caller copies the struct to its stack frame
-                   (memory-p
-                    (let ((num-words (ceiling struct-size n-word-bytes)))
-                      ;; Copy struct data from C stack to our argument vector
-                      (loop for i from 0 below num-words
-                            for src-off = (* (+ 1 arg-slot-count stack-argument-count i)
-                                             n-word-bytes)
-                            for dst-off from arg-offset by n-word-bytes
-                            do (inst mov rax (ea src-off rsp))
-                               (inst mov (ea dst-off rsp) rax))
-                      ;; Account for the stack slots consumed
-                      (incf stack-argument-count num-words)))
-                   ;; Small struct: passed in up to 2 registers per eightbyte
-                   (t
-                    (loop for class in slots
-                          for slot-offset from arg-offset by n-word-bytes
-                          do (ecase class
-                               (:integer
-                                (let ((gpr (pop gprs)))
-                                  (unless gpr
-                                    (incf stack-argument-count)
-                                    (setf gpr rax)
-                                    (inst mov gpr (ea (* (+ 1 arg-slot-count stack-argument-count -1)
-                                                         n-word-bytes) rsp)))
-                                  (inst mov (ea slot-offset rsp) gpr)))
-                               (:double
-                                (let ((fpr (pop fprs)))
-                                  (cond (fpr
-                                         (inst movq (ea slot-offset rsp) fpr))
-                                        (t
-                                         (incf stack-argument-count)
-                                         (inst mov rax (ea (* (+ 1 arg-slot-count stack-argument-count -1)
-                                                              n-word-bytes) rsp))
-                                         (inst mov (ea slot-offset rsp) rax)))))))))))
+                              do (inst mov rax (ea src-off rsp))
+                                 (inst mov (ea dst-off rsp) rax))
+                        ;; Account for the stack slots consumed
+                        (incf stack-argument-count num-words)))
+                     ;; Small struct: passed in up to 2 registers per eightbyte
+                     (t
+                      (loop for class in slots
+                            for slot-offset from arg-offset by n-word-bytes
+                            do (ecase class
+                                 (:integer
+                                  (let ((gpr (pop gprs)))
+                                    (unless gpr
+                                      (incf stack-argument-count)
+                                      (setf gpr rax)
+                                      (inst mov gpr (ea (- stack-args-offset n-word-bytes) rsp)))
+                                    (inst mov (ea slot-offset rsp) gpr)))
+                                 (:double
+                                  (let ((fpr (pop fprs)))
+                                    (cond (fpr
+                                           (inst movq (ea slot-offset rsp) fpr))
+                                          (t
+                                           (incf stack-argument-count)
+                                           (inst mov rax (ea (- stack-args-offset n-word-bytes) rsp))
+                                           (inst mov (ea slot-offset rsp) rax)))))))))))
 
-              ;; Integer/pointer types
-              ((not (alien-float-type-p type))
-               (let ((gpr (pop gprs)))
-                 #+win32 (pop fprs)
-                 ;; Argument not in register, copy it from the old
-                 ;; stack location to a temporary register.
-                 (unless gpr
-                   (incf stack-argument-count)
-                   (setf gpr rax)
-                   (inst mov gpr stack-arg-tn))
-                 ;; Copy from either argument register or temporary
-                 ;; register to target.
-                 (inst mov target-tn gpr)))
+                ;; Integer/pointer types
+                ((not (alien-float-type-p type))
+                 (let ((gpr (pop gprs)))
+                   #+win32 (pop fprs)
+                   ;; Argument not in register, copy it from the old
+                   ;; stack location to a temporary register.
+                   (unless gpr
+                     (incf stack-argument-count)
+                     (setf gpr rax)
+                     (inst mov gpr stack-arg-tn))
+                   ;; Copy from either argument register or temporary
+                   ;; register to target.
+                   (inst mov target-tn gpr)))
 
-              ;; Float types
-              ((or (alien-single-float-type-p type)
-                   (alien-double-float-type-p type))
-               (let ((fpr (pop fprs)))
-                 #+win32 (pop gprs)
-                 (cond (fpr
-                        ;; Copy from float register to target location.
-                        (inst movq target-tn fpr))
-                       (t
-                        ;; Not in float register. Copy from stack to
-                        ;; temporary (general purpose) register, and
-                        ;; from there to the target location.
-                        (incf stack-argument-count)
-                        (inst mov rax stack-arg-tn)
-                        (inst mov target-tn rax)))))
+                ;; Float types
+                ((or (alien-single-float-type-p type)
+                     (alien-double-float-type-p type))
+                 (let ((fpr (pop fprs)))
+                   #+win32 (pop gprs)
+                   (cond (fpr
+                          ;; Copy from float register to target location.
+                          (inst movq target-tn fpr))
+                         (t
+                          ;; Not in float register. Copy from stack to
+                          ;; temporary (general purpose) register, and
+                          ;; from there to the target location.
+                          (incf stack-argument-count)
+                          (inst mov rax stack-arg-tn)
+                          (inst mov target-tn rax)))))
 
-              (t
-               (bug "Unknown alien callback argument type: ~S" type)))
-            ;; Advance to next argument slot
-            (incf arg-offset arg-size)))
+                (t
+                 (bug "Unknown alien callback argument type: ~S" type)))
+              ;; Advance to next argument slot
+              (incf arg-offset arg-size)))
 
-        (macrolet
-            ((call-wrapper ()
-               ;; Technically this fixup should have an optional arg of
-               ;;  (- (ASH SYMBOL-VALUE-SLOT WORD-SHIFT) OTHER-POINTER-LOWTAG)
-               ;; but as the fixup is hand-crafted anyway, it doesn't matter.
-               `(inst call (rip-relative-ea
-                      (make-fixup 'callback-wrapper-trampoline
-                                  :immobile-symbol))))) ; arbitraryish flavor
-        #-sb-thread
-        (progn
-          ;; arg0 to ENTER-ALIEN-CALLBACK (trampoline index)
-          (inst mov rdx (fixnumize index))
-          ;; arg1 to ENTER-ALIEN-CALLBACK (pointer to argument vector)
-          (inst mov rdi rsp)
-          ;; add room on stack for return value
-          (inst sub rsp (* return-slot-count-aligned n-word-bytes))
-          ;; arg2 to ENTER-ALIEN-CALLBACK (pointer to return value)
-          (inst mov rsi rsp)
+          (macrolet
+              ((call-wrapper ()
+                 ;; Technically this fixup should have an optional arg of
+                 ;;  (- (ASH SYMBOL-VALUE-SLOT WORD-SHIFT) OTHER-POINTER-LOWTAG)
+                 ;; but as the fixup is hand-crafted anyway, it doesn't matter.
+                 `(inst call (rip-relative-ea
+                              (make-fixup 'callback-wrapper-trampoline
+                                          :immobile-symbol))))) ; arbitraryish flavor
+            #-sb-thread
+            (progn
+              ;; arg0 to ENTER-ALIEN-CALLBACK (trampoline index)
+              (inst mov rdx (fixnumize index))
+              ;; arg1 to ENTER-ALIEN-CALLBACK (pointer to argument vector)
+              (inst mov rdi rsp)
+              ;; add room on stack for return value
+              (inst sub rsp (* return-slot-count-aligned n-word-bytes))
+              ;; arg2 to ENTER-ALIEN-CALLBACK (pointer to return value)
+              (inst mov rsi rsp)
 
-          ;; Make new frame
-          (inst push rbp)
-          (inst mov  rbp rsp)
+              ;; Make new frame
+              (inst push rbp)
+              (inst mov  rbp rsp)
 
-          ;; Call
-          (call-wrapper)
+              ;; Call
+              (call-wrapper)
 
-          ;; Back! Restore frame
-          (inst leave))
+              ;; Back! Restore frame
+              (inst leave))
 
-        #+sb-thread
-        (progn
-          ;; arg0 to ENTER-ALIEN-CALLBACK (trampoline index)
-          (inst mov #-win32 rdi #+win32 rcx (fixnumize index))
-          ;; arg1 to ENTER-ALIEN-CALLBACK (pointer to argument vector)
-          (inst mov #-win32 rsi #+win32 rdx rsp)
-          ;; add room on stack for return value
-          (inst sub rsp (* return-slot-count-aligned n-word-bytes))
-          ;; arg2 to ENTER-ALIEN-CALLBACK (pointer to return value)
-          (inst mov #-win32 rdx #+win32 r8 rsp)
-          ;; Make new frame
-          (inst push rbp)
-          (inst mov  rbp rsp)
-          #+win32 (inst sub rsp #x20)
-          #+win32 (inst and rsp #x-20)
-          ;; Call
-          (call-wrapper)
+            #+sb-thread
+            (progn
+              ;; arg0 to ENTER-ALIEN-CALLBACK (trampoline index)
+              (inst mov #-win32 rdi #+win32 rcx (fixnumize index))
+              ;; arg1 to ENTER-ALIEN-CALLBACK (pointer to argument vector)
+              (inst mov #-win32 rsi #+win32 rdx rsp)
+              ;; add room on stack for return value
+              (inst sub rsp (* return-slot-count-aligned n-word-bytes))
+              ;; arg2 to ENTER-ALIEN-CALLBACK (pointer to return value)
+              (inst mov #-win32 rdx #+win32 r8 rsp)
+              ;; Make new frame
+              (inst push rbp)
+              (inst mov  rbp rsp)
+              #+win32 (inst sub rsp #x20)
+              #+win32 (inst and rsp #x-20)
+              ;; Call
+              (call-wrapper)
 
-          ;; Back! Restore frame
-          (inst leave)))
+              ;; Back! Restore frame
+              (inst leave)))
 
-        ;; Result now on top of stack, put it in the right register
-        (cond
-          ((or (alien-integer-type-p result-type)
-               (alien-pointer-type-p result-type)
-               (alien-type-= #.(parse-alien-type 'system-area-pointer nil)
-                             result-type))
-           (inst mov rax [rsp]))
-          ((or (alien-single-float-type-p result-type)
-               (alien-double-float-type-p result-type))
-           (inst movq xmm0 [rsp]))
-          ((alien-void-type-p result-type))
-          ;; Struct return types
-          ((alien-record-type-p result-type)
-           #+win32
-           ;; Windows: large structs via hidden pointer (from RCX), small structs in RAX
-           (cond
-             ;; Large struct: copy result to hidden pointer location, return pointer
-             (large-struct-return-p
-              (let ((struct-size (sb-alien::struct-classification-size result-classification)))
-                ;; Retrieve saved hidden pointer (was pushed at start from RCX)
-                (inst mov rax (ea (* (+ arg-slot-count return-slot-count-aligned) n-word-bytes) rsp))
-                ;; Copy struct data from stack to hidden pointer destination
-                (loop for off from 0 below struct-size by 8
-                      do (inst mov rdx (ea off rsp))
-                         (inst mov (ea off rax) rdx))))
-             ;; Small struct (<=8 bytes): just load into RAX
-             (t
-              (inst mov rax [rsp])))
-           #-win32
-           ;; SysV: large structs via hidden pointer (from RDI), small structs in RAX/RDX/XMM0/XMM1
-           (cond
-             (large-struct-return-p
-              (let ((struct-size (sb-alien::struct-classification-size result-classification)))
-                (inst mov rax (ea (* (+ arg-slot-count return-slot-count-aligned) n-word-bytes) rsp))
-                (loop for off from 0 below struct-size by 8
-                      do (inst mov rdx (ea off rsp))
-                         (inst mov (ea off rax) rdx))))
-             ;; Small struct: copy to registers based on classification
-             (t
-              (let ((slots (sb-alien::struct-classification-register-slots result-classification))
-                    (int-reg-idx 0)
-                    (sse-reg-idx 0))
-                (loop for slot in slots
-                      for offset from 0 by 8
-                      do (ecase slot
-                           (:integer
-                            (let ((target (case int-reg-idx
-                                            (0 rax)
-                                            (1 rdx))))
-                              (inst mov target (ea offset rsp)))
-                            (incf int-reg-idx))
-                           (:double
-                            (let ((target (case sse-reg-idx
-                                            (0 xmm0)
-                                            (1 xmm1))))
-                              (inst movq target (ea offset rsp)))
-                            (incf sse-reg-idx))))))))
-          (t
-           (error "Unrecognized alien type: ~A" result-type)))
+          ;; Result now on top of stack, put it in the right register
+          (cond
+            ((or (alien-integer-type-p result-type)
+                 (alien-pointer-type-p result-type)
+                 (alien-type-= #.(parse-alien-type 'system-area-pointer nil)
+                               result-type))
+             (inst mov rax [rsp]))
+            ((or (alien-single-float-type-p result-type)
+                 (alien-double-float-type-p result-type))
+             (inst movq xmm0 [rsp]))
+            ((alien-void-type-p result-type))
+            ;; Struct return types
+            ((alien-record-type-p result-type)
+             #+win32
+             ;; Windows: large structs via hidden pointer (from RCX), small structs in RAX
+             (cond
+               ;; Large struct: copy result to hidden pointer location, return pointer
+               (large-struct-return-p
+                (let ((struct-size (sb-alien::struct-classification-size result-classification)))
+                  ;; Retrieve saved hidden pointer (was pushed at start from RCX)
+                  (inst mov rax (ea (* (+ arg-slot-count return-slot-count-aligned) n-word-bytes) rsp))
+                  ;; Copy struct data from stack to hidden pointer destination
+                  (loop for off from 0 below struct-size by 8
+                        do (inst mov rdx (ea off rsp))
+                           (inst mov (ea off rax) rdx))))
+               ;; Small struct (<=8 bytes): just load into RAX
+               (t
+                (inst mov rax [rsp])))
+             #-win32
+             ;; SysV: large structs via hidden pointer (from RDI), small structs in RAX/RDX/XMM0/XMM1
+             (cond
+               (large-struct-return-p
+                (let ((struct-size (sb-alien::struct-classification-size result-classification)))
+                  (inst mov rax (ea (* (+ arg-slot-count return-slot-count-aligned) n-word-bytes) rsp))
+                  (loop for off from 0 below struct-size by 8
+                        do (inst mov rdx (ea off rsp))
+                           (inst mov (ea off rax) rdx))))
+               ;; Small struct: copy to registers based on classification
+               (t
+                (let ((slots (sb-alien::struct-classification-register-slots result-classification))
+                      (int-reg-idx 0)
+                      (sse-reg-idx 0))
+                  (loop for slot in slots
+                        for offset from 0 by 8
+                        do (ecase slot
+                             (:integer
+                              (let ((target (case int-reg-idx
+                                              (0 rax)
+                                              (1 rdx))))
+                                (inst mov target (ea offset rsp)))
+                              (incf int-reg-idx))
+                             (:double
+                              (let ((target (case sse-reg-idx
+                                              (0 xmm0)
+                                              (1 xmm1))))
+                                (inst movq target (ea offset rsp)))
+                              (incf sse-reg-idx))))))))
+            (t
+             (error "Unrecognized alien type: ~A" result-type)))
 
-        ;; Pop the arguments and the return value from the stack to get
-        ;; the return address at top of stack.
+          ;; Pop the arguments and the return value from the stack to get
+          ;; the return address at top of stack.
 
-        (inst add rsp (* (+ arg-slot-count return-slot-count-aligned
-                            (if large-struct-return-p
-                                1
-                                0))
-                         n-word-bytes))
-        ;; Return
-        (inst ret))
+          (inst add rsp (* (+ arg-slot-count return-slot-count-aligned
+                              (if large-struct-return-p
+                                  1
+                                  0))
+                           n-word-bytes))
+          ;; Return
+          (inst ret)))
       (finalize-segment segment)
       ;; Now that the segment is done, convert it to a static
       ;; vector we can point foreign code to.
