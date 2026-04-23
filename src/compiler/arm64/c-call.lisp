@@ -718,22 +718,39 @@
                        ((multiple-value-bind (hfa-type hfa-count) (hfa-base-type type)
                           (when hfa-type
                             (let ((fp-size (if (eq hfa-type 'single-float) 4 8)))
-                              (dotimes (i hfa-count)
-                                (when (< fp-registers 8)
-                                  (inst str (make-tn fp-registers
-                                                     (if (eq hfa-type 'single-float)
-                                                         'single-reg
-                                                         'double-reg))
-                                        (@ nsp-tn (+ frame-offset (* i fp-size))))
-                                  (incf fp-registers))))
+                              (cond ((<= (+ fp-registers hfa-count) 8)
+                                     (dotimes (i hfa-count)
+                                       (inst str (make-tn fp-registers
+                                                          (if (eq hfa-type 'single-float)
+                                                              'single-reg
+                                                              'double-reg))
+                                             (@ nsp-tn (+ frame-offset (* i fp-size))))
+                                       (incf fp-registers)))
+                                    (t
+                                     (setf fp-registers 8)
+                                     (setf stack-argument-bytes (align-up stack-argument-bytes 8))
+                                     (loop for off below struct-bytes by 8
+                                           for remaining = (- struct-bytes off)
+                                           do (cond ((>= remaining 8)
+                                                     (inst ldr temp-tn (@ nsp-save-tn (+ stack-argument-bytes off)))
+                                                     (inst str temp-tn (@ nsp-tn (+ frame-offset off))))
+                                                    (t
+                                                     (inst ldr (32-bit-reg temp-tn) (@ nsp-save-tn (+ stack-argument-bytes off)))
+                                                     (inst str (32-bit-reg temp-tn) (@ nsp-tn (+ frame-offset off))))))
+                                     (incf stack-argument-bytes (align-up struct-bytes 8)))))
                             t)))
                        ;; Small non-HFA struct (<=16 bytes): passed in GPRs
                        (t
                         (let ((num-regs (ceiling struct-bytes 8)))
                           (dotimes (i num-regs)
                             (let ((gpr (pop gprs)))
-                              (when gpr
-                                (inst str gpr (@ nsp-tn (+ frame-offset (* i 8))))))))))
+                              (cond (gpr
+                                     (inst str gpr (@ nsp-tn (+ frame-offset (* i 8)))))
+                                    (t
+                                     (setf stack-argument-bytes (align-up stack-argument-bytes 8))
+                                     (inst ldr temp-tn (@ nsp-save-tn stack-argument-bytes))
+                                     (inst str temp-tn (@ nsp-tn (+ frame-offset (* i 8))))
+                                     (incf stack-argument-bytes 8))))))))
                      ;; Use word-aligned size for frame offset to match Lisp side
                      (incf frame-offset struct-bytes-aligned)))
                   (t
