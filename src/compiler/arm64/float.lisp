@@ -764,7 +764,7 @@
           (inst fmov bits float)
           (inst sxtw bits bits))
          (single-stack
-          (inst ldrsw (32-bit-reg bits)
+          (inst ldrsw bits
                 (@ (current-nfp-tn vop)
                    (load-store-offset (ash (tn-offset float) 3)))))
          (descriptor-reg
@@ -814,7 +814,7 @@
        (inst fmov hi-bits float)
        (inst asr hi-bits hi-bits 32))
       (double-stack
-        (inst ldrsw (32-bit-reg hi-bits)
+        (inst ldrsw hi-bits
               (@ (current-nfp-tn vop)
                  (load-store-offset
                   (+ (tn-byte-offset float)
@@ -822,7 +822,7 @@
                          0
                          4))))))
       (descriptor-reg
-       (inst ldrsw (32-bit-reg hi-bits)
+       (inst ldrsw hi-bits
              (@ float
                 (- (+ (* double-float-value-slot n-word-bytes)
                       (if (eq *backend-byte-order* :big-endian)

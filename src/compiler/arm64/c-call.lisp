@@ -737,7 +737,7 @@
                                               (inst ldrh temp-tn addr)))
                                          (4
                                           (if signed
-                                              (inst ldrsw (32-bit-reg temp-tn) addr)
+                                              (inst ldrsw temp-tn addr)
                                               (inst ldr (32-bit-reg temp-tn) addr))))))
                                     (t
                                      (inst ldr temp-tn addr)))
