@@ -869,10 +869,10 @@
                              result-type))
            (loadw r0-tn nsp-tn))
           ((alien-float-type-p result-type)
-           (loadw (make-tn fp-registers
-                              (if (alien-single-float-type-p result-type)
-                                  'single-reg
-                                  'double-reg))
+           (loadw (make-tn 0
+                           (if (alien-single-float-type-p result-type)
+                               'single-reg
+                               'double-reg))
                  nsp-tn))
           ((alien-void-type-p result-type))
           ;; Struct return types
