@@ -376,8 +376,20 @@ Floats are passed in integer registers."
   "Handle struct arguments.
    For large structs (>16 bytes), copies to stack per System V AMD64 ABI.
    For small structs, returns a function that emits load VOPs into registers."
-  (let ((classification (classify-struct type)))
-    (if (sb-alien::struct-classification-memory-p classification)
+  (let* ((classification (classify-struct type))
+         (slots (sb-alien::struct-classification-register-slots classification)))
+    (if (or (sb-alien::struct-classification-memory-p classification)
+            (let (stack
+                  (n-int (count :integer slots))
+                  (n-fp (+ (count :single slots) (count :double slots))))
+              ;; Don't split between registers/stack
+              (when (> (+ (arg-state-register-args state) n-int) max-int-args)
+                (setf (arg-state-register-args state) max-int-args
+                      stack t))
+              (when (> (+ (arg-state-xmm-args state) n-fp) max-xmm-args)
+                (setf (arg-state-xmm-args state) max-xmm-args
+                      stack t))
+              stack))
         ;; Large struct: copy to stack (System V AMD64 ABI)
         ;; The struct is passed by value on the stack, not by pointer
         (let* ((size (sb-alien::struct-classification-size classification))
@@ -402,7 +414,7 @@ Floats are passed in integer registers."
         (let ((arg-tns nil)
               (offsets nil)
               (offset 0))
-          (dolist (class (sb-alien::struct-classification-register-slots classification))
+          (dolist (class slots)
             (case class
               (:integer
                (push (int-arg state 'unsigned-byte-64
