@@ -389,8 +389,7 @@
                                 (list off)))))))
                 (stack
                  (let* ((bytes (ceiling (sb-alien::alien-type-bits type) n-byte-bits))
-                        (words (/ (sb-alien::struct-classification-size classification)
-                                  n-word-bytes))
+                        (words (ceiling (sb-alien::struct-classification-size classification) n-word-bytes))
                         (arg-tns (loop repeat words
                                        collect (int-arg state 'unsigned-byte-64
                                                         unsigned-reg-sc-number
@@ -723,13 +722,13 @@
                                 target-tn))
                          (t
                           (setf stack-argument-bytes
-                                  (align-up stack-argument-bytes size))
+                                (align-up stack-argument-bytes size))
                           (case size
                             #+darwin
                             (4
                              (let ((reg (32-bit-reg temp-tn)))
-                              (inst ldr reg (@ nsp-save-tn stack-argument-bytes))
-                              (inst str reg target-tn)))
+                               (inst ldr reg (@ nsp-save-tn stack-argument-bytes))
+                               (inst str reg target-tn)))
                             (t
                              (inst ldr temp-tn (@ nsp-save-tn stack-argument-bytes))
                              (inst str temp-tn target-tn)))
@@ -802,6 +801,9 @@
                        ;; Small non-HFA struct (<=16 bytes): passed in GPRs
                        (t
                         (let ((num-regs (ceiling struct-bytes 8)))
+                          ;; Don't mix stack/registers
+                          (when (< (length gprs) num-regs)
+                            (setf gprs nil))
                           (dotimes (i num-regs)
                             (let ((gpr (pop gprs)))
                               (cond (gpr
