@@ -96,6 +96,11 @@
                    (t
                     (make-wired-tn* prim-type stack-sc (truncate frame-size size)))))))))
 
+(defun stack-arg (state prim-type stack-sc &optional (size 8))
+  (let ((frame-size (align-up (arg-state-stack-frame-size state) size)))
+    (setf (arg-state-stack-frame-size state) (+ frame-size size))
+    (make-wired-tn* prim-type stack-sc (truncate frame-size size))))
+
 (define-alien-type-method (integer :arg-tn) (type state)
  (let ((size #+darwin (truncate (alien-type-bits type) n-byte-bits)
              #-darwin n-word-bytes))
@@ -391,9 +396,7 @@
                  (let* ((bytes (ceiling (sb-alien::alien-type-bits type) n-byte-bits))
                         (words (ceiling (sb-alien::struct-classification-size classification) n-word-bytes))
                         (arg-tns (loop repeat words
-                                       collect (int-arg state 'unsigned-byte-64
-                                                        unsigned-reg-sc-number
-                                                        unsigned-stack-sc-number))))
+                                       collect (stack-arg state 'unsigned-byte-64 unsigned-stack-sc-number))))
                    (sb-c::make-arg-tn-loader
                     arg-tns
                     (lambda (arg call block nfp)
