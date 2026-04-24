@@ -376,12 +376,13 @@
                           (= (car existing) i))
                      ;; Maximize the current block value while
                      ;; not exceeding the overall minimal amount.
-                     (let ((overall-min (third existing)))
+                     (let ((overall-min (third existing))
+                           (block-max (max amount (second existing))))
                        (setf (gethash (list in-con in-op not-p) constraints)
                              (list i
                                    (if overall-min
-                                       (min (max amount (second existing)) overall-min)
-                                       (max amount (second existing)))
+                                       (min block-max overall-min)
+                                       block-max)
                                    overall-min))))))))
 
     (when (and all-previous-outs-computed

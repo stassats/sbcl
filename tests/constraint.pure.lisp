@@ -2157,7 +2157,6 @@
      n)
    (or integer (complex rational))))
 
-
 (with-test (:name :growing-amounts-in-loops)
   (checked-compile `(lambda (n)
                       (declare (integer n)
@@ -2166,3 +2165,28 @@
                         (loop
                          (let ((new (+ v 1)))
                            (setf v new)))))))
+(with-test (:name :join-equality-constraints-loop)
+  (checked-compile
+   `(lambda (data n d j)
+      (declare (simple-string   data)
+               (optimize (debug 3)))
+      (let ((p773 0))
+        (if n
+            (setq p773 1))
+        (let ((name (make-array p773)))
+          (print name))
+
+        (incf p773)
+        (print (schar data p773))
+        (incf p773)
+        (block nil
+          (tagbody
+           g826
+             (progn
+               (if n
+                   (return-from nil))
+               (setq p773 (+ 1 p773))
+               (aref data p773))
+             (go g826)))
+
+        (do ((index22 0 d)) ((or j index22)))))))

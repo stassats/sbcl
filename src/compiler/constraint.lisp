@@ -61,6 +61,10 @@
             (:copier nil))
   (var nil :type lambda-var :read-only t))
 
+#+sb-devel
+(defprinter (vector-length-constraint)
+            (var :prin1 (lambda-var-%source-name var)))
+
 (deftype constraint-y () '(or ctype lvar lambda-var constant
                            vector-length-constraint))
 
@@ -1656,13 +1660,20 @@
           (mapc #'enqueue-block-for-constraints
                 (find-block-type-constraints block nil)))
         ;; Propagate constraints
-        (loop for block = (pop *constraint-blocks*)
-              while block do
-              (unless (or (block-delete-p block)
-                          (eq block (component-tail component)))
-                (when (update-block-in block join-types-p)
-                  (mapc #'enqueue-block-for-constraints
-                        (find-block-type-constraints block nil)))))))
+        (loop while *constraint-blocks*
+              do
+              ;; Process the newly enqueued blocks in the same order
+              (setf *constraint-blocks*
+                    (sort *constraint-blocks* #'< :key #'block-number))
+              (let ((current-end (car (last *constraint-blocks*))))
+                (loop for block = (pop *constraint-blocks*)
+                      do
+                      (unless (or (block-delete-p block)
+                                  (eq block (component-tail component)))
+                        (when (update-block-in block join-types-p)
+                          (mapc #'enqueue-block-for-constraints
+                                (find-block-type-constraints block nil))))
+                      until (eq block current-end))))))
 
     rest-of-blocks))
 
