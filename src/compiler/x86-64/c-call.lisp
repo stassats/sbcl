@@ -403,17 +403,11 @@ Floats are passed in integer registers."
          (struct-size (sb-alien::struct-classification-size classification))
          (slots (sb-alien::struct-classification-register-slots classification)))
     (if (or (sb-alien::struct-classification-memory-p classification)
-            (let (stack
-                  (n-int (count :integer slots))
+            (let ((n-int (count :integer slots))
                   (n-fp (+ (count :single slots) (count :double slots))))
               ;; Don't split between registers/stack
-              (when (> (+ (arg-state-register-args state) n-int) max-int-args)
-                (setf (arg-state-register-args state) max-int-args
-                      stack t))
-              (when (> (+ (arg-state-xmm-args state) n-fp) max-xmm-args)
-                (setf (arg-state-xmm-args state) max-xmm-args
-                      stack t))
-              stack))
+              (or (> (+ (arg-state-register-args state) n-int) max-int-args)
+                  (> (+ (arg-state-xmm-args state) n-fp) max-xmm-args))))
         ;; Large struct: copy to stack (System V AMD64 ABI)
         ;; The struct is passed by value on the stack, not by pointer
         (let* ((words (ceiling struct-size 8))
