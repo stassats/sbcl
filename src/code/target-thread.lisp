@@ -493,8 +493,8 @@ See also: RETURN-FROM-THREAD and SB-EXT:EXIT."
     (locally (declare (sb-ext:muffle-conditions sb-ext:compiler-note))
       (define-structure-slot-addressor mutex-state-address
         ;; """ (Futexes are 32 bits in size on all platforms, including 64-bit systems.) """
-        ;; which means we need to add 4 bytes to get to the low 32 bits of the slot contents
-        ;; where we store state. This would be prettier if we had 32-bit raw slots.
+        ;; which means 64-bit big-endian needs to add 4 bytes to get to the low half
+        ;; of the slot, since we lack 32-bit raw slots.
         :structure mutex
         :slot state
         :byte-offset (+ #+(and 64-bit big-endian) 4))
