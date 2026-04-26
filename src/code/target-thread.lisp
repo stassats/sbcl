@@ -981,17 +981,15 @@ Notes:
 
 (declaim (ftype (sfunction (mutex &key (:if-not-owner (member :punt :warn :error :force))) null)
                 release-mutex))
-(defun release-mutex (mutex &key (if-not-owner :punt))
-  "Release MUTEX by setting it to NIL. Wake up threads waiting for
-this mutex.
+(defun release-mutex (mutex &key (if-not-owner :punt)) ; TERRIBLE DEFAULT!!!
+  "Release MUTEX and wake up any other thread waiting for it.
 
 RELEASE-MUTEX is not interrupt safe: interrupts should be disabled
 around calls to it.
 
-If the current thread is not the owner of the mutex then it silently
-returns without doing anything (if IF-NOT-OWNER is :PUNT), signals a
-WARNING (if IF-NOT-OWNER is :WARN), or releases the mutex anyway (if
-IF-NOT-OWNER is :FORCE)."
+The IF-NOT-OWNER keyword dictates behavior when the current thread does not own the
+mutex. Do nothing and silently return if :PUNT, signal a WARNING or ERROR if :WARN
+or :ERROR respectively, or release the mutex anyway if :FORCE."
   (declare (type mutex mutex))
   ;; Order matters: set owner to NIL before releasing state.
   (let* ((self (current-vmthread-id))
