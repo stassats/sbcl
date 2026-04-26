@@ -951,12 +951,10 @@ Floats are passed in integer registers."
                         (struct-size (sb-alien::struct-classification-size classification))
                         (slots (sb-alien::struct-classification-register-slots classification))
                         (n-int (count :integer slots))
-                        (n-fp (count :double slots)))
-                   (when (or (> n-int (length gprs))
-                             (> n-fp (length fprs)))
-                     ;; Don't mix stack/registers
-                     (setf gprs nil
-                           fprs nil))
+                        (n-fp (count :double slots))
+                        ;; Don't mix stack/registers
+                        (use-registers (and (<= n-int (length gprs))
+                                            (<= n-fp (length fprs)))))
                    #+win32
                    (cond
                      ;; Large struct: pointer passed in register
@@ -976,12 +974,14 @@ Floats are passed in integer registers."
                                    (inst mov (ea dst-off rsp) r11)))))
                      ;; Small struct: single integer register
                      (t
-                      (let ((gpr (pop gprs)))
-                        (pop fprs)
-                        (unless gpr
-                          (incf stack-argument-count)
-                          (setf gpr rax)
-                          (inst mov gpr stack-arg-tn))
+                      (let ((gpr (and use-registers
+                                      (pop gprs))))
+                        (cond (gpr
+                               (pop fprs))
+                              (t
+                               (incf stack-argument-count)
+                               (setf gpr rax)
+                               (inst mov gpr stack-arg-tn)))
                         (inst mov (ea arg-offset rsp) gpr))))
                    #-win32
                    (cond
@@ -1003,14 +1003,16 @@ Floats are passed in integer registers."
                             for slot-offset from arg-offset by n-word-bytes
                             do (ecase class
                                  (:integer
-                                  (let ((gpr (pop gprs)))
+                                  (let ((gpr (and use-registers
+                                                  (pop gprs))))
                                     (unless gpr
                                       (incf stack-argument-count)
                                       (setf gpr rax)
                                       (inst mov gpr (ea (- stack-args-offset n-word-bytes) rsp)))
                                     (inst mov (ea slot-offset rsp) gpr)))
                                  (:double
-                                  (let ((fpr (pop fprs)))
+                                  (let ((fpr (and use-registers
+                                                  (pop fprs))))
                                     (cond (fpr
                                            (inst movq (ea slot-offset rsp) fpr))
                                           (t
