@@ -84,3 +84,9 @@ struct gp_3f  gp_3f_make  (float a, float b, float c) {
   s.a = a; s.b = b; s.c = c;
   return s;
 }
+
+/*
+ * 20-byte struct (>16B, MEMORY-class on SysV and AAPCS64), for
+ * callback trampoline test.
+ */
+typedef struct { signed char m[20]; } gp_i8x20;

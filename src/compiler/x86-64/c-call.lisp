@@ -841,6 +841,34 @@ Floats are passed in integer registers."
 (defun alien-callback-accessor-form (type sp offset)
   `(deref (sap-alien (sap+ ,sp ,offset) (* ,type))))
 
+;;; Copy SIZE bytes from [SRC-REG] to [DST-REG] using SCRATCH as a temp.
+#-sb-xc-host
+(defun emit-sret-copy (size src-reg dst-reg scratch)
+  (multiple-value-bind (full-words tail) (floor size 8)
+    (loop for i below full-words
+          for off = (* i 8)
+          do (inst mov scratch (ea off src-reg))
+             (inst mov (ea off dst-reg) scratch))
+    (when (plusp tail)
+      (let ((off (* full-words 8)))
+        (flet ((copy-byte-at (k)
+                 (inst mov :byte scratch (ea (+ off k) src-reg))
+                 (inst mov :byte (ea (+ off k) dst-reg) scratch))
+               (copy-word-at (k)
+                 (inst mov :word scratch (ea (+ off k) src-reg))
+                 (inst mov :word (ea (+ off k) dst-reg) scratch))
+               (copy-dword-at (k)
+                 (inst mov :dword scratch (ea (+ off k) src-reg))
+                 (inst mov :dword (ea (+ off k) dst-reg) scratch)))
+          (ecase tail
+            (1 (copy-byte-at 0))
+            (2 (copy-word-at 0))
+            (3 (copy-word-at 0) (copy-byte-at 2))
+            (4 (copy-dword-at 0))
+            (5 (copy-dword-at 0) (copy-byte-at 4))
+            (6 (copy-dword-at 0) (copy-word-at 4))
+            (7 (copy-dword-at 0) (copy-word-at 4) (copy-byte-at 6))))))))
+
 #-sb-xc-host
 (defun alien-callback-assembler-wrapper (index result-type argument-types)
   ;; Windows x64 struct-by-value callback rules:
@@ -1127,9 +1155,7 @@ Floats are passed in integer registers."
                   ;; Retrieve saved hidden pointer (was pushed at start from RCX)
                   (inst mov rax (ea (* (+ arg-slot-count return-slot-count-aligned) n-word-bytes) rsp))
                   ;; Copy struct data from stack to hidden pointer destination
-                  (loop for off from 0 below struct-size by 8
-                        do (inst mov rdx (ea off rsp))
-                           (inst mov (ea off rax) rdx))))
+                  (emit-sret-copy struct-size rsp rax rdx)))
                ;; Small struct (<=8 bytes): just load into RAX
                (t
                 (inst mov rax [rsp])))
@@ -1139,9 +1165,7 @@ Floats are passed in integer registers."
                (large-struct-return-p
                 (let ((struct-size (sb-alien::struct-classification-size result-classification)))
                   (inst mov rax (ea (* (+ arg-slot-count return-slot-count-aligned) n-word-bytes) rsp))
-                  (loop for off from 0 below struct-size by 8
-                        do (inst mov rdx (ea off rsp))
-                           (inst mov (ea off rax) rdx))))
+                  (emit-sret-copy struct-size rsp rax rdx)))
                ;; Small struct: copy to registers based on classification
                (t
                 (let ((slots (sb-alien::struct-classification-register-slots result-classification))

@@ -213,3 +213,21 @@
                      (assert (= (slot s 'a) 1.0f0))
                      (assert (= (slot s 'b) 2.0f0))
                      (assert (= (slot s 'c) 3.0f0)))))
+
+;;; When a Lisp callback returns a struct >16 bytes to C, the ABI
+;;; passes a hidden pointer to the callback.  The callback assembler
+;;; wrapper copies Lisp's struct buffer to that pointer. Check for
+;;; overwrites.
+
+(define-alien-type nil (struct gp-i8x20 (m (array (signed 8) 20))))
+
+(with-test (:name :overwrite-cb-return-i8x20)
+  (with-guarded-struct (s 20 (struct gp-i8x20) sap)
+    (declare (ignore s))
+    (sb-alien:with-alien-callable
+        ((cb (struct gp-i8x20) ()
+           (sb-alien:with-alien ((view (struct gp-i8x20))) view)))
+      (with-fault-handler "OVER-WRITE (callback trampoline)"
+        (alien-funcall-into
+         (sb-alien:sap-alien (alien-sap cb) (function (struct gp-i8x20)))
+         sap)))))
