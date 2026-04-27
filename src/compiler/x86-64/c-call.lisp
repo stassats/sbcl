@@ -127,29 +127,14 @@
 
 #-win32
 (defun classify-field-sysv-amd64 (type)
-  "Classify a single field type for SysV AMD64 ABI.
-   Returns :INTEGER, :DOUBLE, or :MEMORY."
+  "Classify a leaf scalar field for SysV AMD64 ABI.
+   Returns :INTEGER, :DOUBLE, or :MEMORY.  Aggregates (records and
+   arrays) are flattened by CLASSIFY-STRUCT and never reach here."
   (cond
-    ;; Check specific types first, before general type checks
     ((sb-alien::alien-integer-type-p type) :integer)
     ((sb-alien::alien-pointer-type-p type) :integer)
     ((sb-alien::alien-single-float-type-p type) :double)
     ((sb-alien::alien-double-float-type-p type) :double)
-    ;; Arrays are classified by their element type
-    ((sb-alien::alien-array-type-p type)
-     (let ((element-type (sb-alien::alien-array-type-element-type type)))
-       (classify-field-sysv-amd64 element-type)))
-    ;; Nested struct - recursively classify and inherit eightbyte classes
-    ((sb-alien::alien-record-type-p type)
-     (let ((nested (classify-struct type)))
-       (if (sb-alien::struct-classification-memory-p nested)
-           :memory
-           ;; Merge all slots from nested struct to get dominant class
-           ;; e.g., struct { double d; } should contribute :double, not :integer
-           (reduce #'merge-classes
-                   (sb-alien::struct-classification-register-slots nested)
-                   :initial-value :no-class))))
-    ;; System-area-pointer (must come after array/record checks)
     ((typep type 'sb-alien::alien-system-area-pointer-type) :integer)
     (t :memory)))
 
@@ -170,7 +155,10 @@
 #-win32
 (defun classify-struct (record-type)
   "Classify struct for x86-64 System V ABI return.
-   Returns STRUCT-CLASSIFICATION."
+   Returns STRUCT-CLASSIFICATION.
+
+   Walks fields recursively, descending into nested records and arrays
+   so each leaf scalar contributes to the eightbyte it lands in."
   (let* ((bits (sb-alien::alien-type-bits record-type))
          (byte-size (ceiling bits 8))
          (alignment (sb-alien::alien-type-alignment record-type)))
@@ -183,24 +171,35 @@
          :alignment alignment
          :memory-p t)))
 
-    ;; Classify each eightbyte
     (let* ((num-eightbytes (max 1 (ceiling byte-size 8)))
            (eightbytes (make-list num-eightbytes :initial-element :no-class)))
-      ;; Iterate through fields and classify
-      (dolist (field (sb-alien::alien-record-type-fields record-type))
-        (let* ((field-offset-bits (sb-alien::alien-record-field-offset field))
-               (field-type (sb-alien::alien-record-field-type field))
-               (field-bits (sb-alien::alien-type-bits field-type))
-               (field-offset-bytes (floor field-offset-bits 8))
-               (field-size-bytes (ceiling field-bits 8))
-               (field-class (classify-field-sysv-amd64 field-type)))
-          ;; Apply class to all eightbytes this field spans
-          (loop for byte-offset from field-offset-bytes below (+ field-offset-bytes field-size-bytes) by 8
-                for eightbyte-index = (floor byte-offset 8)
-                when (< eightbyte-index num-eightbytes)
-                do (setf (nth eightbyte-index eightbytes)
-                         (merge-classes (nth eightbyte-index eightbytes)
-                                        field-class)))))
+      (labels ((merge-leaf (offset-bytes size-bytes class)
+                 (loop for byte-offset from offset-bytes
+                       below (+ offset-bytes size-bytes)
+                       by 8
+                       for eb = (floor byte-offset 8)
+                       when (< eb num-eightbytes)
+                       do (setf (nth eb eightbytes)
+                                (merge-classes (nth eb eightbytes) class))))
+               (walk (type offset-bytes)
+                 (cond
+                   ((sb-alien::alien-record-type-p type)
+                    (dolist (field (sb-alien::alien-record-type-fields type))
+                      (walk (sb-alien::alien-record-field-type field)
+                            (+ offset-bytes
+                               (floor (sb-alien::alien-record-field-offset field) 8)))))
+                   ((sb-alien::alien-array-type-p type)
+                    (let* ((elt (sb-alien::alien-array-type-element-type type))
+                           (elt-bytes (ceiling (sb-alien::alien-type-bits elt) 8))
+                           (n (or (first (sb-alien::alien-array-type-dimensions type)) 0)))
+                      (dotimes (i n)
+                        (walk elt (+ offset-bytes (* i elt-bytes))))))
+                   ;; Leaf scalar
+                   (t
+                    (merge-leaf offset-bytes
+                                (ceiling (sb-alien::alien-type-bits type) 8)
+                                (classify-field-sysv-amd64 type))))))
+        (walk record-type 0))
 
       ;; Post-merge cleanup per ABI: if second eightbyte is MEMORY, first must be too
       (when (and (> num-eightbytes 1)
@@ -332,23 +331,6 @@ Floats are passed in integer registers."
     (ecase size
       (4 (inst movss target (ea offset sap)))
       (8 (inst movsd target (ea offset sap))))))
-
-;;; VOPs for storing struct result registers to memory
-;;; These VOPs store result register values back to memory for struct-by-value returns
-
-(define-vop (store-struct-int-result)
-  (:args (value :scs (unsigned-reg signed-reg))
-         (sap :scs (sap-reg)))
-  (:info offset)
-  (:generator 5
-    (inst mov :qword (ea offset sap) value)))
-
-(define-vop (store-struct-sse-result)
-  (:args (value :scs (double-reg single-reg))
-         (sap :scs (sap-reg)))
-  (:info offset)
-  (:generator 5
-    (inst movsd (ea offset sap) value)))
 
 ;;; VOP to copy a full or partial qword from struct SAP to the C
 ;;; argument stack Used for passing large structs (>16 bytes) by value

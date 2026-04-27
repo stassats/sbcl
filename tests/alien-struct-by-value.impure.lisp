@@ -760,3 +760,29 @@
                  1.5d0 2.5d0)))
     (assert (= (slot result 'd0) 1.5d0))
     (assert (= (slot result 'd1) 2.5d0))))
+
+;;; Test that an outer struct wrapping a nested {double, int} is
+;;; classified correctly and matches SysV ABI expectations.
+;;;
+;;; Without recursive flattening the nested struct collapses to
+;;; :INTEGER, both slots come out :INTEGER, and a double is misrouted
+;;; through a GPR.
+(define-alien-type nil (struct inner-di (d double) (i int)))
+(define-alien-type nil (struct nest-di (inner (struct inner-di))))
+(define-alien-routine nest-di-make (struct nest-di) (d double) (i int))
+(define-alien-routine nest-di-sum double (s (struct nest-di)))
+
+#+(and x86-64 (not win32))
+(with-test (:name :struct-by-value-nested-classifier)
+  (let* ((type (sb-alien::parse-alien-type '(struct nest-di) nil))
+         (cls  (sb-vm::classify-struct type)))
+    (assert (equal (sb-alien::struct-classification-register-slots cls)
+                   '(:double :integer)))
+    (assert (= (sb-alien::struct-classification-size cls) 16))
+    (assert (not (sb-alien::struct-classification-memory-p cls)))))
+
+(with-test (:name :struct-by-value-nested-double-int)
+  (let ((s (nest-di-make 3.5d0 7)))
+    (assert (= (slot (slot s 'inner) 'd) 3.5d0))
+    (assert (= (slot (slot s 'inner) 'i) 7))
+    (assert (= (nest-di-sum s) 10.5d0))))

@@ -414,3 +414,16 @@ long long call_with_small_union(small_union_callback cb, long long val) {
 union small_union call_returning_small_union(small_union_return_callback cb, long long val) {
   return cb(val);
 }
+
+/*
+ * Nested struct classification fixture for call-by-value: The inner
+ * struct of nest_di spans both eightbytes of the outer: the SysV
+ * classifier must walk it field-by-field rather than collapsing it to
+ * a single class.
+ */
+struct inner_di { double d; int i; };
+struct nest_di { struct inner_di inner; };
+struct nest_di nest_di_make(double d, int i) {
+  struct nest_di s; s.inner.d = d; s.inner.i = i; return s;
+}
+double nest_di_sum(struct nest_di s) { return s.inner.d + (double)s.inner.i; }
