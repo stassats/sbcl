@@ -427,3 +427,18 @@ struct nest_di nest_di_make(double d, int i) {
   struct nest_di s; s.inner.d = d; s.inner.i = i; return s;
 }
 double nest_di_sum(struct nest_di s) { return s.inner.d + (double)s.inner.i; }
+
+/*
+ * Large struct return + __int128 argument.  Exercise interaction of
+ * hidden sret pointer (injected by the struct-return IR1 transform)
+ * and int128 splitting (rewrites the arg list): these must agree on
+ * whether the buffer arg is present.
+ */
+struct three_u64 { unsigned long long a, b, c; };
+struct three_u64 three_u64_from_u128(__uint128_t x) {
+  struct three_u64 s;
+  s.a = (unsigned long long) x;
+  s.b = (unsigned long long) (x >> 64);
+  s.c = s.a ^ s.b;
+  return s;
+}

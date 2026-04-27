@@ -786,3 +786,22 @@
     (assert (= (slot (slot s 'inner) 'd) 3.5d0))
     (assert (= (slot (slot s 'inner) 'i) 7))
     (assert (= (nest-di-sum s) 10.5d0))))
+
+;;; Large struct return combined with an __int128 argument: the
+;;; struct-return IR1 transform injects a hidden sret-pointer arg
+;;; ahead of the original args; the int128-splitting transform
+;;; rewrites the arg list.
+#+x86-64
+(with-test (:name :struct-by-value-large-return-with-int128-arg)
+  (define-alien-routine three-u64-from-u128 (struct nil
+                                                    (a (unsigned 64))
+                                                    (b (unsigned 64))
+                                                    (c (unsigned 64)))
+    (x (unsigned 128)))
+  (let* ((low #x0123456789abcdef)
+         (high #xfedcba9876543210)
+         (x (logior low (ash high 64)))
+         (s (three-u64-from-u128 x)))
+    (assert (= (slot s 'a) low))
+    (assert (= (slot s 'b) high))
+    (assert (= (slot s 'c) (logxor low high)))))

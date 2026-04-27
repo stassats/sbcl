@@ -520,6 +520,12 @@ Floats are passed in integer registers."
             (and (alien-integer-type-p result-type)
                  (> (sb-alien::alien-integer-type-bits result-type) 64)))
         (collect ((new-args) (lambda-vars) (new-arg-types))
+          ;; When the OUTER struct-return path injected a hidden
+          ;; buffer SAP as the first arg, thread it through.
+          (let ((buf-var (and large-struct-return-p (gensym "BUF"))))
+            (when buf-var
+              (lambda-vars buf-var)
+              (new-args buf-var)))
           (dolist (type arg-types)
             (let ((arg (gensym)))
               (lambda-vars arg)
