@@ -1,5 +1,52 @@
 ;;;; -*- coding: utf-8; fill-column: 78 -*-
 
+changes relative to sbcl-2.6.2:
+  * minor incompatible change: when DEFSETF is called on a name that was
+    previously used as a (presumed) call to a function, it issues a single
+    STYLE-WARNING (like DEFMACRO).
+  * minor incompatible change: SB-EXT:PROCESS-KILL no longer supports the
+    :PTY-PROCESS-GROUP option.
+  * minor incompatible change: the :INITIAL-OFFSET argument for typed
+    DEFSTRUCT, if given, no longer accepts NIL.
+  * platform support:
+    ** more likely to support 32-bit linux's struct timeval with 64-bit time_t.
+    ** the runtime's main function is now defined as a weak symbol for
+       platform/compiler combinations that support it.
+    ** on Windows, individual empty arguments for RUN-PROGRAM are escaped.
+  * bug fix: address infinite loops in the compiler.  (lp#2144911, lp#2148056)
+  * bug fix: if a FTYPE has been proclaimed for a function, don't mix NULL
+    with explicitly-type keyword arguments.  (lp#2147050, reported by Vasily
+    Postnicov)
+  * bug fix: compiler error from treatment of unused results.  (lp#2147383)
+  * bug fix: compiler error from invalid dimension arguments to MAKE-ARRAY.
+    (lp#2147384)
+  * bug fix: compiler error arising from continuing to optimize deleted nodes.
+    (lp#2147385)
+  * bug fix: make sure linkage-table alien entries have base-string names.
+    (lp#2147646, thanks to Seokjun Lee)
+  * bug fix: make sure CHECK-TYPE's expansion does not include internal
+    non-externalizable objects.  (lp#2148777, reported by Willem Broekema)
+  * bug fix: alien calls involving passing structs by value are less likely to
+    read or write wrong areas of memory.  (thanks to Jesse Bouwman)
+  * bug fix: lowering EQUALP to EQUAL handles constant dotted lists correctly.
+  * bug fix: a number of standard functions perform more explicit type checks
+    on their arguments.
+  * bug fix: only return the primary value from (LIST* <values>)
+  * bug fix: correct treatment of escaped closing brackets in pathname
+    patterns.
+  * bug fix: escape dots in pathnames more correctly.
+  * bug fix: the hash set for function names will incur collisions less
+    frequently.  (reported by Andrew Wolven)
+  * bug fix: the system is now capable of expressing select() on the whole
+    range of possible file descriptors.
+  * optimization: compiler optimizations for REPLACE now apply given :START1
+    and/or :END1 keyword arguments
+  * optimization: CONCATENATE is faster for concatenating list arguments to a
+    VECTOR.
+  * optimization: ROUND for integers is more compact.
+  * optimization: on 64-bit x86, implement TRUNCATE using the Lemire, Kaser,
+    Kurz transform.
+
 changes in sbcl-2.6.3 relative to sbcl-2.6.2:
   * minor incompatible change: (MAKE-ARRAY X :ELEMENT-TYPE 'UNDEFINED) now
     signals an error, consistent with (UPGRADED-ARRAY-ELEMENT-TYPE
