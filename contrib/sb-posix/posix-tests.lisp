@@ -17,7 +17,7 @@
             (logior
              sb-posix::s-irgrp sb-posix::s-iwgrp sb-posix::s-ixgrp
              sb-posix::s-iroth sb-posix::s-iwoth sb-posix::s-ixoth))))
-
+#-win32
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (sb-alien:define-alien-routine openpty sb-alien:int
     (amaster sb-alien:int :out)
@@ -718,6 +718,7 @@
         (= new (sb-posix:cfgetospeed termios))))
   t)
 
+#-win32
 (deftest tcsetattr.smoke.pty
     (let (master-fd slave-fd)
       (unwind-protect
