@@ -339,47 +339,46 @@ deeply nested structures."
 
 (defmacro define-c-struct (name size &rest elements)
   (multiple-value-bind (struct-elements accessors)
-      (let* ((root (make-instance 'struct :name name :children nil :offset 0)))
+      (let ((root (make-instance 'struct :name name :children nil :offset 0)))
         (loop for e in (sort (copy-list elements) #'< :key #'fourth)
-              do (insert-element root (apply 'mk-val e))
-              finally (return root))
+              do (insert-element root (apply 'mk-val e)))
         (setf (children root)
               (nconc (children root)
-                     (list
-                      (mk-padding (max 0 (- size
-                                            (size root)))
-                                  (size root)))))
+                     (let ((pad (- size (size root))))
+                       (when (> pad 0)
+                         (list
+                          (mk-padding pad (size root)))))))
         (generate-struct-definition name root nil))
     `(progn
-           (sb-alien:define-alien-type ,@(first struct-elements))
-           ,@accessors
-           ;; This macro's lambda vars are uninterned so that they don't refer to
-           ;; the SB-GROVEL package, but they don't need to be GENSYMed.
-           (defmacro ,(sb-int:symbolicate "WITH-" name)
-               (alien (&rest #1=#:initializers) &body #2=#:body)
-             `(sb-alien:with-alien ((,alien ,',name))
-                (alien-funcall (extern-alien "memset"
-                                (function void system-area-pointer int sb-kernel::os-vm-size-t))
-                               (sb-alien:alien-sap ,alien) 0 ,,size)
-                (let ((,alien (cast ,alien (* ,',name))))
-                  (setf ,@(mapcan
-                           ;; The symbol CONS is not in the SB-GROVEL package, making it more
-                           ;; clear that this expander works fine in the absence of sb-grovel.
-                           (lambda (cons)
-                             `((,(sb-int:package-symbolicate ,(package-name (symbol-package name))
-                                                             ,(concatenate 'string (string name) "-")
-                                                             (car cons)) ,alien)
-                               ,(cadr cons)))
-                           #1#))
-                  ,@#2#)))
-           (defconstant ,(sb-int:symbolicate "SIZE-OF-" name) ,size) ; why does this exist?
-           (defun ,(sb-int:symbolicate "ALLOCATE-" name) () ; and this?
-             (let ((sb-kernel:instance (sb-alien:make-alien ,name)))
-               ;; The allocator returns 0-filled aliens. It's unknowable whether anyone cares.
-               (alien-funcall (extern-alien "memset"
-                               (function void system-area-pointer int sb-kernel::os-vm-size-t))
-                              (sb-alien:alien-sap sb-kernel:instance) 0 ,size)
-               sb-kernel:instance)))))
+       (sb-alien:define-alien-type ,@(first struct-elements))
+       ,@accessors
+       ;; This macro's lambda vars are uninterned so that they don't refer to
+       ;; the SB-GROVEL package, but they don't need to be GENSYMed.
+       (defmacro ,(sb-int:symbolicate "WITH-" name)
+           (alien (&rest #1=#:initializers) &body #2=#:body)
+         `(sb-alien:with-alien ((,alien ,',name))
+            (alien-funcall (extern-alien "memset"
+                                         (function void system-area-pointer int sb-kernel::os-vm-size-t))
+                           (sb-alien:alien-sap ,alien) 0 ,,size)
+            (let ((,alien (cast ,alien (* ,',name))))
+              (setf ,@(mapcan
+                       ;; The symbol CONS is not in the SB-GROVEL package, making it more
+                       ;; clear that this expander works fine in the absence of sb-grovel.
+                       (lambda (cons)
+                         `((,(sb-int:package-symbolicate ,(package-name (symbol-package name))
+                                                         ,(concatenate 'string (string name) "-")
+                                                         (car cons)) ,alien)
+                           ,(cadr cons)))
+                       #1#))
+              ,@#2#)))
+       (defconstant ,(sb-int:symbolicate "SIZE-OF-" name) ,size) ; why does this exist?
+       (defun ,(sb-int:symbolicate "ALLOCATE-" name) () ; and this?
+         (let ((sb-kernel:instance (sb-alien:make-alien ,name)))
+           ;; The allocator returns 0-filled aliens. It's unknowable whether anyone cares.
+           (alien-funcall (extern-alien "memset"
+                                        (function void system-area-pointer int sb-kernel::os-vm-size-t))
+                          (sb-alien:alien-sap sb-kernel:instance) 0 ,size)
+           sb-kernel:instance)))))
 
 ;; FIXME: Nothing in SBCL uses this, but kept it around in case there
 ;; are third-party sb-grovel clients.  It should go away eventually,
