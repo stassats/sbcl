@@ -792,7 +792,8 @@
 ;;; ahead of the original args; the int128-splitting transform
 ;;; rewrites the arg list.
 #+x86-64
-(with-test (:name :struct-by-value-large-return-with-int128-arg)
+(with-test (:name :struct-by-value-large-return-with-int128-arg
+            :broken-on :win32) ;; __int128 not implemented
   (define-alien-routine three-u64-from-u128 (struct nil
                                                     (a (unsigned 64))
                                                     (b (unsigned 64))
