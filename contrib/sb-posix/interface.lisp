@@ -813,16 +813,20 @@ not supported."
 
 #-win32
 (define-protocol-class termios alien-termios ()
-  ((iflag :initarg :iflag :accessor sb-posix:termios-iflag
+  ((iflag :initarg :iflag :accessor termios-iflag
           :documentation "Input modes.")
-   (oflag :initarg :oflag :accessor sb-posix:termios-oflag
+   (oflag :initarg :oflag :accessor termios-oflag
           :documentation "Output modes.")
-   (cflag :initarg :cflag :accessor sb-posix:termios-cflag
+   (cflag :initarg :cflag :accessor termios-cflag
           :documentation "Control modes.")
-   (lflag :initarg :lflag :accessor sb-posix:termios-lflag
+   (lflag :initarg :lflag :accessor termios-lflag
           :documentation "Local modes.")
-   (cc :initarg :cc :accessor sb-posix:termios-cc :array-length nccs
-       :documentation "Control characters."))
+   (cc :initarg :cc :accessor termios-cc :array-length nccs
+       :documentation "Control characters.")
+   (ispeed :initarg :ispeed :accessor termios-ispeed
+           :documentation "Input speed.")
+   (ospeed :initarg :ospeed :accessor termios-ospeed
+           :documentation "Output speed."))
   (:documentation
    "Instances of this class represent I/O characteristics of the terminal."))
 

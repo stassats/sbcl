@@ -18,6 +18,14 @@
              sb-posix::s-irgrp sb-posix::s-iwgrp sb-posix::s-ixgrp
              sb-posix::s-iroth sb-posix::s-iwoth sb-posix::s-ixoth))))
 
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (sb-alien:define-alien-routine openpty sb-alien:int
+    (amaster sb-alien:int :out)
+    (aslave sb-alien:int :out)
+    (name (* sb-alien:char))
+    (termp (* t))
+    (winp (* t))))
+
 (defmacro define-eacces-test (name form &rest values)
   #+win32 (declare (ignore name form values))
   #-win32
@@ -710,6 +718,25 @@
         (= new (sb-posix:cfgetospeed termios))))
   t)
 
+(deftest tcsetattr.smoke.pty
+    (let (master-fd slave-fd)
+      (unwind-protect
+           (progn
+             (multiple-value-bind (rv master slave)
+                 (openpty nil nil nil)
+               (assert (zerop rv))
+               (setf master-fd master
+                     slave-fd slave))
+             (let ((termios (sb-posix:tcgetattr slave-fd)))
+               ;; The pre-fix bug on openBSD was that even round-tripping an
+               ;; unmodified termios value could smash memory or crash.
+               (sb-posix:tcsetattr slave-fd sb-posix:tcsanow termios))
+             t)
+        (when slave-fd
+          (sb-posix:close slave-fd))
+        (when master-fd
+          (sb-posix:close master-fd))))
+  t)
 
 #-win32
 (deftest time.1

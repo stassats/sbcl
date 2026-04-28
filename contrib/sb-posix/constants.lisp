@@ -433,7 +433,9 @@
               (tcflag-t oflag "tcflag_t" "c_oflag")
               (tcflag-t cflag "tcflag_t" "c_cflag")
               (tcflag-t lflag "tcflag_t" "c_lflag")
-              ((array cc-t) cc "cc_t" "c_cc")))
+              ((array cc-t) cc "cc_t" "c_cc")
+              (speed-t ispeed "speed_t" "c_ispeed")
+              (speed-t ospeed "speed_t" "c_ospeed")))
 
  ;; utime(), utimes()
  #-win32
