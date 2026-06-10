@@ -258,6 +258,8 @@
 (defvar *dynamic*)
 (defvar *permgen*)
 (defvar *static*)
+#+(and darwin-jit relocatable-static-space)
+(defvar *static-code*)
 (defvar *read-only*)
 (defvar core-file-name)
 
@@ -317,7 +319,8 @@
 
 (cl:defmethod print-object ((gspace gspace) stream)
   (print-unreadable-object (gspace stream :type t)
-    (format stream "@#x~X ~S" (gspace-byte-address gspace) (gspace-name gspace))))
+    (format stream "@#x~X ~S (~a)" (gspace-byte-address gspace) (gspace-name gspace)
+            (gspace-identifier gspace))))
 
 (defun make-gspace (name identifier byte-address &rest rest)
   ;; Genesis should be agnostic of space alignment except in so far as it must
@@ -4223,7 +4226,8 @@ INDEX   LINK-ADDR       FNAME    FUNCTION  NAME
                       #+permgen ,*permgen*
                       #+(and immobile-space x86-64) ,*immobile-fixedobj*
                       #+immobile-space ,*immobile-text*
-                      ,*dynamic* ,*read-only*)))
+                      ,*dynamic* ,*read-only*
+                      #+(and darwin-jit relocatable-static-space) ,*static-code*)))
         ;; Write the Directory entry header.
         (write-words core-file directory-core-entry-type-code)
         ;; length = (5 words/space) * N spaces + 2 for header.
@@ -4318,6 +4322,12 @@ INDEX   LINK-ADDR       FNAME    FUNCTION  NAME
            (*static*    (make-gspace :static
                                      static-core-space-id
                                      sb-vm:static-space-start))
+           #+(and darwin-jit relocatable-static-space)
+           (*static-code*  (make-gspace :static-code
+                                        static-code-core-space-id
+                                        sb-vm:static-code-space-start
+                                        :free-word-index (/ sb-vm:static-code-space-size
+                                                            sb-vm:n-word-bytes)))
            #+immobile-space
            (*immobile-fixedobj*
             (make-gspace :immobile-fixedobj immobile-fixedobj-core-space-id

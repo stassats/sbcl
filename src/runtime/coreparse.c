@@ -297,6 +297,7 @@ set_adjustment(struct cons* pair, int id, uword_t actual_addr)
 #endif
 #endif
     }
+    printf("%d desired_addr %p actual: %p\n", id, desired_addr, actual_addr);
     int j = adj->n_ranges;
     adj->range[j].start = (lispobj)desired_addr;
     adj->range[j].end   = (lispobj)desired_addr + len;
@@ -351,7 +352,7 @@ static void
 adjust_code_refs(struct heap_adjust __attribute__((unused)) *adj,
                  struct code __attribute__((unused)) *code)
 {
-#if defined LISP_FEATURE_PERMGEN || defined LISP_FEATURE_IMMOBILE_SPACE
+#if defined LISP_FEATURE_PERMGEN || defined LISP_FEATURE_RELOCATABLE_STATIC_SPACE
     // Dynamic space always gets relocated before immobile space does,
     // and dynamic space code does not use fixups (except on 32-bit x86).
     // So if we're here, it must be to relocate an immobile object.
@@ -832,6 +833,7 @@ process_directory(int count, struct ndir_entry *entry,
 #endif
             addr = (uword_t)coreparse_alloc_space(id, sub_2gb_flag ? MOVABLE_LOW : MOVABLE,
                                                   (os_vm_address_t)addr, request);
+            printf("%d %p\n", id, addr);
             switch (id) {
             case PERMGEN_CORE_SPACE_ID:
                 PERMGEN_SPACE_START = addr;
@@ -841,6 +843,11 @@ process_directory(int count, struct ndir_entry *entry,
                 STATIC_SPACE_START = addr;
 #endif
                 break;
+#if defined LISP_FEATURE_DARWIN_JIT && defined LISP_FEATURE_RELOCATABLE_STATIC_SPACE
+            case STATIC_CODE_CORE_SPACE_ID:
+                STATIC_CODE_SPACE_START = addr;
+                break;
+#endif
             case READ_ONLY_CORE_SPACE_ID:
                 READ_ONLY_SPACE_START = addr;
                 READ_ONLY_SPACE_END = addr + len;
@@ -890,14 +897,17 @@ process_directory(int count, struct ndir_entry *entry,
                 load_core_bytes(fd, offset + file_offset, (os_vm_address_t)addr, len, id == READ_ONLY_CORE_SPACE_ID);
             }
 
-#ifdef LISP_FEATURE_DARWIN_JIT
-            if (id == READ_ONLY_CORE_SPACE_ID)
-                os_protect((os_vm_address_t)addr, len, OS_VM_PROT_READ | OS_VM_PROT_EXECUTE);
-#endif
 #ifdef MADV_MERGEABLE
             if ((merge_core_pages == 1)
                 || ((merge_core_pages == -1) && compressed)) {
                 madvise((void *)addr, len, MADV_MERGEABLE);
+            }
+#endif
+        } else {
+#ifdef LISP_FEATURE_RELOCATABLE_STATIC_SPACE
+            if (id == STATIC_CODE_CORE_SPACE_ID) {
+                printf("%d\n", spaces[id].desired_size);
+                    //addr = (uword_t)coreparse_alloc_space(id, MOVABLE, (os_vm_address_t)addr, request);
             }
 #endif
         }
@@ -950,6 +960,10 @@ process_directory(int count, struct ndir_entry *entry,
     set_adjustment(&spaceadj, DYNAMIC_CORE_SPACE_ID, DYNAMIC_SPACE_START);
 #ifdef LISP_FEATURE_RELOCATABLE_STATIC_SPACE
     set_adjustment(&spaceadj, STATIC_CORE_SPACE_ID, STATIC_SPACE_START);
+/* #ifdef LISP_FEATURE_DARWIN_JIT */
+/*     set_adjustment(&spaceadj, STATIC_CODE_CORE_SPACE_ID, STATIC_CODE_SPACE_START); */
+/* #endif */
+
 #endif
 #ifdef LISP_FEATURE_PERMGEN
     set_adjustment(&spaceadj, PERMGEN_CORE_SPACE_ID, PERMGEN_SPACE_START);
@@ -1290,6 +1304,7 @@ void gc_load_corefile_ptes(core_entry_elt_t n_ptes,
     tune_asm_routines_for_microarch();
 #endif
 #ifdef LISP_FEATURE_DARWIN_JIT
+    os_protect((os_vm_address_t)READ_ONLY_SPACE_START, READ_ONLY_SPACE_SIZE, OS_VM_PROT_READ | OS_VM_PROT_EXECUTE);
     if (!static_code_space_free_pointer)
         static_code_space_free_pointer = (lispobj *)STATIC_CODE_SPACE_START;
 #endif

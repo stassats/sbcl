@@ -420,8 +420,8 @@ os_vm_address_t coreparse_alloc_space(int space_id, int attr,
                                       os_vm_address_t addr, os_vm_size_t size)
 {
     __attribute__((unused)) long extra_request = 0;
-#ifdef LISP_FEATURE_IMMOBILE_SPACE
-    if (space_id == IMMOBILE_TEXT_CORE_SPACE_ID) {
+#ifdef LISP_FEATURE_RELOCATABLE_STATIC_SPACE
+    if (space_id == STATIC_CORE_SPACE_ID) {
         extra_request = ALIEN_LINKAGE_SPACE_SIZE;
         size += extra_request;
         addr -= extra_request; // try to put text space start where expected
@@ -435,7 +435,10 @@ os_vm_address_t coreparse_alloc_space(int space_id, int attr,
       size += BACKEND_PAGE_BYTES;
     }
 #endif
-
+#ifdef LISP_FEATURE_DARWIN_JIT
+    if (space_id == STATIC_CODE_CORE_SPACE_ID)
+        size = STATIC_CODE_SPACE_SIZE;
+#endif
     if (size == 0) return addr;
 
     addr = os_alloc_gc_space(space_id, attr, addr, size);
@@ -449,8 +452,8 @@ os_vm_address_t coreparse_alloc_space(int space_id, int attr,
     }
 #endif
 
-#ifdef LISP_FEATURE_IMMOBILE_SPACE
-    if (space_id == IMMOBILE_TEXT_CORE_SPACE_ID) {
+#ifdef LISP_FEATURE_RELOCATABLE_STATIC_SPACE
+    if (space_id == STATIC_CORE_SPACE_ID) {
       ALIEN_LINKAGE_SPACE_START = (uword_t)addr;
       // TEXT_SPACE actually starts after ALIEN_LINKAGE_SPACE
       TEXT_SPACE_START = (uword_t)addr + extra_request;

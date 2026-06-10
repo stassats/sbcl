@@ -71,7 +71,7 @@
 
 (gc-space-setup #+(or linux openbsd netbsd freebsd win32)
                      #x2F0000000
-                     #+darwin #x7000000000
+                     #+darwin #x70000000
                      #-darwin :read-only-space-size #-darwin 0
                      :fixedobj-space-start 0
                      :fixedobj-space-size 0
@@ -81,12 +81,15 @@
                      #-darwin #x1000000000
                      #+darwin #x8003000000)
 
+#+(and darwin-jit relocatable-static-space)
+(define-symbol-macro static-code-space-end (+ static-code-space-start static-code-space-size))
+
 (defconstant alien-linkage-table-growth-direction :up)
 (defconstant alien-linkage-table-entry-size 16)
   ;; text space:
   ;;   | ALIEN LINKAGE | CODE OBJECTS ...
   ;;   |<------------->|
-#+(and sb-xc-host immobile-space)
+#+(and sb-xc-host relocatable-static-space)
 (defparameter alien-linkage-space-start (- text-space-start alien-linkage-space-size))
 
 ;;;; other miscellaneous constants

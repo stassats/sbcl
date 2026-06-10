@@ -50,7 +50,7 @@ default_lossage_handler(void)
     }
     exit(1);
 }
-static void (*lossage_handler)(void) = default_lossage_handler;
+static void (*lossage_handler)(void) = ldb_monitor /* default_lossage_handler */;
 
 #ifdef LISP_FEATURE_WIN32
 static void

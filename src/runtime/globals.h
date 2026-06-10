@@ -53,6 +53,9 @@ extern os_vm_size_t thread_control_stack_size;
 
 #ifdef LISP_FEATURE_RELOCATABLE_STATIC_SPACE
 extern uword_t STATIC_SPACE_START;
+#ifdef LISP_FEATURE_DARWIN_JIT
+extern uword_t STATIC_CODE_SPACE_START;
+#endif
 #endif
 
 extern uword_t READ_ONLY_SPACE_START, READ_ONLY_SPACE_END;
@@ -110,7 +113,7 @@ extern lispobj *static_code_space_free_pointer;
 #endif
 
 extern lispobj *text_space_highwatermark;
-#if defined LISP_FEATURE_X86_64 || defined LISP_FEATURE_IMMOBILE_SPACE
+#if defined LISP_FEATURE_RELOCATABLE_STATIC_SPACE
 extern lispobj ALIEN_LINKAGE_SPACE_START;
 #endif
 #ifdef LISP_FEATURE_IMMOBILE_SPACE

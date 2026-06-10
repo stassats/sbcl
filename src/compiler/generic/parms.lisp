@@ -34,7 +34,8 @@
                                (t
                                 (error "Invalid --dynamic-space-size=~A" line)))))
               (* number mult))))))
-  #-sb-xc-host (bug "read-dynamic-space-size"))
+  #-sb-xc-host (progn (warn "read-dynamic-space-size")
+                      0))
 
 ;; By happenstance this is the same as small-space-size.
 (defconstant alien-linkage-space-size #x100000)
@@ -82,13 +83,14 @@
         ((spaces `((read-only ,ro-space-size)
                    ;; #+immobile-space implies a relocatable alien linkage space. And x86-64 always
                    ;; has relocatable linkage tables
-                   #-(or x86-64 immobile-space) (alien-linkage ,alien-linkage-space-size)
+                   #-relocatable-static-space (alien-linkage ,alien-linkage-space-size)
                    ;; x86-64 uses a relocatable trap page just below the card mark
                    ;; table (wired to a register). Other platforms allocate a separate page.
                    #+(and sb-safepoint (not x86-64))
                    (safepoint ,(symbol-value '+backend-page-bytes+))
                    (static ,small-space-size)
-                   #+darwin-jit (static-code ,small-space-size)))
+                   #+darwin-jit
+                   (static-code ,small-space-size)))
          (ptr small-spaces-start)
          (small-space-forms
           (mapcan
@@ -96,7 +98,7 @@
              (declare (notinline member)) ; no xperfecthash
              (destructuring-bind (space size) name-and-size
                (let* ((relocatable
-                       (member space `(#+relocatable-static-space ,@'(safepoint static)
+                       (member space `(#+relocatable-static-space ,@'(safepoint static static-code)
                                        read-only)))
                       (start (prog1 ptr (incf ptr size))))
                  (list (defconstantish relocatable (symbolicate space "-SPACE-START") start)

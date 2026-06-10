@@ -58,7 +58,7 @@ lispobj *static_space_trailer_start;
 lispobj *static_code_space_free_pointer;
 #endif
 
-#if defined LISP_FEATURE_X86_64 || defined LISP_FEATURE_IMMOBILE_SPACE
+#ifdef LISP_FEATURE_RELOCATABLE_STATIC_SPACE
 lispobj ALIEN_LINKAGE_SPACE_START;
 #endif
 #ifdef LISP_FEATURE_IMMOBILE_SPACE

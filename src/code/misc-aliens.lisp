@@ -56,13 +56,17 @@
 
 (define-alien-variable ("TEXT_SPACE_START" sb-vm:text-space-start) sb-kernel::os-vm-size-t)
 
-#+(or x86-64 immobile-space)
+#+relocatable-static-space
 (define-symbol-macro sb-vm:alien-linkage-space-start
     (extern-alien "ALIEN_LINKAGE_SPACE_START" unsigned))
 
 #+darwin-jit
-(define-alien-variable ("static_code_space_free_pointer" sb-vm:*static-code-space-free-pointer*)
-  system-area-pointer)
+(progn
+  (define-alien-variable ("static_code_space_free_pointer" sb-vm:*static-code-space-free-pointer*)
+    system-area-pointer)
+  #+relocatable-static-space
+  (define-alien-variable ("STATIC_CODE_SPACE_START" sb-vm:static-code-space-start)
+    sb-kernel::os-vm-size-t))
 
 (declaim (inline memmove))
 (define-alien-routine ("memmove" memmove) void ; BUG: technically returns void*

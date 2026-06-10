@@ -32,6 +32,9 @@ uword_t DYNAMIC_SPACE_START;
 uword_t READ_ONLY_SPACE_START, READ_ONLY_SPACE_END;
 #ifdef LISP_FEATURE_RELOCATABLE_STATIC_SPACE
 uword_t STATIC_SPACE_START;
+#ifdef LISP_FEATURE_DARWIN_JIT
+uword_t STATIC_CODE_SPACE_START = 0;
+#endif
 #endif
 
 uword_t asm_routines_start, asm_routines_end;
@@ -80,12 +83,13 @@ bool allocate_hardwired_spaces(bool hard_failp)
       // and linkage spaces (alien + lisp) are either placed at the start of
       // text space if it exists, or below static space otherwise.
         { READ_ONLY_SPACE_START, READ_ONLY_SPACE_SIZE, READ_ONLY_CORE_SPACE_ID },
-        { ALIEN_LINKAGE_SPACE_START, ALIEN_LINKAGE_SPACE_SIZE, ALIEN_LINKAGE_TABLE_CORE_SPACE_ID },
+
 #endif
 #ifndef LISP_FEATURE_RELOCATABLE_STATIC_SPACE
         { STATIC_SPACE_START, STATIC_SPACE_SIZE, STATIC_CORE_SPACE_ID },
+        { ALIEN_LINKAGE_SPACE_START, ALIEN_LINKAGE_SPACE_SIZE, ALIEN_LINKAGE_TABLE_CORE_SPACE_ID },
 #endif
-#ifdef LISP_FEATURE_DARWIN_JIT
+#if defined LISP_FEATURE_DARWIN_JIT && !defined LISP_FEATURE_RELOCATABLE_STATIC_SPACE
         { STATIC_CODE_SPACE_START, STATIC_CODE_SPACE_SIZE, STATIC_CODE_CORE_SPACE_ID },
 #endif
     };
