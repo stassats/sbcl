@@ -1386,3 +1386,83 @@
       (setf (buffer-head ibuf) head)
       (truly-the index (values (truncate string-offset 4))))))
 
+
+(declaim (inline word-has-zero-bytes))
+(defun word-has-zero-bytes (word)
+  (declare (word word)
+           (optimize speed))
+  (let* ((ones (ldb (byte sb-vm:n-word-bits 0) #x0101010101010101))
+         (high-bits (* ones #x80)))
+    (logtest (logandc2 (- word ones) word)
+             high-bits)))
+
+(declaim (inline word-has-zero-or-negative-bytes))
+(defun word-has-zero-or-negative-bytes (word)
+  (declare (word word)
+           (optimize speed))
+  (let* ((ones (ldb (byte sb-vm:n-word-bits 0) #x0101010101010101))
+         (high-bits (* ones #x80)))
+    (logtest (logior (logandc2 (- word ones) word) word)
+             high-bits)))
+
+(declaim (inline word-aligned-sap-p))
+(defun word-aligned-sap-p (sap)
+  (declare (system-area-pointer sap)
+           (optimize speed))
+  (zerop (rem (sap-int sap) sb-vm:n-word-bytes)))
+
+;#-arm64
+(defun sb-vm::simd-utf8-strlen (sap)
+  (declare (type system-area-pointer sap)
+           (optimize speed (safety 0)))
+  (macrolet ((return-if-not-cont (x)
+               `(let ((x ,x))
+                  (unless (<= #x80 x #xBF)
+                    (return))
+                  x)))
+    (let ((index 0))
+      (declare (fixnum index))
+      (when (word-aligned-sap-p sap)
+        (loop until (word-has-zero-or-negative-bytes (sap-ref-word sap index))
+              do (incf index sb-vm:n-word-bytes)))
+      (let ((codepoints index))
+        (declare (fixnum codepoints))
+        (loop
+         (let ((b0 (sap-ref-8 sap index)))
+           (cond
+             ;; ASCII
+             ((< b0 #x80)
+              (when (zerop b0)
+                (return codepoints))
+              (incf index 1))
+             ;; 2 bytes
+             ((<= #xC2 b0 #xDF)
+              (return-if-not-cont (sap-ref-8 sap (+ index 1)))
+              (incf index 2))
+
+             ;; 3 bytes
+             ((<= #xE0 b0 #xEF)
+              (let ((b1 (return-if-not-cont (sap-ref-8 sap (+ index 1))))
+                    (b2 (return-if-not-cont (sap-ref-8 sap (+ index 2)))))
+                (unless (if (= b0 #xE0)
+                            (<= #xA0 b1 #xBF) ; Overlong
+                            (if (= b0 #xED)
+                                (<= #x80 b1 #x9F) ; Surrogate halves
+                                b2))
+                  (return nil)))
+              (incf index 3))
+             ;; 4 bytes
+             ((<= #xF0 b0 #xF4)
+              (let ((b1 (return-if-not-cont (sap-ref-8 sap (+ index 1))))
+                    (b2 (return-if-not-cont (sap-ref-8 sap (+ index 2))))
+                    (b3 (return-if-not-cont (sap-ref-8 sap (+ index 3)))))
+                (declare (ignore b2 b3))
+                (unless (if (= b0 #xF0)
+                            (<= #x90 b1 #xBF) ; Overlong
+                            (if (= b0 #xF4)
+                                (<= #x80 b1 #x8F) ; Too Large
+                                b1))
+                  (return nil)))
+              (incf index 4))
+             (t (return nil))))
+         (incf codepoints))))))
