@@ -1411,7 +1411,7 @@
            (optimize speed))
   (zerop (rem (sap-int sap) sb-vm:n-word-bytes)))
 
-;#-arm64
+#-arm64
 (defun sb-vm::simd-utf8-strlen (sap)
   (declare (type system-area-pointer sap)
            (optimize speed (safety 0)))
@@ -1422,6 +1422,7 @@
                   x)))
     (let ((index 0))
       (declare (fixnum index))
+      ;; SWAR for ASCII
       (when (word-aligned-sap-p sap)
         (loop until (word-has-zero-or-negative-bytes (sap-ref-word sap index))
               do (incf index sb-vm:n-word-bytes)))

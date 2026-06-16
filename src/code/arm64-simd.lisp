@@ -1292,47 +1292,55 @@
 
       ((res descriptor-reg t :from :load))
     (flet ((validate ()
-             ;; The Keiser, Lemire algorithm
-             (inst ext tmp1 prev current 15 :16b)
-             (inst ushr tmp2 tmp1 4 :16b)
-             (inst and tmp3 tmp1 nibble-mask :16b)
-             (inst ushr tmp4 current 4 :16b)
+             (assemble ()
+               ;; Skip an all-ASCII block
+               (inst orr tmp1 current prev :16b)
+               (inst umaxv tmp1 tmp1 :16b)
+               (inst fmov tmp (reg-in-sc tmp1 'single-reg))
+               (inst tbz tmp 7 VALIDATED)
 
-             (inst tbl tmp2 (list tbl1) tmp2 :16b)
-             (inst tbl tmp3 (list tbl2) tmp3 :16b)
-             (inst tbl tmp4 (list tbl3) tmp4 :16b)
+               ;; The Keiser, Lemire algorithm
+               (inst ext tmp1 prev current 15 :16b)
+               (inst ushr tmp2 tmp1 4 :16b)
+               (inst and tmp3 tmp1 nibble-mask :16b)
+               (inst ushr tmp4 current 4 :16b)
 
-             (inst and tmp2 tmp2 tmp3 :16b)
-             (inst and tmp2 tmp2 tmp4 :16b)
-             (inst orr errors errors tmp2 :16b)
+               (inst tbl tmp2 (list tbl1) tmp2 :16b)
+               (inst tbl tmp3 (list tbl2) tmp3 :16b)
+               (inst tbl tmp4 (list tbl3) tmp4 :16b)
 
-             (inst ushr tmp1 current 4 :16b)
-             (inst tbl tmp1 (list tbl4) tmp1 :16b)
+               (inst and tmp2 tmp2 tmp3 :16b)
+               (inst and tmp2 tmp2 tmp4 :16b)
+               (inst orr errors errors tmp2 :16b)
 
-             (inst ext tmp2 prev-len tmp1 15 :16b)
-             (inst ext tmp3 prev-len tmp1 14 :16b)
-             (inst ext tmp4 prev-len tmp1 13 :16b)
+               (inst ushr tmp1 current 4 :16b)
+               (inst tbl tmp1 (list tbl4) tmp1 :16b)
 
-             (inst ushr tmp2 tmp2 1 :16b)
-             (inst ushr tmp3 tmp3 2 :16b)
-             (inst ushr tmp4 tmp4 3 :16b)
+               (inst ext tmp2 prev-len tmp1 15 :16b)
+               (inst ext tmp3 prev-len tmp1 14 :16b)
+               (inst ext tmp4 prev-len tmp1 13 :16b)
 
-             (inst orr tmp2 tmp2 tmp3 :16b)
-             (inst orr tmp2 tmp2 tmp4 :16b)
+               (inst ushr tmp2 tmp2 1 :16b)
+               (inst ushr tmp3 tmp3 2 :16b)
+               (inst ushr tmp4 tmp4 3 :16b)
 
-             (inst ushr tmp3 current 6 :16b)
-             (inst cmeq tmp3 tmp3 twos :16b)
+               (inst orr tmp2 tmp2 tmp3 :16b)
+               (inst orr tmp2 tmp2 tmp4 :16b)
 
-             (inst cmtst tmp4 tmp2 tmp2 :16b)
+               (inst ushr tmp3 current 6 :16b)
+               (inst cmeq tmp3 tmp3 twos :16b)
 
-             (inst eor tmp4 tmp3 tmp4 :16b)
-             (inst orr errors errors tmp4 :16b)
+               (inst cmtst tmp4 tmp2 tmp2 :16b)
 
-             ;; Subtract continuations
-             (inst ushr tmp4 tmp3 7 :16b)
-             (inst addv tmp4 tmp4 :16b)
-             (inst fmov tmp (reg-in-sc tmp4 'single-reg))
-             (inst add total-conts total-conts tmp)))
+               (inst eor tmp4 tmp3 tmp4 :16b)
+               (inst orr errors errors tmp4 :16b)
+
+               ;; Subtract continuations
+               (inst ushr tmp4 tmp3 7 :16b)
+               (inst addv tmp4 tmp4 :16b)
+               (inst fmov tmp (reg-in-sc tmp4 'single-reg))
+               (inst add total-conts total-conts tmp)
+               VALIDATED)))
       (assemble ()
         (inst mov res null-tn)
         (inst movi nibble-mask #x0f :16b)
