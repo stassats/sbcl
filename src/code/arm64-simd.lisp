@@ -1342,33 +1342,55 @@
                (inst add total-conts total-conts tmp)
                VALIDATED)))
       (assemble ()
+        ;; Align the start and then mask off the extra bits
+        (inst and ptr bytes -16)
+        (inst sub total-bytes bytes ptr)
+
+        (inst ldr current (@ ptr))
+
+        (load-inline-constant indexes :oword #x0F0E0D0C0B0A09080706050403020100)
+        ;; Replace the aligned bits with ones, avoiding null termination
+        (inst dup tmp1 total-bytes :16b)
+        (inst cmhi tmp1 tmp1 indexes :16b)
+        (inst bic current current tmp1 :16b)
+        (inst sub current current tmp1 :16b)
+
+        ASCII
+        (inst sminv tmp1 current :16b)
+        (inst fmov tmp (reg-in-sc tmp1 'single-reg))
+        (inst tbnz tmp 7 NON-ASCII)
+        (inst cbz tmp ASCII-TAIL)
+
+        (inst ldr current (@ ptr 16 :pre-index))
+        (inst b ASCII)
+
+        ASCII-TAIL
+        ;; Find the first zero
+        (inst cmtst tmp1 current current :16b)
+        (inst orr tmp1 tmp1 indexes :16b)
+        (inst uminv tmp1 tmp1 :16b)
+        (inst fmov tmp (reg-in-sc tmp1 'single-reg))
+
+        (inst add ptr ptr tmp)
+
+        (inst sub total-bytes ptr bytes)
+        (inst b RETURN)
+
+        NON-ASCII
         (inst mov res null-tn)
         (inst movi nibble-mask #x0f :16b)
         (inst movi twos 2 :16b)
+        (inst mov total-conts 0)
 
         (load-inline-constant tbl1 :oword #x38060001000000000000000000000000)
         (load-inline-constant tbl2 :oword #x2020242020202020202020100000010B)
         (load-inline-constant tbl3 :oword #x202020203535332B2020202020202020)
         (load-inline-constant tbl4 :oword #x08040202000000000000000000000000)
 
-        (load-inline-constant indexes :oword #x0F0E0D0C0B0A09080706050403020100)
-
         (inst movi errors   0 :16b)
         (inst movi prev     0 :16b)
         (inst movi prev-len 0 :16b)
 
-        ;; Align the start and then mask off the extra bits
-        (inst and ptr bytes -16)
-        (inst sub total-bytes bytes ptr)
-        (inst mov total-conts 0)
-
-        (inst ldr current (@ ptr))
-
-        ;; Replace the aligned bits with ones, avoiding null termination
-        (inst dup tmp1 total-bytes :16b)
-        (inst cmhi tmp1 tmp1 indexes :16b)
-        (inst bic current current tmp1 :16b)
-        (inst sub current current tmp1 :16b)
         (inst b START)
 
         LOOP
@@ -1409,6 +1431,7 @@
         (inst cbnz tmp DONE)
 
         (inst sub total-bytes total-bytes total-conts)
+        RETURN
         (inst lsl res total-bytes n-fixnum-tag-bits)
         DONE))))
 

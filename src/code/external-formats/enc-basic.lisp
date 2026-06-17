@@ -1445,11 +1445,12 @@
              ((<= #xE0 b0 #xEF)
               (let ((b1 (return-if-not-cont (sap-ref-8 sap (+ index 1))))
                     (b2 (return-if-not-cont (sap-ref-8 sap (+ index 2)))))
+                (declare (ignore b2 ))
                 (unless (if (= b0 #xE0)
                             (<= #xA0 b1 #xBF) ; Overlong
                             (if (= b0 #xED)
                                 (<= #x80 b1 #x9F) ; Surrogate halves
-                                b2))
+                                t))
                   (return nil)))
               (incf index 3))
              ;; 4 bytes
@@ -1462,7 +1463,7 @@
                             (<= #x90 b1 #xBF) ; Overlong
                             (if (= b0 #xF4)
                                 (<= #x80 b1 #x8F) ; Too Large
-                                b1))
+                                t))
                   (return nil)))
               (incf index 4))
              (t (return nil))))
