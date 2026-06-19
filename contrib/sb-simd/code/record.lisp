@@ -187,7 +187,8 @@
             (let ((base-type
                     (ecase bits
                       (128 (find-symbol "SIMD-PACK" "SB-EXT"))
-                      (256 (find-symbol "SIMD-PACK-256" "SB-EXT")))))
+                      (256 (find-symbol "SIMD-PACK-256" "SB-EXT"))
+                      (512 (find-symbol "SIMD-PACK-512" "SB-EXT")))))
               (cond ((not base-type) 't)
                     ((not scalar-record-name) base-type)
                     (t `(,base-type ,scalar-record-name))))))

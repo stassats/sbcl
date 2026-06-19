@@ -457,6 +457,7 @@
 #+sb-simd-pack-256
 (defparameter *hword-sc-names* '(ymm-reg int-avx2-reg single-avx2-reg double-avx2-reg
                                    int-avx2-stack single-avx2-stack double-avx2-stack))
+#+sb-simd-pack-512
 (defparameter *zword-sc-names* '(zmm-reg
                                  #+sb-simd-pack-512 int-avx512-reg
                                  #+sb-simd-pack-512 single-avx512-reg
@@ -469,11 +470,12 @@
   . #.(mapcar (lambda (class-spec)
                 (let ((size
                         (case (car class-spec)
-                          (#.*zword-sc-names*   :zword)
                           #+sb-simd-pack
                           (#.*oword-sc-names*   :oword)
                           #+sb-simd-pack-256
                           (#.*hword-sc-names*   :hword)
+                          #+sb-simd-pack-512
+                          (#.*zword-sc-names*   :zword)
                           (#.*qword-sc-names*   :qword)
                           (#.*float-sc-names*   :float)
                           (#.*double-sc-names*  :double)

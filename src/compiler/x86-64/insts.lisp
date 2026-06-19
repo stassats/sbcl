@@ -22,6 +22,7 @@
   ;; Imports from SB-VM into this package
   #+sb-simd-pack-256
   (import '(sb-vm::int-avx2-reg sb-vm::double-avx2-reg sb-vm::single-avx2-reg))
+  #+sb-simd-pack-512
   (import '(sb-vm::tn-byte-offset sb-vm::tn-reg sb-vm::reg-name
             sb-vm::frame-byte-offset sb-vm::rip-tn sb-vm::rbp-tn
             sb-vm::gpr-tn-p sb-vm::stack-tn-p sb-c::tn-reads sb-c::tn-writes
@@ -3356,7 +3357,11 @@
       #+(and sb-simd-pack-256 (not sb-xc-host))
       (simd-pack-256
        (setq constant
-             (sb-vm::%simd-pack-256-inline-constant first)))))
+             (sb-vm::%simd-pack-256-inline-constant first)))
+      #+(and sb-simd-pack-512 (not sb-xc-host))
+      (simd-pack-512
+       (setq constant
+             (sb-vm::%simd-pack-512-inline-constant first)))))
   (destructuring-bind (type value) constant
     (ecase type
       ((:byte :word :dword :qword)

@@ -109,7 +109,72 @@
           (sap-ref-double sap 0)
           (sap-ref-double sap 8)
           (sap-ref-double saph 0)
-          (sap-ref-double saph 8)))))))
+          (sap-ref-double saph 8))))
+      ;; fixme512 - check if this is correct (probaly not)
+      #+sb-simd-pack-512
+      (simd-pack-512-int
+       (let ((saph #+linux (alien-sap (context-zmm-register-addr context index))
+                   #-linux sap)) ;; Unimplemented
+         (if integer
+             (values (dpb (dpb (sap-ref-64 saph 8)
+                               (byte 64 64)
+                               (sap-ref-64 saph 0))
+                          (byte 128 128)
+                          (dpb (sap-ref-64 sap 8)
+                               (byte 64 64)
+                               (sap-ref-64 sap 0))
+                          (byte 192 192)
+                          (dpb (sap-ref-64 sap 8)
+                               (byte 64 64)
+                               (sap-ref-64 sap 0))
+                          (byte 256 256)
+                          (dpb (sap-ref-64 sap 8)
+                               (byte 64 64)
+                               (sap-ref-64 sap 0)))
+                     32)
+             (%make-simd-pack-512-ub64
+              (sap-ref-64 sap 0)
+              (sap-ref-64 sap 8)
+              (sap-ref-64 sap 16)
+              (sap-ref-64 sap 24)
+              (sap-ref-64 saph 0)
+              (sap-ref-64 saph 8)
+              (sap-ref-64 saph 16)
+              (sap-ref-64 saph 24)))))
+      #+sb-simd-pack-512
+      (simd-pack-512-single
+       (let ((saph #+linux (alien-sap (context-zmm-register-addr context index))
+                   #-linux sap))
+         (%make-simd-pack-512-single
+          (sap-ref-single sap 0)
+          (sap-ref-single sap 4)
+          (sap-ref-single sap 8)
+          (sap-ref-single sap 12)
+          (sap-ref-single sap 16)
+          (sap-ref-single sap 20)
+          (sap-ref-single sap 24)
+          (sap-ref-single sap 28)
+          (sap-ref-single saph 0)
+          (sap-ref-single saph 4)
+          (sap-ref-single saph 8)
+          (sap-ref-single saph 12)
+          (sap-ref-single saph 16)
+          (sap-ref-single saph 20)
+          (sap-ref-single saph 24)
+          (sap-ref-single saph 28))))
+      #+sb-simd-pack-512
+      (simd-pack-512-double
+       (let ((saph #+linux (alien-sap (context-zmm-register-addr context index))
+                   #-linux sap))
+         (%make-simd-pack-512-double
+          (sap-ref-double sap 0)
+          (sap-ref-double sap 8)
+          (sap-ref-double sap 16)
+          (sap-ref-double sap 24)
+          (sap-ref-double saph 0)
+          (sap-ref-double saph 8)
+          (sap-ref-double saph 16)
+          (sap-ref-double saph 24)))))))
 
 (defun %set-context-float-register (context index format value)
   (declare (ignorable context index format))
@@ -158,6 +223,17 @@
                (sap-ref-64 sap 8) b
                (sap-ref-64 sap 16) c
                (sap-ref-64 sap 24) d)))
+      #+sb-simd-pack-512
+      (simd-pack-512-int
+       (multiple-value-bind (a b c d e f g h) (%simd-pack-512-ub64s value)
+         (setf (sap-ref-64 sap 0) a
+               (sap-ref-64 sap 8) b
+               (sap-ref-64 sap 16) c
+               (sap-ref-64 sap 24) d
+               (sap-ref-64 sap 32) e
+               (sap-ref-64 sap 40) f
+               (sap-ref-64 sap 48) g
+               (sap-ref-64 sap 56) h)))
       #+sb-simd-pack-256
       (simd-pack-256-single
        (multiple-value-bind (a b c d e f g h) (%simd-pack-256-singles value)
@@ -169,13 +245,42 @@
                (sap-ref-single sap 20) f
                (sap-ref-single sap 24) g
                (sap-ref-single sap 28) h)))
+      #+sb-simd-pack-512
+      (simd-pack-512-single
+       (multiple-value-bind (a b c d e f g h i j k l m n p q) (%simd-pack-512-singles value)
+         (setf (sap-ref-single sap 0) a
+               (sap-ref-single sap 4) b
+               (sap-ref-single sap 8) c
+               (sap-ref-single sap 12) d
+               (sap-ref-single sap 16) e
+               (sap-ref-single sap 20) f
+               (sap-ref-single sap 24) g
+               (sap-ref-single sap 28) h
+               (sap-ref-single sap 32) i
+               (sap-ref-single sap 36) j
+               (sap-ref-single sap 40) k
+               (sap-ref-single sap 44) l
+               (sap-ref-single sap 48) m
+               (sap-ref-single sap 52) n
+               (sap-ref-single sap 54) p
+               (sap-ref-single sap 58) q)))
       #+sb-simd-pack-256
       (simd-pack-256-double
        (multiple-value-bind (a b c d) (%simd-pack-256-doubles value)
          (setf (sap-ref-double sap 0) a
                (sap-ref-double sap 8) b
                (sap-ref-double sap 16) c
-               (sap-ref-double sap 24) d))))))
+               (sap-ref-double sap 24) d)))      #+sb-simd-pack-512
+      (simd-pack-512-double
+       (multiple-value-bind (a b c d e f g h) (%simd-pack-512-doubles value)
+         (setf (sap-ref-double sap 0) a
+               (sap-ref-double sap 8) b
+               (sap-ref-double sap 16) c
+               (sap-ref-double sap 24) d
+               (sap-ref-double sap 32) e
+               (sap-ref-double sap 40) f
+               (sap-ref-double sap 48) g
+               (sap-ref-double sap 56) h))))))
 
 ;;; Given a signal context, return the floating point modes word in
 ;;; the same format as returned by FLOATING-POINT-MODES.
