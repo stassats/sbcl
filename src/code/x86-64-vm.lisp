@@ -19,8 +19,12 @@
   (* unsigned) (context (* os-context-t)) (index int))
 
 #+linux
-(define-alien-routine ("os_context_ymm_register_addr" context-ymm-register-addr)
-    (* unsigned) (context (* os-context-t)) (index int))
+(progn
+  (define-alien-routine ("os_context_ymm_register_addr" context-ymm-register-addr)
+      (* unsigned) (context (* os-context-t)) (index int))
+
+  (define-alien-routine ("os_context_zmm_register_addr" context-zmm-register-addr)
+      (* unsigned) (context (* os-context-t)) (index int)))
 
 ;;; This is like CONTEXT-REGISTER, but returns the value of a float
 ;;; register. FORMAT is the type of float to return.
@@ -113,17 +117,16 @@
       ;; fixme512 - check if this is correct (probaly not)
       #+sb-simd-pack-512
       (simd-pack-512-int
-       (let ((saph #+linux (alien-sap (context-zmm-register-addr context index))
-                   #-linux sap)) ;; Unimplemented
+       (let* ((sap (alien-sap (context-ymm-register-addr context index)))
+              (saph (if (< index 16)
+                        (alien-sap (context-zmm-register-addr context index))
+                        sap)))
          (if integer
-             (values (dpb (dpb (sap-ref-64 saph 8)
-                               (byte 64 64)
-                               (sap-ref-64 saph 0))
-                          (byte 128 128)
-                          (dpb (sap-ref-64 sap 8)
-                               (byte 64 64)
-                               (sap-ref-64 sap 0)))
-                     32)
+             ;; If you need the integer representation, consider returning the pack
+             ;; and converting it, rather than building it via DPB here.
+             (error "Construction of integer representation from SIMD is complex.")
+
+             ;; This is the critical change: Direct calls to the constructor
              (%make-simd-pack-512-ub64
               (sap-ref-64 sap 0)
               (sap-ref-64 sap 8)
@@ -133,9 +136,30 @@
               (sap-ref-64 saph 8)
               (sap-ref-64 saph 16)
               (sap-ref-64 saph 24)))))
+      ;; (simd-pack-512-int
+      ;;  (let ((saph #+linux (alien-sap (context-zmm-register-addr context index))
+      ;;              #-linux sap)) ;; Unimplemented
+      ;;    (if integer
+      ;;        (values (dpb (dpb (sap-ref-64 saph 8)
+      ;;                          (byte 64 64)
+      ;;                          (sap-ref-64 saph 0))
+      ;;                     (byte 128 128)
+      ;;                     (dpb (sap-ref-64 sap 8)
+      ;;                          (byte 64 64)
+      ;;                          (sap-ref-64 sap 0)))
+      ;;                32)
+      ;;        (%make-simd-pack-512-ub64
+      ;;         (sap-ref-64 sap 0)
+      ;;         (sap-ref-64 sap 8)
+      ;;         (sap-ref-64 sap 16)
+      ;;         (sap-ref-64 sap 24)
+      ;;         (sap-ref-64 saph 0)
+      ;;         (sap-ref-64 saph 8)
+      ;;         (sap-ref-64 saph 16)
+      ;;         (sap-ref-64 saph 24)))))
       #+sb-simd-pack-512
       (simd-pack-512-single
-       (let ((saph #+linux (alien-sap (context-zmm-register-addr context index))
+       (let ((saph #+linux (context-zmm-register-addr context index)
                    #-linux sap))
          (%make-simd-pack-512-single
           (sap-ref-single sap 0)
