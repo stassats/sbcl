@@ -458,13 +458,8 @@
 (defparameter *hword-sc-names* '(ymm-reg int-avx2-reg single-avx2-reg double-avx2-reg
                                    int-avx2-stack single-avx2-stack double-avx2-stack))
 #+sb-simd-pack-512
-(defparameter *zword-sc-names* '(zmm-reg
-                                 #+sb-simd-pack-512 int-avx512-reg
-                                 #+sb-simd-pack-512 single-avx512-reg
-                                 #+sb-simd-pack-512 double-avx512-reg
-                                 #+sb-simd-pack-512 int-avx512-stack
-                                 #+sb-simd-pack-512 single-avx512-stack
-                                 #+sb-simd-pack-512 double-avx512-stack))
+(defparameter *zword-sc-names* '(zmm-reg int-avx512-reg single-avx512-reg double-avx512-reg
+                                 int-avx512-stack single-avx512-stack double-avx512-stack))
 ) ; EVAL-WHEN
 (!define-storage-classes
   . #.(mapcar (lambda (class-spec)

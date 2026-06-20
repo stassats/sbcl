@@ -1032,6 +1032,11 @@
 (defun xmm-register-p (thing)
   (and (register-p thing) (not (is-gpr-id-p (reg-id thing)))))
 
+;;; Return true if THING is an ZMM register.
+(defun zmm-register-p (thing)
+  (and (register-p thing) (is-zmm-id-p (reg-id thing))))
+
+
 ;;; Return true if THING is AL, AX, EAX, or RAX
 (defun accumulator-p (thing)
   (and (gpr-p thing) (= 0 (reg-id-num (reg-id thing)))))
