@@ -12,6 +12,16 @@
 ;; fixme512 - replace with correct instructions, offests etc for avx512
 
 (in-package "SB-VM")
+
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (unless (member :avx512 *features*)
+    ;; (error "AVX-512 feature NOT detected by cold compiler!")
+    ;; I don't know why cold compiler does not seem to see AVX512;
+    ;; I see it defined in features, and elsewhere.
+    ;; This is wrong, but I need it to test things; somewhere more
+    ;; clever than me should remove this and fix it properly
+    (push :avx512 *features*)
+    (pushnew :sb-simd-pack-512 *features*)))
 
 ;; should this be redefined as ea-for-avx512-stack ???
 (defun ea-for-avx512-stack (tn &optional (base rbp-tn))
@@ -97,7 +107,8 @@
                :load-if (not (location= x y))))
   (:note "AVX512 move")
   (:generator 0
-     (move y x)))
+              (move y x)))
+
 (define-move-vop avx512-move :move
   (int-avx512-reg single-avx512-reg double-avx512-reg)
   (int-avx512-reg single-avx512-reg double-avx512-reg))
@@ -425,6 +436,7 @@
   (:result-types simd-pack-512-double)
   (:generator 5
    ;; fixme512 ???
+   ;; (format *error-output* "emit double i: ~a ~a ~%" dst tmp)
    (inst vunpcklpd dst p0 p1)
    (inst vunpcklpd tmp p2 p3)
    (inst vinsertf64x2 dst dst tmp #x1)
@@ -493,12 +505,49 @@
   (:policy :fast-safe)
   (:generator 3
     (let ((quadrant (floor index 4))
-        (sub-index (mod index 4)))
-    (inst vextractf32x4 tmp x quadrant)
-      (when (plusp sub-index)
-      (inst vpsrldq tmp tmp (* 4 sub-index)))
-    (inst vxorps dst dst dst)
-    (inst vmovss dst tmp))))
+          (index (mod index 4)))
+      (inst vextractf32x4 tmp x quadrant)
+      (when (plusp index)
+        (inst vpsrldq tmp tmp (* 4 index)))
+      (inst vxorps dst dst dst)
+      (inst vmovss dst tmp))))
+
+(defknown %simd-pack-512-double-item
+  (simd-pack-512 (integer 0 7)) double-float (flushable))
+
+;; fixme512
+(define-vop (%simd-pack-512-double-item)
+  (:translate %simd-pack-512-double-item)
+  (:args (x :scs (int-avx512-reg double-avx512-reg single-avx512-reg)
+            :target tmp))
+  (:info index)
+  (:arg-types simd-pack-512 (:constant t))
+  (:results (dst :scs (double-reg)))
+  (:result-types double-float)
+  (:temporary (:sc double-avx2-reg) tmp)
+  (:policy :fast-safe)
+(:generator 3
+(assert (and (tn-p x) (tn-p tmp)) ()
+          "Register allocation failure: x=~a, tmp=~a" x tmp)
+    (let ((quadrant (floor index 2))
+          (index (mod index 2)))
+      (inst vextractf32x4 tmp x quadrant)
+      (when (plusp index)
+        (inst vpsrldq tmp tmp (* 8 index)))
+      (inst vxorpd dst dst dst)
+      (inst vmovsd dst tmp)))
+  ;; (:generator 3
+  ;;   (cond ((>= index 2)
+  ;;          (decf index 2)
+  ;;          (inst vextractf64x4 tmp x 1))
+  ;;         (t
+  ;;          (move tmp x)))
+  ;;   (when (plusp index)
+  ;;     (inst vpsrldq tmp tmp (* 8 index)))
+  ;;   (inst vxorpd dst dst dst)
+  ;;   (inst vmovsd dst tmp))
+
+  )
 
 #-sb-xc-host
 (progn
@@ -522,31 +571,6 @@
             (%simd-pack-512-single-item pack 13)
             (%simd-pack-512-single-item pack 14)
             (%simd-pack-512-single-item pack 15)))))
-
-(defknown %simd-pack-512-double-item
-  (simd-pack-512 (integer 0 7)) double-float (flushable))
-
-;; fixme512
-(define-vop (%simd-pack-512-double-item)
-  (:translate %simd-pack-512-double-item)
-  (:args (x :scs (int-avx512-reg double-avx512-reg single-avx512-reg)
-            :target tmp))
-  (:info index)
-  (:arg-types simd-pack-512 (:constant t))
-  (:results (dst :scs (double-reg)))
-  (:result-types double-float)
-  (:temporary (:sc double-avx512-reg :from (:argument 0)) tmp)
-  (:policy :fast-safe)
-  (:generator 3
-    (cond ((>= index 2)
-           (decf index 2)
-           (inst vextractf64x4 tmp x 1))
-          (t
-           (move tmp x)))
-    (when (plusp index)
-      (inst vpsrldq tmp tmp (* 8 index)))
-    (inst vxorpd dst dst dst)
-    (inst vmovsd dst tmp)))
 
 #-sb-xc-host
 (progn

@@ -46,6 +46,33 @@
   (def vmovdqu32 #xf3 #x6f #x7f 0)
   (def vmovdqu64 #xf3 #x6f #x7f 1))
 
+(macrolet ((def (name prefix)
+             `(define-instruction ,name (segment dst src &optional src2)
+                ,@(avx2-inst-printer-list 'ymm-ymm/mem-dir prefix #b0001000)
+                (:emitter
+                 (cond ((and (is-zmm-id-p (reg-id dst)) (ea-p src))
+                        (emit-avx512-inst segment src dst ,prefix #x10))
+
+                       ((and (ea-p dst) (is-zmm-id-p (reg-id src)))
+                        (emit-avx512-inst segment dst src ,prefix #x11))
+
+                       ((or (is-zmm-id-p (reg-id dst))
+                            (is-zmm-id-p (reg-id src))
+                            (and src2 (is-zmm-id-p (reg-id src2))))
+                        (emit-avx512-inst segment src2 dst ,prefix #x10 :vvvv src))
+
+                       ((and (xmm-register-p dst) (ea-p src))
+                        (emit-avx2-inst segment src dst ,prefix #x10 :l 0))
+
+                       ((xmm-register-p dst)
+                        (emit-avx2-inst segment src2 dst ,prefix #x10 :vvvv src :l 0))
+
+                       (t
+                        (aver (xmm-register-p src))
+                        (emit-avx2-inst segment dst src ,prefix #x11 :l 0)))))))
+  (def vmovsd #xf2)
+  (def vmovss #xf3))
+
 ;;; Ternary logic
 (macrolet ((def (name w)
              `(define-instruction ,name (segment dst src1 src2 imm)

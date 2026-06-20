@@ -1140,7 +1140,12 @@ REG is the source (encoded in ModR/M.r/m).
              `(define-instruction ,name (segment dst src &optional src2)
                 ,@(avx2-inst-printer-list 'ymm-ymm/mem-dir prefix #b0001000)
                 (:emitter
-                 (cond ((and (xmm-register-p dst)
+                 (cond ;; ((and (is-zmm-id-p dst)
+                       ;;       (ea-p src))
+                       ;;  (emit-avx512-inst segment src dst ,prefix #x10 :l 0))
+                       ;; ((is-zmm-id-p dst)
+                       ;;  (emit-avx512-inst segment src2 dst ,prefix #x10 :vvvv src :l 0))
+                       ((and (xmm-register-p dst)
                              (ea-p src))
                         (emit-avx2-inst segment src dst ,prefix #x10 :l 0))
                        ((xmm-register-p dst)
@@ -1150,6 +1155,7 @@ REG is the source (encoded in ModR/M.r/m).
                         (emit-avx2-inst segment dst src ,prefix #x11 :l 0)))))))
   (def vmovsd #xf2)
   (def vmovss #xf3))
+
 
 (flet ((move-ymm<->gpr (segment dst src w)
          (cond ((xmm-register-p dst)
