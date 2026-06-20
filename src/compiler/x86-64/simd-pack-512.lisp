@@ -14,8 +14,8 @@
 (in-package "SB-VM")
 
 ;; should this be redefined as ea-for-avx512-stack ???
-;; (defun ea-for-avx-stack (tn &optional (base rbp-tn))
-;;   (ea (frame-byte-offset (+ (tn-offset tn) 3)) base))
+(defun ea-for-avx512-stack (tn &optional (base rbp-tn))
+  (ea (frame-byte-offset (+ (tn-offset tn) 7)) base))
 
 (defun float-avx512-p (tn)
   (sc-is tn single-avx512-reg single-avx512-stack single-avx512-immediate
@@ -75,19 +75,19 @@
 
 (define-move-fun (load-int-avx512 2) (vop x y)
   ((int-avx512-stack) (int-avx512-reg))
-  (inst vmovdqu64 y (ea-for-avx-stack x)))
+  (inst vmovdqu64 y (ea-for-avx512-stack x)))
 
 (define-move-fun (load-float-avx512 2) (vop x y)
   ((single-avx512-stack double-avx512-stack) (single-avx512-reg double-avx512-reg))
-  (inst vmovups y (ea-for-avx-stack x)))
+  (inst vmovups y (ea-for-avx512-stack x)))
 
 (define-move-fun (store-int-avx512 2) (vop x y)
   ((int-avx512-reg) (int-avx512-stack))
-  (inst vmovdqu64 (ea-for-avx-stack y) x))
+  (inst vmovdqu64 (ea-for-avx512-stack y) x))
 
 (define-move-fun (store-float-avx512 2) (vop x y)
   ((double-avx512-reg single-avx512-reg) (double-avx512-stack single-avx512-stack))
-  (inst vmovups (ea-for-avx-stack y) x))
+  (inst vmovups (ea-for-avx512-stack y) x))
 
 (define-vop (avx512-move)
   (:args (x :scs (single-avx512-reg double-avx512-reg int-avx512-reg)
@@ -164,8 +164,8 @@
               (inst vmovdqu64 y x))))
        ((int-avx512-stack double-avx512-stack single-avx512-stack)
         (if (float-avx512-p x)
-            (inst vmovups (ea-for-avx-stack y fp) x)
-            (inst vmovdqu64 (ea-for-avx-stack y fp) x))))))
+            (inst vmovups (ea-for-avx512-stack y fp) x)
+            (inst vmovdqu64 (ea-for-avx512-stack y fp) x))))))
 (define-move-vop move-avx512-arg :move-arg
   (int-avx512-reg double-avx512-reg single-avx512-reg descriptor-reg)
   (int-avx512-reg double-avx512-reg single-avx512-reg))
@@ -493,27 +493,12 @@
   (:policy :fast-safe)
   (:generator 3
     (let ((quadrant (floor index 4))
-          (sub-index (mod index 4)))
-      ;; 1. Extract the exact 128-bit quadrant into a standard single-reg (dst)
-      (inst vextractf32x4 dst x quadrant)
-      
-      ;; 2. If it's not the first element in that quadrant, shift it down
+        (sub-index (mod index 4)))
+    (inst vextractf32x4 tmp x quadrant)
       (when (plusp sub-index)
-        (inst vpsrldq dst dst (* 4 sub-index)))
-      
-      ;; 3. Isolate the lowest single float in dst
-      ;; (Note: if vmovss needs a clean destination, we can clear a temp or leave it)
-      (inst vmovss dst dst))
-    (cond ((>= index 8)
-           (decf index 8)
-           (inst vextractf64x4 tmp x 1))
-          (t
-           (inst vextractf64x4 tmp x 0)))
-    ;; fixme512 I think this is wrong
-    (when (plusp index)
-      (inst vpsrldq tmp tmp (* 4 index)))
+      (inst vpsrldq tmp tmp (* 4 sub-index)))
     (inst vxorps dst dst dst)
-    (inst vmovss dst tmp)))
+    (inst vmovss dst tmp))))
 
 #-sb-xc-host
 (progn
