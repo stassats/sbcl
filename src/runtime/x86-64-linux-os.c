@@ -233,12 +233,30 @@ os_context_ymm_register_addr(os_context_t *context, int offset)
 #endif
 }
 
-os_context_register_t *
+// Define layout extensions for AVX-512 states in Linux
+struct _xregister_128 { uint32_t element[4]; };
+struct _xregister_256 { uint32_t element[8]; };
+
+typedef struct {
+    uint8_t legacy_fp_sse[512];
+    uint64_t xstate_bv;
+    uint64_t xcomp_bv;
+    uint8_t  reserved[48];
+    struct _xregister_128 ymmh_space[16];      // YMM upper 128-bits (0-15)
+    uint64_t opmask_space[8];                  // AVX-512 k0-k7 masks
+    struct _xregister_256 zmm_space[16];       // ZMM upper 256-bits (0-15)
+    struct _xregister_256 zmm_hi256_space[16]; // ZMM16-ZMM31 entire 512-bits
+} _zxstate;
+
+uint32_t *
 os_context_zmm_register_addr(os_context_t *context, int offset)
 {
-    void *xstate = (void*)context->uc_mcontext.fpregs;
-    //return (os_context_register_t*)&(xstate->ymmh.ymmh_space[offset * 4]);
-    return (os_context_register_t*)&((char*)xstate+32)[offset * 64];
+    // the idea here was to (in Lisp) (re)use avx2 pointer to ymm
+    // So the code to initialize int/single/double should call this one
+    // only for the upper 256 bits in "sapz", while sap is 0 - 128 and
+    // "sapy" is 128 - 256 (i.e. "saph" in simd-pack-256 code)
+    _zxstate* xstate = (_zxstate*)context->uc_mcontext.fpregs;
+    return (uint32_t*)&(xstate)->zmm_hi256_space[offset * 16];
 }
 
 sigset_t *
