@@ -237,20 +237,8 @@ os_context_register_t *
 os_context_zmm_register_addr(os_context_t *context, int offset)
 {
     void *xstate = (void*)context->uc_mcontext.fpregs;
-
-    if (offset < 16) {
-        /* * ZMM0-ZMM15: The lower 256 bits are split across the legacy XMM area
-         * and component 2 (YMM_Hi128). Component 6 contains the upper 256 bits
-         * (ZMM_Hi256) at offset 1152 (0x480). Each element is 32 bytes.
-         */
-        return (os_context_register_t*)&((char*)xstate+0x480)[offset * 32];
-    } else {
-        /* * ZMM16-ZMM31: The full 512 bits are contiguous. Component 7 contains
-         * these full registers (Hi16_ZMM) starting at offset 1664 (0x680).
-         * Each element is 64 bytes.
-         */
-        return (os_context_register_t*)&((char*)xstate+0x680)[(offset - 16) * 64];
-    }
+    //return (os_context_register_t*)&(xstate->ymmh.ymmh_space[offset * 4]);
+    return (os_context_register_t*)&((char*)xstate+32)[offset * 64];
 }
 
 sigset_t *

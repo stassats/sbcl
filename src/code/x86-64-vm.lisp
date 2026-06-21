@@ -117,80 +117,67 @@
       ;; fixme512 - check if this is correct (probaly not)
       #+sb-simd-pack-512
       (simd-pack-512-int
-       (let* ((sap (alien-sap (context-ymm-register-addr context index)))
-              (saph (if (< index 16)
-                        (alien-sap (context-zmm-register-addr context index))
-                        sap)))
+       (let* ((sapy #+linux (alien-sap (context-ymm-register-addr context index))
+                    #-linux sap)
+              (sapz #+linux (alien-sap (context-zmm-register-addr context index))
+                    #-linux sap))
          (if integer
-             ;; If you need the integer representation, consider returning the pack
-             ;; and converting it, rather than building it via DPB here.
-             (error "Construction of integer representation from SIMD is complex.")
-
-             ;; This is the critical change: Direct calls to the constructor
+             (error "Integer not yet implemented")
+             ;; (values (dpb (dpb (sap-ref-64 saph 8)
+             ;;                   (byte 64 64)
+             ;;                   (sap-ref-64 saph 0))
+             ;;              (byte 128 128)
+             ;;              (dpb (sap-ref-64 sap 8)
+             ;;                   (byte 64 64)
+             ;;                   (sap-ref-64 sap 0)))
+             ;;         32)
              (%make-simd-pack-512-ub64
               (sap-ref-64 sap 0)
               (sap-ref-64 sap 8)
-              (sap-ref-64 sap 16)
-              (sap-ref-64 sap 24)
-              (sap-ref-64 saph 0)
-              (sap-ref-64 saph 8)
-              (sap-ref-64 saph 16)
-              (sap-ref-64 saph 24)))))
-      ;; (simd-pack-512-int
-      ;;  (let ((saph #+linux (alien-sap (context-zmm-register-addr context index))
-      ;;              #-linux sap)) ;; Unimplemented
-      ;;    (if integer
-      ;;        (values (dpb (dpb (sap-ref-64 saph 8)
-      ;;                          (byte 64 64)
-      ;;                          (sap-ref-64 saph 0))
-      ;;                     (byte 128 128)
-      ;;                     (dpb (sap-ref-64 sap 8)
-      ;;                          (byte 64 64)
-      ;;                          (sap-ref-64 sap 0)))
-      ;;                32)
-      ;;        (%make-simd-pack-512-ub64
-      ;;         (sap-ref-64 sap 0)
-      ;;         (sap-ref-64 sap 8)
-      ;;         (sap-ref-64 sap 16)
-      ;;         (sap-ref-64 sap 24)
-      ;;         (sap-ref-64 saph 0)
-      ;;         (sap-ref-64 saph 8)
-      ;;         (sap-ref-64 saph 16)
-      ;;         (sap-ref-64 saph 24)))))
+              (sap-ref-64 sapy 16)
+              (sap-ref-64 sapy 24)
+              (sap-ref-64 sapz 0)
+              (sap-ref-64 sapz 8)
+              (sap-ref-64 sapz 16)
+              (sap-ref-64 sapz 24)))))
       #+sb-simd-pack-512
       (simd-pack-512-single
-       (let ((saph #+linux (context-zmm-register-addr context index)
+       (let ((sapy #+linux (alien-sap (context-ymm-register-addr context index))
+                   #-linux sap)
+             (sapz #+linux (alien-sap (context-zmm-register-addr context index))
                    #-linux sap))
          (%make-simd-pack-512-single
           (sap-ref-single sap 0)
           (sap-ref-single sap 4)
           (sap-ref-single sap 8)
           (sap-ref-single sap 12)
-          (sap-ref-single sap 16)
-          (sap-ref-single sap 20)
-          (sap-ref-single sap 24)
-          (sap-ref-single sap 28)
-          (sap-ref-single saph 0)
-          (sap-ref-single saph 4)
-          (sap-ref-single saph 8)
-          (sap-ref-single saph 12)
-          (sap-ref-single saph 16)
-          (sap-ref-single saph 20)
-          (sap-ref-single saph 24)
-          (sap-ref-single saph 28))))
+          (sap-ref-single sapy 16)
+          (sap-ref-single sapy 20)
+          (sap-ref-single sapy 24)
+          (sap-ref-single sapy 28)
+          (sap-ref-single sapz 0)
+          (sap-ref-single sapz 4)
+          (sap-ref-single sapz 8)
+          (sap-ref-single sapz 12)
+          (sap-ref-single sapz 16)
+          (sap-ref-single sapz 20)
+          (sap-ref-single sapz 24)
+          (sap-ref-single sapz 28))))
       #+sb-simd-pack-512
       (simd-pack-512-double
-       (let ((saph #+linux (alien-sap (context-zmm-register-addr context index))
+       (let ((sapy #+linux (alien-sap (context-ymm-register-addr context index))
+                   #-linux sap)
+             (sapz #+linux (alien-sap (context-zmm-register-addr context index))
                    #-linux sap))
          (%make-simd-pack-512-double
           (sap-ref-double sap 0)
           (sap-ref-double sap 8)
-          (sap-ref-double sap 16)
-          (sap-ref-double sap 24)
-          (sap-ref-double saph 0)
-          (sap-ref-double saph 8)
-          (sap-ref-double saph 16)
-          (sap-ref-double saph 24)))))))
+          (sap-ref-double sapy 16)
+          (sap-ref-double sapy 24)
+          (sap-ref-double sapz 0)
+          (sap-ref-double sapz 8)
+          (sap-ref-double sapz 16)
+          (sap-ref-double sapz 24)))))))
 
 (defun %set-context-float-register (context index format value)
   (declare (ignorable context index format))
@@ -279,7 +266,7 @@
                (sap-ref-single sap 48) m
                (sap-ref-single sap 52) n
                (sap-ref-single sap 54) p
-               (sap-ref-single sap 58) q)))
+               (sap-ref-single sap 60) q)))
       #+sb-simd-pack-256
       (simd-pack-256-double
        (multiple-value-bind (a b c d) (%simd-pack-256-doubles value)
