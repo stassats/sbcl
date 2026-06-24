@@ -415,6 +415,10 @@
 
 #-sb-xc-host
 (progn
+  ;; (defun %make-simd-pack-512-ub64 (p0 p1 p2 p3 p4 p5 p6 p7)
+  ;;   (declare (type (unsigned-byte 64) p0 p1 p2 p3 p4 p5 p6 p7))
+  ;;   (%make-simd-pack-512 0 p0 p1 p2 p3 p4 p5 p6 p7))
+
   (defun %make-simd-pack-512-ub32 (p0 p1 p2 p3 p4 p5 p6 p7 p8
                                    p9 p10 p11 p12 p13 p14 p15)
     (declare (type (unsigned-byte 32) p0 p1 p2 p3 p4 p5 p6 p7 p8
