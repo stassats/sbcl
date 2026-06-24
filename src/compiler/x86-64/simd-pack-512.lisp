@@ -30,6 +30,7 @@
 (defun float-avx512-p (tn)
   (sc-is tn single-avx512-reg single-avx512-stack single-avx512-immediate
             double-avx512-reg double-avx512-stack double-avx512-immediate))
+
 (defun int-avx512-p (tn)
   (sc-is tn int-avx512-reg int-avx512-stack int-avx512-immediate))
 
@@ -177,6 +178,7 @@
         (if (float-avx512-p x)
             (inst vmovups (ea-for-avx512-stack y fp) x)
             (inst vmovdqu64 (ea-for-avx512-stack y fp) x))))))
+
 (define-move-vop move-avx512-arg :move-arg
   (int-avx512-reg double-avx512-reg single-avx512-reg descriptor-reg)
   (int-avx512-reg double-avx512-reg single-avx512-reg))
@@ -262,7 +264,7 @@
     (storew p7 dst simd-pack-512-p7-slot other-pointer-lowtag)))
 
 (define-vop (%make-simd-pack-512-ub64)
-  (:translate %make-simd-pack-512-ub64)
+    (:translate %make-simd-pack-512-ub64)
   (:policy :fast-safe)
   (:args (p0 :scs (unsigned-reg))
          (p1 :scs (unsigned-reg))
@@ -274,21 +276,31 @@
          (p7 :scs (unsigned-reg)))
   (:arg-types unsigned-num unsigned-num unsigned-num unsigned-num
               unsigned-num unsigned-num unsigned-num unsigned-num)
-  ;;(:temporary (:sc int-avx512-reg) tmp)
   (:results (dst :scs (int-avx512-reg)))
   (:result-types simd-pack-512-ub64)
   (:generator 5
-    ;; in %simd-pack-256ub they are building this one by one reg,
-    ;; I don't understand why they do this, but I guess there is
-    ;; a reason for it
-    (inst vpinsrq dst dst p0 0)
-    (inst vpinsrq dst dst p1 1)
-    (inst vpinsrq dst dst p2 2)
-    (inst vpinsrq dst dst p3 3)
-    (inst vpinsrq dst dst p4 4)
-    (inst vpinsrq dst dst p5 5)
-    (inst vpinsrq dst dst p6 6)
-    (inst vpinsrq dst dst p7 7)))
+              (let* ((offset (sb-c:tn-offset dst))
+                     ;; a 128-bit "xmm view" of the destination register
+                     ;; using the 'double-reg' storage class (which maps to XMM)
+                     ;; this saves a temporary register
+                     (dst-xmm (sb-c:make-random-tn
+                               (sb-c:sc-or-lose 'sb-vm::double-reg) offset)))
+
+                (inst vpinsrq dst-xmm dst-xmm p0 0)
+                (inst vpinsrq dst-xmm dst-xmm p1 1)
+
+                (inst vpinsrq dst-xmm dst-xmm p2 0)
+                (inst vpinsrq dst-xmm dst-xmm p3 1)
+                (inst vinserti64x2 dst dst dst-xmm 1)
+
+                (inst vpinsrq dst-xmm dst-xmm p4 0)
+                (inst vpinsrq dst-xmm dst-xmm p5 1)
+                (inst vinserti64x2 dst dst dst-xmm 2)
+
+                (inst vpinsrq dst-xmm dst-xmm p6 0)
+                (inst vpinsrq dst-xmm dst-xmm p7 1)
+                (inst vinserti64x2 dst dst dst-xmm 3))))
+
 
 (defmacro simd-pack-512-dispatch (pack &body body)
   (check-type pack symbol)
