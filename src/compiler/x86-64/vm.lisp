@@ -419,19 +419,19 @@
   (zmm-reg float-registers :locations #.*zmm-regs*)
   #+sb-simd-pack-512
   (int-avx512-reg float-registers
-                  :locations #.*zmm-regs*
+                  :locations #.*float-regs*
                   :constant-scs (int-avx512-immediate)
                   :save-p t
                   :alternate-scs (int-avx512-stack))
   #+sb-simd-pack-512
   (double-avx512-reg float-registers
-                     :locations #.*zmm-regs*
+                     :locations #.*float-regs*
                      :constant-scs (double-avx512-immediate)
                      :save-p t
                      :alternate-scs (double-avx512-stack))
   #+sb-simd-pack-512
   (single-avx512-reg float-registers
-                     :locations #.*zmm-regs*
+                     :locations #.*float-regs*
                      :constant-scs (single-avx512-immediate)
                      :save-p t
                      :alternate-scs (single-avx512-stack))

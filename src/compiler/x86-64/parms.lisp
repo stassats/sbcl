@@ -198,6 +198,7 @@
 
 ;;; Bit indices into *CPU-FEATURE-BITS*
 (defconstant cpu-has-ymm-registers   0)
+(defconstant cpu-has-zmm-registers   0)
 (defconstant cpu-has-popcnt          1)
 
 #+sb-simd-pack

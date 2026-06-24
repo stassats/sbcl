@@ -13,15 +13,15 @@
 
 (in-package "SB-VM")
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (unless (member :avx512 *features*)
-    ;; (error "AVX-512 feature NOT detected by cold compiler!")
-    ;; I don't know why cold compiler does not seem to see AVX512;
-    ;; I see it defined in features, and elsewhere.
-    ;; This is wrong, but I need it to test things; somewhere more
-    ;; clever than me should remove this and fix it properly
-    (push :avx512 *features*)
-    (pushnew :sb-simd-pack-512 *features*)))
+;; (eval-when (:compile-toplevel :load-toplevel :execute)
+;;   (unless (member :avx512 *features*)
+;;     ;; (error "AVX-512 feature NOT detected by cold compiler!")
+;;     ;; I don't know why cold compiler does not seem to see AVX512;
+;;     ;; I see it defined in features, and elsewhere.
+;;     ;; This is wrong, but I need it to test things; somewhere more
+;;     ;; clever than me should remove this and fix it properly
+;;     (push :avx512 *features*)
+;;     (pushnew :sb-simd-pack-512 *features*)))
 
 ;; should this be redefined as ea-for-avx512-stack ???
 (defun ea-for-avx512-stack (tn &optional (base rbp-tn))

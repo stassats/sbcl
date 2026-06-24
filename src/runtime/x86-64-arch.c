@@ -40,7 +40,7 @@
 #define UD2_INST 0x0b0f
 #define BREAKPOINT_WIDTH 1
 
-int avx_supported = 0, avx2_supported = 0;
+int avx_supported = 0, avx2_supported = 0, avx512_supported = 0;
 
 static void cpuid(unsigned info, unsigned subinfo,
                   unsigned *eax, unsigned *ebx, unsigned *ecx, unsigned *edx)
@@ -123,6 +123,9 @@ void tune_asm_routines_for_microarch(void)
             xgetbv(&eax, &edx);
             if ((eax & 0x06) == 0x06) { // YMM and XMM
                 avx_supported = 1;
+                if ((eax & 5) == 5 && (eax & 7) == 7) { // ZMM
+                    avx512_supported = 1;
+                }
                 cpuid(7, 0, &eax, &ebx, &ecx, &edx);
                 if  (ebx & 0x20)  {
                     avx2_supported = 1;
@@ -135,6 +138,8 @@ void tune_asm_routines_for_microarch(void)
     if (avx2_supported) our_cpu_feature_bits |= 1;
     // POPCNT = ECX bit 23, which gets copied into bit 2 in cpu_feature_bits
     if (cpuid_fn1_ecx & (1<<23)) our_cpu_feature_bits |= 2;
+    // avx512 supported in bit 3
+    if (avx512_supported) our_cpu_feature_bits |= 4;
     consts->cpu_feature_bits = our_cpu_feature_bits;
 
 #ifdef LISP_FEATURE_WIN32

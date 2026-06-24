@@ -138,7 +138,19 @@
   ;;   Lisp = save GPRs that lisp call can change
   (aver (member convention '(lisp c)))
   (let* ((save-fpr (neq except 'fp))
-         (fpr-align xsave-area-alignment)
+
+         ;; AVX-512 REQUIRES 64-byte alignment for state 6 and 7 (ZMM registers).
+         ;; If this was previously 16 or 32, it must be upgraded.
+         (fpr-align 64)
+
+         ;; uncompacted XSAVE size for AVX-512:
+         ;; Legacy      (512) + Header (64) = 576
+         ;; YMM (256)   at offset 576       = 832
+         ;; KMM (64)    at offset 1088      = 1152
+         ;; ZMM (0-15)  (512) at 1152       = 1664
+         ;; ZMM (16-31) (1024) at 2112      = 3136
+         (zmm-xsave-area-size 3136)
+
          (except (if (eq except 'fp) nil (ensure-list except)))
          (clobberables
           (remove (intern (aref +qword-register-names+ card-table-reg))
@@ -148,17 +160,10 @@
                          #+gs-seg r13 r14 r15))))
          (frame-tn (when frame-reg (symbolicate frame-reg "-TN"))))
     (aver (subsetp except clobberables)) ; Catch spelling mistakes
-    ;; Since FPR-SAVE / -RESTORE utilize RAX, returning RAX from an assembly
-    ;; routine (by *not* preserving it) will be meaningless.
-    ;; You'd have to modify -SAVE / -RESTORE to avoid clobbering RAX.
-    ;; This is a bit limiting: if you ask not to preserve RAX, what you mean is exactly that:
-    ;; it does not matter what value is gets. But EXCEPT has a dual purpose of also
-    ;; propagating the value out from BODY. We _should_ allow RAX in the list of things
-    ;; not to save, in case the caller wants to be maximally efficient and specify that RAX
-    ;; can be trashed with impunity. But it helps with incorrect usage for now
-    ;; to raise this error.
+
     (when (member 'rax except)
       (error "Excluding RAX from preserved GPRs probably will not do what you want."))
+
     (let* ((gprs ; take SET-DIFFERENCE with EXCEPT but in a predictable order
              (remove-if (lambda (x) (member x except))
                         (ecase convention
@@ -166,44 +171,121 @@
                           (c '(rax rcx rdx rsi rdi r8 r9 r10 r11))
                           ;; all GPRs are potentially destroyed across lisp call
                           (lisp clobberables))))
-           ;; each 8 registers pushed preserves 64-byte alignment
+           ;; each 8 registers pushed preserves 64-byte alignment.
+           ;; This calculates the padding needed AFTER pushing GPRs to land perfectly on 64.
            (alignment-bytes
-             (-  (nth-value 1 (ceiling (* n-word-bytes (length gprs)) fpr-align)))))
+             (- (nth-value 1 (ceiling (* n-word-bytes (length gprs)) fpr-align)))))
       (when eflags (aver frame-reg)) ; don't need to support no-frame-tn,yes-flags
       `(progn
-         ;; Obviously we have to save EFLAGS before messing them up by doing arithmetic.
-         ;; So if requested, save them inside the new frame. It would mess up backtrace
-         ;; to PUSHF before PUSH RBP because then the stack word at 1 slot above RBP
-         ;; would not be the return PC pushed by a preceding CALL. It would similarly be
-         ;; wrong to push flags in between the push of RBP and the MOV.
          ,@(when frame-tn
              `((inst push ,frame-tn)
                (inst mov ,frame-tn rsp-tn)
                ,@(when eflags '((inst pushf)))))
+
+         ;; initial stack alignment to 64-bytes
          ,@(when save-fpr
              `((inst and rsp-tn ,(- fpr-align))))
+
+         ;; Push GPRs (throws off the 64-byte alignment by (* 8 gprs) bytes)
          (regs-pushlist ,@gprs)
+
+         ;; Subtract the new 3136 byte payload + the alignment padding
+         ;; to re-align RSP to 64-bytes for XSAVE.
          ,@(when save-fpr
-             `((inst sub rsp-tn ,(+ alignment-bytes xsave-area-size))
+             `((inst sub rsp-tn ,(+ alignment-bytes zmm-xsave-area-size))
                (call-fpr-save/restore-routine :save)))
+
          (assemble () ,@body)
+
+         ;; Restore FPRs and reverse stack arithmetic
          ,@(when save-fpr
              `((call-fpr-save/restore-routine :restore)
-               (inst add rsp-tn ,(+ alignment-bytes xsave-area-size))))
+               (inst add rsp-tn ,(+ alignment-bytes zmm-xsave-area-size))))
+
          (regs-poplist ,@gprs)
          ,@(cond ((and (eq frame-tn 'rbp-tn) (not eflags))
                   '((inst leave)))
-             ;; If EFLAGS got pushed, restoring RBP can't be done with LEAVE,
-             ;; because RSP has to be decremented by 1 word.
-             ;;    return-PC
-             ;;    saved RBP     <-- new RBP points here
-             ;;    saved EFLAGS
                  (frame-tn
                   `(,@(if eflags
                           `((inst lea rsp-tn (ea -8 ,frame-tn))
                             (inst popf))
                           `((inst mov rsp-tn ,frame-tn)))
                     (inst pop ,frame-tn))))))))
+
+;; (defmacro with-registers-preserved ((convention &key eflags except (frame-reg 'rbp))
+;;                                     &body body)
+;;   ;: Convention:
+;;   ;;   C    = save GPRs that C call can change
+;;   ;;   Lisp = save GPRs that lisp call can change
+;;   (aver (member convention '(lisp c)))
+;;   (let* ((save-fpr (neq except 'fp))
+;;          (fpr-align xsave-area-alignment)
+;;          (except (if (eq except 'fp) nil (ensure-list except)))
+;;          (clobberables
+;;           (remove (intern (aref +qword-register-names+ card-table-reg))
+;;            (remove frame-reg
+;;                    `(rax rbx rcx rdx rsi rdi r8 r9 r10 r11 r12
+;;                          ;; 13 is usable only if not permanently wired to the thread base
+;;                          #+gs-seg r13 r14 r15))))
+;;          (frame-tn (when frame-reg (symbolicate frame-reg "-TN"))))
+;;     (aver (subsetp except clobberables)) ; Catch spelling mistakes
+;;     ;; Since FPR-SAVE / -RESTORE utilize RAX, returning RAX from an assembly
+;;     ;; routine (by *not* preserving it) will be meaningless.
+;;     ;; You'd have to modify -SAVE / -RESTORE to avoid clobbering RAX.
+;;     ;; This is a bit limiting: if you ask not to preserve RAX, what you mean is exactly that:
+;;     ;; it does not matter what value is gets. But EXCEPT has a dual purpose of also
+;;     ;; propagating the value out from BODY. We _should_ allow RAX in the list of things
+;;     ;; not to save, in case the caller wants to be maximally efficient and specify that RAX
+;;     ;; can be trashed with impunity. But it helps with incorrect usage for now
+;;     ;; to raise this error.
+;;     (when (member 'rax except)
+;;       (error "Excluding RAX from preserved GPRs probably will not do what you want."))
+;;     (let* ((gprs ; take SET-DIFFERENCE with EXCEPT but in a predictable order
+;;              (remove-if (lambda (x) (member x except))
+;;                         (ecase convention
+;;                           ;; RBX and R12..R15 are preserved across C call
+;;                           (c '(rax rcx rdx rsi rdi r8 r9 r10 r11))
+;;                           ;; all GPRs are potentially destroyed across lisp call
+;;                           (lisp clobberables))))
+;;            ;; each 8 registers pushed preserves 64-byte alignment
+;;            (alignment-bytes
+;;              (-  (nth-value 1 (ceiling (* n-word-bytes (length gprs)) fpr-align)))))
+;;       (when eflags (aver frame-reg)) ; don't need to support no-frame-tn,yes-flags
+;;       `(progn
+;;          ;; Obviously we have to save EFLAGS before messing them up by doing arithmetic.
+;;          ;; So if requested, save them inside the new frame. It would mess up backtrace
+;;          ;; to PUSHF before PUSH RBP because then the stack word at 1 slot above RBP
+;;          ;; would not be the return PC pushed by a preceding CALL. It would similarly be
+;;          ;; wrong to push flags in between the push of RBP and the MOV.
+;;          ,@(when frame-tn
+;;              `((inst push ,frame-tn)
+;;                (inst mov ,frame-tn rsp-tn)
+;;                ,@(when eflags '((inst pushf)))))
+;;          ,@(when save-fpr
+;;              `((inst and rsp-tn ,(- fpr-align))))
+;;          (regs-pushlist ,@gprs)
+;;          ,@(when save-fpr
+;;              `((inst sub rsp-tn ,(+ alignment-bytes xsave-area-size))
+;;                (call-fpr-save/restore-routine :save)))
+;;          (assemble () ,@body)
+;;          ,@(when save-fpr
+;;              `((call-fpr-save/restore-routine :restore)
+;;                (inst add rsp-tn ,(+ alignment-bytes xsave-area-size))))
+;;          (regs-poplist ,@gprs)
+;;          ,@(cond ((and (eq frame-tn 'rbp-tn) (not eflags))
+;;                   '((inst leave)))
+;;              ;; If EFLAGS got pushed, restoring RBP can't be done with LEAVE,
+;;              ;; because RSP has to be decremented by 1 word.
+;;              ;;    return-PC
+;;              ;;    saved RBP     <-- new RBP points here
+;;              ;;    saved EFLAGS
+;;                  (frame-tn
+;;                   `(,@(if eflags
+;;                           `((inst lea rsp-tn (ea -8 ,frame-tn))
+;;                             (inst popf))
+;;                           `((inst mov rsp-tn ,frame-tn)))
+;;                     (inst pop ,frame-tn))))))))
+
 
 (defmacro call-c (fun &rest args)
   (aver (stringp fun))
