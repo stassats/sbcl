@@ -264,7 +264,7 @@
     (storew p7 dst simd-pack-512-p7-slot other-pointer-lowtag)))
 
 (define-vop (%make-simd-pack-512-ub64)
-    (:translate %make-simd-pack-512-ub64)
+  (:translate %make-simd-pack-512-ub64)
   (:policy :fast-safe)
   (:args (p0 :scs (unsigned-reg))
          (p1 :scs (unsigned-reg))
@@ -278,34 +278,28 @@
               unsigned-num unsigned-num unsigned-num unsigned-num)
   (:results (dst :scs (int-avx512-reg)))
   (:result-types simd-pack-512-ub64)
-  ;; Explicitly request a temporary XMM register to build 128-bit chunks safely
-  (:temporary (:sc double-reg) tmp)
-  ;; this one builds in chunks in a temporary register, and swaps in bytes
-  ;; in the correct place in result; I think there is more efficient way to do
-  ;; this but I don't know it for now. I am happy if someone reworks it
-  (:generator 20
-     ;; a "xmm view" of dst register
-     (let ((xmm (sb-c:make-random-tn
-                     (sb-c:sc-or-lose 'sb-vm::double-reg) (sb-c:tn-offset dst))))
+  ;; use 3 XMM regs to break execution dependencies
+  (:temporary (:sc double-reg) tmp1 tmp2 tmp3)
+  (:generator 10
+    (let ((xmm (sb-c:make-random-tn ;; "xmm view of zmm reg"
+                (sb-c:sc-or-lose 'sb-vm::double-reg) (sb-c:tn-offset dst))))
 
-       (inst vpxor dst dst dst)
-       (inst vpxor tmp tmp tmp)
+      ;; vmovq zeroes out bits 64-511 automatically
+      (inst vmovq xmm p0)
+      (inst vpinsrq xmm xmm p1 1) ;      ;; xmm = [p1, p0]
 
-       (inst vpinsrq xmm xmm p0 0)
-       (inst vpinsrq xmm xmm p1 1)
+      (inst vmovq tmp1 p2)
+      (inst vpinsrq tmp1 tmp1 p3 1)      ;; tmp1 = [p3, p2]
 
-       (inst vpinsrq tmp tmp p2 0)
-       (inst vpinsrq tmp tmp p3 1)
-       (inst vinserti64x2 dst dst tmp 1)
+      (inst vmovq tmp2 p4)
+      (inst vpinsrq tmp2 tmp2 p5 1)      ;; tmp2 = [p5, p4]
 
-       (inst vpinsrq tmp tmp p4 0)
-       (inst vpinsrq tmp tmp p5 1)
-       (inst vinserti64x2 dst dst tmp 2)
+      (inst vmovq tmp3 p6)
+      (inst vpinsrq tmp3 tmp3 p7 1)      ;; tmp3 = [p7, p6]
 
-       (inst vpinsrq tmp tmp p6 0)
-       (inst vpinsrq tmp tmp p7 1)
-       (inst vinserti64x2 dst dst tmp 3))))
-
+      (inst vinserti64x2 dst dst tmp1 1)
+      (inst vinserti64x2 dst dst tmp2 2)
+      (inst vinserti64x2 dst dst tmp3 3))))
 
 (defmacro simd-pack-512-dispatch (pack &body body)
   (check-type pack symbol)
