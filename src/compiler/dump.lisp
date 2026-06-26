@@ -655,7 +655,7 @@
 ;;; Use HANDLE whenever we try to dump CONSTANT. HANDLE should have been
 ;;; returned earlier by FASL-DUMP-LOAD-TIME-VALUE-LAMBDA.
 (defun fasl-note-handle-for-constant (constant handle file)
-  (let ((table (fasl-output-eq-table file)))ao
+  (let ((table (fasl-output-eq-table file)))
     (when (gethash constant table)
       (error "~S already dumped?" constant))
     (setf (gethash constant table) handle))
