@@ -538,7 +538,7 @@
 #+(and (not sb-xc-host) sb-simd-pack-512)
 (defun dump-simd-pack-512 (x file)
   (dump-fop 'fop-simd-pack file)
-  (dump-integer-as-n-bytes (logior (%simd-pack-512-tag x) (ash 1 6)) 8 file)
+  (dump-integer-as-n-bytes (logior (%simd-pack-512-tag x) (ash 1 7)) 8 file)
   (dump-integer-as-n-bytes (%simd-pack-512-0 x) 8 file)
   (dump-integer-as-n-bytes (%simd-pack-512-1 x) 8 file)
   (dump-integer-as-n-bytes (%simd-pack-512-2 x) 8 file)
@@ -655,7 +655,7 @@
 ;;; Use HANDLE whenever we try to dump CONSTANT. HANDLE should have been
 ;;; returned earlier by FASL-DUMP-LOAD-TIME-VALUE-LAMBDA.
 (defun fasl-note-handle-for-constant (constant handle file)
-  (let ((table (fasl-output-eq-table file)))
+  (let ((table (fasl-output-eq-table file)))ao
     (when (gethash constant table)
       (error "~S already dumped?" constant))
     (setf (gethash constant table) handle))

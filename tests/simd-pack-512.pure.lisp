@@ -50,10 +50,8 @@
                                              (sb-kernel:make-single-float -1)
                                              (sb-kernel:make-single-float -1))
 
-          (sb-ext:%make-simd-pack-512-double 1d0 2d0 3d0 4d0
-                                             5d0 6d0 7d0 8d0)
-          (sb-ext:%make-simd-pack-512-double 0d0 0d0 0d0 0d0
-                                             0d0 0d0 0d0 0d0)
+          (sb-ext:%make-simd-pack-512-double 1d0 2d0 3d0 4d0 5d0 6d0 7d0 8d0)
+          (sb-ext:%make-simd-pack-512-double 0d0 0d0 0d0 0d0 0d0 0d0 0d0 0d0)
           (sb-ext:%make-simd-pack-512-double (sb-kernel:make-double-float
                                               -1 (ldb (byte 32 0) -1))
                                              (sb-kernel:make-double-float
@@ -87,7 +85,8 @@
                                                        (ldb (byte 64 0) -1)
                                                        (ldb (byte 64 0) -1)))
           for pack in (list i i0 i-1)
-          do (assert (eql p0 (sb-kernel:%simd-pack-512-0 pack)))
+          do (print (list p0 p1 p2 p3 p4 p5 p6 p7))
+             (assert (eql p0 (sb-kernel:%simd-pack-512-0 pack)))
              (assert (eql p1 (sb-kernel:%simd-pack-512-1 pack)))
              (assert (eql p2 (sb-kernel:%simd-pack-512-2 pack)))
              (assert (eql p3 (sb-kernel:%simd-pack-512-3 pack)))
@@ -104,14 +103,15 @@
           for pack in (list f f0 f-1)
           do (assert (every #'eql expected
                             (multiple-value-list (sb-ext:%simd-pack-512-singles pack)))))
-    (loop for expected in (list '(1d0 2d0 3d0 4d0 1d0 2d0 3d0 4d0)
+    (loop for expected in (list '(1d0 2d0 3d0 4d0 5d0 6d0 7d0 8d0)
                                 '(0d0 0d0 0d0 0d0 0d0 0d0 0d0 0d0)
                                 (make-list
                                  8 :initial-element (sb-kernel:make-double-float
                                                      -1 (ldb (byte 32 0) -1))))
           for pack in (list d d0 d-1)
           do (assert (every #'eql expected
-                            (multiple-value-list (sb-ext:%simd-pack-512-doubles pack)))))))
+                            (multiple-value-list (sb-ext:%simd-pack-512-doubles pack)))))
+    ))
 
 (with-test (:name (simd-pack-512 print :smoke))
   (let ((packs (multiple-value-list (make-constant-packs))))
@@ -152,14 +152,14 @@
            (let ((*pack* nil))
              (load tmp-fasl)
              (assert (typep *pack* '(sb-ext:simd-pack-512 (unsigned-byte 64))))
-             (assert (= 2 (sb-kernel:%simd-pack-512-0 *pack*)))
-             (assert (= 4 (sb-kernel:%simd-pack-512-1 *pack*)))
-             (assert (= 8 (sb-kernel:%simd-pack-512-2 *pack*)))
-             (assert (= 16 (sb-kernel:%simd-pack-512-3 *pack*))))
-             (assert (= 2 (sb-kernel:%simd-pack-512-0 *pack*)))
-             (assert (= 4 (sb-kernel:%simd-pack-512-1 *pack*)))
-             (assert (= 8 (sb-kernel:%simd-pack-512-2 *pack*)))
-             (assert (= 16 (sb-kernel:%simd-pack-512-3 *pack*))))
+             (assert (= 2  (sb-kernel:%simd-pack-512-0 *pack*)))
+             (assert (= 4  (sb-kernel:%simd-pack-512-1 *pack*)))
+             (assert (= 8  (sb-kernel:%simd-pack-512-2 *pack*)))
+             (assert (= 16 (sb-kernel:%simd-pack-512-3 *pack*)))
+             (assert (= 2  (sb-kernel:%simd-pack-512-4 *pack*)))
+             (assert (= 4  (sb-kernel:%simd-pack-512-5 *pack*)))
+             (assert (= 8  (sb-kernel:%simd-pack-512-6 *pack*)))
+             (assert (= 16 (sb-kernel:%simd-pack-512-7 *pack*)))))
       (when tmp-fasl (delete-file tmp-fasl))
       (delete-file *tmp-filename*))))
 
@@ -169,7 +169,7 @@
                      :if-exists :supersede
                      :if-does-not-exist :create)
     (print '(setq *pack* (sb-ext:%make-simd-pack-512-single 1f0 2f0 3f0 4f0 5f0 6f0 7f0 8f0
-                                                             1f0 2f0 3f0 4f0 5f0 6f0 7f0 8f0)) s))
+                                                            1f0 2f0 3f0 4f0 5f0 6f0 7f0 8f0)) s))
   (let (tmp-fasl)
     (unwind-protect
          (progn
@@ -218,11 +218,11 @@
     (((sb-ext:%make-simd-pack-512-ub64 1 2 3 4 5 6 7 8) 0) '(1 2 3 4 5 6 7 8 0) :test #'equal)))
 
 (with-test (:name (simd-pack-512 subtypep :smoke))
-  (assert-tri-eq t t (subtypep '(simd-pack-512 (unsigned-byte 8)) 'simd-pack-512))
+  (assert-tri-eq t t (subtypep '(simd-pack-512 (unsigned-byte 8))  'simd-pack-512))
   (assert-tri-eq t t (subtypep '(simd-pack-512 (unsigned-byte 16)) 'simd-pack-512))
   (assert-tri-eq t t (subtypep '(simd-pack-512 (unsigned-byte 32)) 'simd-pack-512))
   (assert-tri-eq t t (subtypep '(simd-pack-512 (unsigned-byte 64)) 'simd-pack-512))
-  (assert-tri-eq t t (subtypep '(simd-pack-512 (signed-byte 8)) 'simd-pack-512))
+  (assert-tri-eq t t (subtypep '(simd-pack-512 (signed-byte 8))  'simd-pack-512))
   (assert-tri-eq t t (subtypep '(simd-pack-512 (signed-byte 16)) 'simd-pack-512))
   (assert-tri-eq t t (subtypep '(simd-pack-512 (signed-byte 32)) 'simd-pack-512))
   (assert-tri-eq t t (subtypep '(simd-pack-512 (signed-byte 64)) 'simd-pack-512))
@@ -247,11 +247,11 @@
 (with-test (:name (simd-pack-512 :ctype-unparse :smoke))
   (flet ((unparsed (s) (sb-kernel:type-specifier (sb-kernel:specifier-type s))))
     (assert (equal (unparsed 'simd-pack-512) 'simd-pack-512))
-    (assert (equal (unparsed '(simd-pack-512 (unsigned-byte 8))) '(simd-pack-512 (unsigned-byte 8))))
+    (assert (equal (unparsed '(simd-pack-512 (unsigned-byte 8)))  '(simd-pack-512 (unsigned-byte 8))))
     (assert (equal (unparsed '(simd-pack-512 (unsigned-byte 16))) '(simd-pack-512 (unsigned-byte 16))))
     (assert (equal (unparsed '(simd-pack-512 (unsigned-byte 32))) '(simd-pack-512 (unsigned-byte 32))))
     (assert (equal (unparsed '(simd-pack-512 (unsigned-byte 64))) '(simd-pack-512 (unsigned-byte 64))))
-    (assert (equal (unparsed '(simd-pack-512 (signed-byte 8))) '(simd-pack-512 (signed-byte 8))))
+    (assert (equal (unparsed '(simd-pack-512 (signed-byte 8)))  '(simd-pack-512 (signed-byte 8))))
     (assert (equal (unparsed '(simd-pack-512 (signed-byte 16))) '(simd-pack-512 (signed-byte 16))))
     (assert (equal (unparsed '(simd-pack-512 (signed-byte 32))) '(simd-pack-512 (signed-byte 32))))
     (assert (equal (unparsed '(simd-pack-512 (signed-byte 64))) '(simd-pack-512 (signed-byte 64))))

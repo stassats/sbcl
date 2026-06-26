@@ -895,7 +895,7 @@
                                   (fast-read-u-integer 8)
                                   (fast-read-u-integer 8)))
             #+sb-simd-pack-512
-            ((logbitp 6 tag)
+            ((logbitp 7 tag)
              (%make-simd-pack-512 (logand tag #b00111111)
                                   (fast-read-u-integer 8)
                                   (fast-read-u-integer 8)

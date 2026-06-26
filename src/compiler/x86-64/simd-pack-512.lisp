@@ -278,28 +278,33 @@
               unsigned-num unsigned-num unsigned-num unsigned-num)
   (:results (dst :scs (int-avx512-reg)))
   (:result-types simd-pack-512-ub64)
-  (:generator 5
-              (let* ((offset (sb-c:tn-offset dst))
-                     ;; a 128-bit "xmm view" of the destination register
-                     ;; using the 'double-reg' storage class (which maps to XMM)
-                     ;; this saves a temporary register
-                     (dst-xmm (sb-c:make-random-tn
-                               (sb-c:sc-or-lose 'sb-vm::double-reg) offset)))
+  ;; Explicitly request a temporary XMM register to build 128-bit chunks safely
+  (:temporary (:sc double-reg) tmp)
+  ;; this one builds in chunks in a temporary register, and swaps in bytes
+  ;; in the correct place in result; I think there is more efficient way to do
+  ;; this but I don't know it for now. I am happy if someone reworks it
+  (:generator 20
+     ;; a "xmm view" of dst register
+     (let ((xmm (sb-c:make-random-tn
+                     (sb-c:sc-or-lose 'sb-vm::double-reg) (sb-c:tn-offset dst))))
 
-                (inst vpinsrq dst-xmm dst-xmm p0 0)
-                (inst vpinsrq dst-xmm dst-xmm p1 1)
+       (inst vpxor dst dst dst)
+       (inst vpxor tmp tmp tmp)
 
-                (inst vpinsrq dst-xmm dst-xmm p2 0)
-                (inst vpinsrq dst-xmm dst-xmm p3 1)
-                (inst vinserti64x2 dst dst dst-xmm 1)
+       (inst vpinsrq xmm xmm p0 0)
+       (inst vpinsrq xmm xmm p1 1)
 
-                (inst vpinsrq dst-xmm dst-xmm p4 0)
-                (inst vpinsrq dst-xmm dst-xmm p5 1)
-                (inst vinserti64x2 dst dst dst-xmm 2)
+       (inst vpinsrq tmp tmp p2 0)
+       (inst vpinsrq tmp tmp p3 1)
+       (inst vinserti64x2 dst dst tmp 1)
 
-                (inst vpinsrq dst-xmm dst-xmm p6 0)
-                (inst vpinsrq dst-xmm dst-xmm p7 1)
-                (inst vinserti64x2 dst dst dst-xmm 3))))
+       (inst vpinsrq tmp tmp p4 0)
+       (inst vpinsrq tmp tmp p5 1)
+       (inst vinserti64x2 dst dst tmp 2)
+
+       (inst vpinsrq tmp tmp p6 0)
+       (inst vpinsrq tmp tmp p7 1)
+       (inst vinserti64x2 dst dst tmp 3))))
 
 
 (defmacro simd-pack-512-dispatch (pack &body body)
@@ -487,81 +492,79 @@
   ;;(:temporary (:sc single-avx512-reg  :from (:argument 3)) tmp)
   (:results (dst :scs (single-avx512-reg) :from (:argument 0)))
   (:result-types simd-pack-512-single)
-  (:generator 5
-    ;; fixme512 - questionable :)
-    (inst vmovss dst 0 p0)
-    (inst vmovss dst 1 p1)
-    (inst vmovss dst #.(ash 1 2) p2)
-    (inst vmovss dst #.(ash 1 3) p3)
-    (inst vmovss dst #.(ash 1 4) p4)
-    (inst vmovss dst #.(ash 1 5) p5)
-    (inst vmovss dst #.(ash 1 6) p6)
-    (inst vmovss dst #.(ash 1 7) p7)
-    (inst vmovss dst #.(ash 1 8) p8)
-    (inst vmovss dst #.(ash 1 9) p9)
-    (inst vmovss dst #.(ash 1 10) p10)
-    (inst vmovss dst #.(ash 1 11) p11)
-    (inst vmovss dst #.(ash 1 12) p12)
-    (inst vmovss dst #.(ash 1 13) p13)
-    (inst vmovss dst #.(ash 1 14) p14)
-    (inst vmovss dst #.(ash 1 15) p15)))
+  (:generator 10
+  ;; allocate 16 floats on the stack.
+  (inst sub rsp-tn 64)
+
+  ;; move all 16 scalar floats to sequential memory addresses.
+  (inst movss (ea 0 rsp-tn) p0)
+  (inst movss (ea 4 rsp-tn) p1)
+  (inst movss (ea 8 rsp-tn) p2)
+  (inst movss (ea 12 rsp-tn) p3)
+  (inst movss (ea 16 rsp-tn) p4)
+  (inst movss (ea 20 rsp-tn) p5)
+  (inst movss (ea 24 rsp-tn) p6)
+  (inst movss (ea 28 rsp-tn) p7)
+  (inst movss (ea 32 rsp-tn) p8)
+  (inst movss (ea 36 rsp-tn) p9)
+  (inst movss (ea 40 rsp-tn) p10)
+  (inst movss (ea 44 rsp-tn) p11)
+  (inst movss (ea 48 rsp-tn) p12)
+  (inst movss (ea 52 rsp-tn) p13)
+  (inst movss (ea 56 rsp-tn) p14)
+  (inst movss (ea 60 rsp-tn) p15)
+
+  ;; load the entire 512-bit chunk into the destination register.
+  (inst vmovups dst (ea 0 rsp-tn))
+
+  ;; restore the stack pointer.
+  (inst add rsp-tn 64)))
 
 (defknown %simd-pack-512-single-item
   (simd-pack-512 (integer 0 15)) single-float (flushable))
 
 (define-vop (%simd-pack-512-single-item)
-  (:args (x :scs (int-avx512-reg double-avx512-reg single-avx512-reg)
-            :target tmp))
   (:translate %simd-pack-512-single-item)
+  (:args (x :scs (int-avx512-reg double-avx512-reg single-avx512-reg)
+            :target dst))
   (:info index)
   (:arg-types simd-pack-512 (:constant t))
   (:results (dst :scs (single-reg)))
   (:result-types single-float)
-  (:temporary (:sc single-avx512-reg :from (:argument 0)) tmp)
+  (:temporary (:sc single-reg :from (:argument 0)) tmp)
   (:policy :fast-safe)
   (:generator 3
-    (let ((quadrant (floor index 4))
-          (index (mod index 4)))
-      (inst vextractf32x4 tmp x quadrant)
-      (when (plusp index)
-        (inst vpsrldq tmp tmp (* 4 index)))
-      (inst vxorps dst dst dst)
-      (inst vmovss dst tmp))))
+    (multiple-value-bind (lane idx) (floor index 4)
+      ;; extract the correct 128-bit lane (0-3) into temporary XMM register
+      (inst vextractf32x4 tmp x lane)
+      (cond ((zerop idx)
+             (inst vmovss dst tmp))
+            (t
+             (inst vshufps dst tmp tmp idx))))))
 
 (defknown %simd-pack-512-double-item
   (simd-pack-512 (integer 0 7)) double-float (flushable))
 
-;; fixme512
 (define-vop (%simd-pack-512-double-item)
   (:translate %simd-pack-512-double-item)
   (:args (x :scs (int-avx512-reg double-avx512-reg single-avx512-reg)
-            :target tmp))
+            :target dst))
   (:info index)
   (:arg-types simd-pack-512 (:constant t))
   (:results (dst :scs (double-reg)))
   (:result-types double-float)
-  (:temporary (:sc double-avx512-reg :from (:argument 0)) tmp)
+  (:temporary (:sc double-reg :from (:argument 0)) tmp)
   (:policy :fast-safe)
-(:generator 3
-    (let ((quadrant (floor index 2))
-          (index (mod index 2)))
-      (inst vextractf64x4 tmp x quadrant)
-      (when (plusp index)
-        (inst vpsrldq tmp tmp (* 8 index)))
-      (inst vxorpd dst dst dst)
-      (inst vmovsd dst tmp)))
-  ;; (:generator 3
-  ;;   (cond ((>= index 2)
-  ;;          (decf index 2)
-  ;;          (inst vextractf64x4 tmp x 1))
-  ;;         (t
-  ;;          (move tmp x)))
-  ;;   (when (plusp index)
-  ;;     (inst vpsrldq tmp tmp (* 8 index)))
-  ;;   (inst vxorpd dst dst dst)
-  ;;   (inst vmovsd dst tmp))
-
-  )
+  (:generator 3
+    (multiple-value-bind (lane idx) (floor index 2)
+      ;; Extract the correct 128-bit lane (0, 1, 2, or 3) into the XMM temporary
+      (inst vextractf64x2 tmp x lane)
+      (cond ((zerop idx)
+             ;; Element 0 of the lane: move lower 64-bits directly to dst
+             (inst vmovsd dst tmp))
+            (t
+             ;; Element 1 of the lane: shift lane right by 8 bytes (64 bits)
+             (inst vpsrldq dst tmp 8))))))
 
 #-sb-xc-host
 (progn
