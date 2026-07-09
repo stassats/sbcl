@@ -1946,21 +1946,30 @@
                            (inst sub byte-array-length byte-array-length tmp))
                          (inst b NEXT))
                        FULL-LENGTH
-  ;; ushr    v20.4s, v0.4s, #18      // unmasked B0 field (extra junk bits above bit2 remain)
-  ;;   ushr    v21.4s, v0.4s, #12      // unmasked B1 field
-  ;;   ushr    v22.4s, v0.4s, #6       // unmasked B2 field
-  ;;   mov     v23.16b, v0.16b         // unmasked B3 field
                        (inst ushr f1 bytes 18 :4s)
                        (inst ushr f2 bytes 12 :4s)
                        (inst ushr f3 bytes 6 :4s)
                        (inst mov f4 bytes :4s)
                        (load-inline-constant shuf :oword (concat-ub 8 '(60 44 28 12 56 40 24 8 52 36 20 4 48 32 16 0)))
-                       (mprint bytes)
-                       (inst tbl r1 (list f1 f2 f3 f4) shuf :16b)
+                       (inst tbl r4 (list f1 f2 f3 f4) shuf :16b)
                        (load-inline-constant shuf :oword (concat-ub 32 (make-list 4 :initial-element #x3f3f3f07)))
-                       (inst and r1 r1 shuf :16b)
+                       (inst and r4 r4 shuf :16b)
                        (load-inline-constant shuf :oword (concat-ub 32 (make-list 4 :initial-element #x808080F0)))
-                       (inst orr r1 r1 shuf :16b)
+                       (inst orr r4 r4 shuf :16b)
+
+                       (load-inline-constant shuf :oword (concat-ub 8 '(60 44 28 12 56 40 24 8 52 36 20 4 48 32 16 0)))
+                       (inst tbl r3 (list f2 f3 f4) shuf :16b)
+                       (load-inline-constant shuf :oword (concat-ub 32 (make-list 4 :initial-element #x3f3f0f)))
+                       (inst and r3 r3 shuf :16b)
+                       (load-inline-constant shuf :oword (concat-ub 32 (make-list 4 :initial-element #x8080E0)))
+                       (inst orr r3 r3 shuf :16b)
+
+
+                       (inst movi c-80 65536 :4s)
+                       (inst cmhi ascii c-80 bytes :4s)
+
+                       (inst bsl ascii r3 r4 :16b)
+                       (move r4 ascii :4s)
 
                        (inst ushr r2 bytes 6 :4s)
                        (inst sli r2 bytes 8 :4s)
@@ -1971,39 +1980,42 @@
 
                        (inst movi c-80 2048 :4s)
                        (inst cmhi ascii c-80 bytes :4s)
-                       (inst bsl ascii r2 r1 :16b)
+                       (inst bsl ascii r2 r4 :16b)
 
                        (inst movi c-80 #x80 :4s)
-                       (move r1 ascii :4s)
+                       (move r4 ascii :4s)
                        (inst cmhi ascii c-80 bytes :4s)
-                       (inst bsl ascii bytes r1 :16b)
+                       (inst bsl ascii bytes r4 :16b)
 
 
-                       ;; (inst cmtst temp ascii ascii :16b)
-                       ;; (inst orr temp #xFF :4s) ;; don't remove #\Nul
-                       ;; (inst shrn temp temp 4 :8b)
-                       ;; (inst and temp powers temp :8b)
                        (move temp ascii :4s)
                        (inst orr temp #xFF :4s) ;; don't remove #\Nul
                        (inst clz temp ascii :4s)
                        (inst ushr temp temp 3 :4s)
-                       (mprint temp)
                        (load-inline-constant shuf :oword (concat-ub 32 '(64 16 4 1)))
+                       (inst addv r4 temp :4s)
+                       (inst umov tmp-tn r4 0 :b)
                        (inst mul temp shuf temp :4s)
+
+;; addv    s1, v1.4s                    // Sum the zero byte counts
+;; fmov    w5, s1                       // w5 = total zeros removed
+;; mov     w6, #16
+;; sub     w_total, w6, w5              // w_total = 16 - zeros = valid bytes
+
                        (inst addv temp temp :4s)
 
 
                        (inst umov tmp temp 0 :b)
-                       (mprint tmp)
 
                        (inst ldr shuf (@ table2 (lsl tmp 4)))
 
                        (inst tbl bytes (list ascii) shuf :16b)
-
                        (inst str bytes (@ byte-array byte-index))
                        (inst add byte-index byte-index 16)
                        ;(inst sub byte-array-length byte-array-length 16)
+                       (inst sub byte-index byte-index tmp-tn)
                        (inst sub char-index char-index 16)
+                       (inst sub 32-bit-array 32-bit-array 16)
 
                        (inst add n n 16)
                        NEXT)))
