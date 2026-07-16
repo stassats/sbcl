@@ -1673,16 +1673,25 @@
                      ((c-c0 complex-double-reg))
                      ((c-bf complex-double-reg))
                      ((powers complex-double-reg))
+                     #-darwin
                      ((mask-s0 complex-double-reg))
+                     #-darwin
                      ((mask-s1 complex-double-reg))
+                     #-darwin
                      ((mask-s2 complex-double-reg))
+                     #-darwin
                      ((mask-s3 complex-double-reg))
+                     #+darwin
+                     ((udot1 complex-double-reg))
+                     #+darwin
+                     ((udot2 complex-double-reg))
                      ((shuf-low complex-double-reg t :offset 1))
                      ((shuf-high complex-double-reg t :offset 2))
                      ((chars-low complex-double-reg t :offset 5))
                      ((chars-high complex-double-reg t :offset 6))
                      ((s1 complex-double-reg t :offset 8))
                      ((s2 complex-double-reg t :offset 9))
+                     #-darwin
                      ((s3 complex-double-reg t :offset 10))
                      ((tag-clear complex-double-reg))
                      ((continuations complex-double-reg))
@@ -1795,13 +1804,25 @@
                                                                                               (loop for i from (1- (or next
                                                                                                                        (+ suffix 8))) downto start
                                                                                                     collect i))
-                                                                              append (loop for byte below 4
-                                                                                           collect (or (pop sources) #xFF)))))
+                                                                              append (let ((bytes (loop for byte below 4
+                                                                                                        collect (or (pop sources) #xFF))))
+                                                                                       #-darwin
+                                                                                       bytes
+                                                                                       #+darwin ;; a different order for UDOT
+                                                                                       (destructuring-bind (a b c d) bytes
+                                                                                         (list c d a b))))))
                                                          '(vector (unsigned-byte 8))))
-                (inst movi mask-s0 #xFF :4s)
-                (inst movi mask-s1 #xFF00 :4s)
-                (inst movi mask-s2 #xFF0000 :4s)
-                (inst movi mask-s3 #xFF000000 :4s)
+                #-darwin
+                (progn
+                 (inst movi mask-s0 #xFF :4s)
+                 (inst movi mask-s1 #xFF00 :4s)
+                 (inst movi mask-s2 #xFF0000 :4s)
+                 (inst movi mask-s3 #xFF000000 :4s))
+                #+darwin
+                (progn
+                  (load-inline-constant udot1 :oword #x00004001000040010000400100004001)
+                  (inst shl udot2 udot1 16 :4s))
+
 
                 FULL-LOOP
                 (inst sub tmp-tn string-length char-index)
@@ -1852,22 +1873,31 @@
                 ;; Shuffle the bytes into 4-byte lanes
                 (inst tbl chars-low (list bytes) shuf-low :16b)
                 (inst tbl chars-high (list bytes) shuf-high :16b)
-
-                ;; Isolate each byte in a lane and shift it into place to get a codepoint
-                (flet ((decode-lane (chars)
+                (flet (#-darwin
+                       (decode-lane (dest chars)
+                         ;; Isolate each byte in a lane and shift it into place to get a codepoint
                          (inst and s1 chars mask-s1 :16b)
                          (inst and s2 chars mask-s2 :16b)
                          (inst and s3 chars mask-s3 :16b)
-                         (inst and chars chars mask-s0 :16b)
+                         (inst and dest chars mask-s0 :16b)
 
-                         (inst usra chars s1 2 :4s)
-                         (inst usra chars s2 4 :4s)
-                         (inst usra chars s3 6 :4s)))
-
-                  (decode-lane chars-low)
-                  (decode-lane chars-high))
+                         (inst usra dest s1 2 :4s)
+                         (inst usra dest s2 4 :4s)
+                         (inst usra dest s3 6 :4s))
+                       #+darwin ;; guaranteed to have udot
+                       (decode-lane (dest chars)
+                         ;; Do the above thing using UDOT
+                         ;; TODO: use def-variant for everywhere else
+                         ;; Perform A + B<<6 + C<<12 + D<<18
+                         ;; in two steps, because UDOT can only multiply by 8 bits
+                         (inst movi dest 0 :4s)
+                         (inst udot dest chars udot1 :4s)
+                         (inst shl dest dest 12 :4s)
+                         (inst udot dest chars udot2 :4s)))
+                  (decode-lane temp2 chars-low)
+                  (decode-lane temp3 chars-high))
                 (inst add ptr string (lsl char-index 2))
-                (inst st1 (list chars-low chars-high) (@ ptr) :16b)
+                (inst st1 (list temp2 temp3) (@ ptr) :16b)
 
                 (inst add byte-index byte-index 8)
                 (inst sub char-index char-index produced)
