@@ -90,6 +90,11 @@
     (inst lea rax-tn (ea (+ 512 16) rsp-tn))
     (dotimes (i 8)
       (inst mov (ea (ash i word-shift) rax-tn) rdx-tn))
+    (inst lea rax-tn (ea 16 rsp-tn))
+    (inst test rax-tn 63)
+    (inst jmp :z skip)
+    (inst break halt-trap)
+    skip
     (inst mov rax-tn 7)
     (inst xsave (ea 16 rsp-tn))
     (inst pop rdx-tn))
