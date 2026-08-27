@@ -1537,34 +1537,58 @@ NOTE: This interface is experimental and subject to change."
                                        subtree
                                        (unquote new (comma-kind subtree)))))
                                 ((atom subtree) subtree)
-                                (t (let ((car (s (car subtree)))
-                                         (cdr (s (cdr subtree))))
-                                     (if (and (eq car (car subtree))
-                                              (eq cdr (cdr subtree)))
-                                         subtree
-                                         (cond ((and (typep car '(cons symbol))
-                                                     (string= (car car) "$WHEN"))
-                                                (if (eval (second car))
-                                                    (append (cddr car) cdr)
-                                                    cdr))
-                                               ((and (typep car '(cons symbol))
-                                                     (string= (car car) "$UNLESS"))
-                                                (if (eval (second car))
-                                                    cdr
-                                                    (append (cddr car) cdr)))
-                                               ((and (typep car '(cons symbol))
-                                                     (string= (car car) "$IF"))
-                                                (cons
-                                                 (if (eval (second car))
-                                                     (third car)
-                                                     (fourth car))
-                                                 cdr))
-                                               ((and (typep car '(cons symbol))
-                                                     (string= (car car) "$VALUE"))
-                                                (cons (symbol-value (second car)) cdr))
-                                               (t
-                                                (cons car cdr))))))))))
+                                (t
+                                 (let ((car (s (car subtree)))
+                                       (cdr (s (cdr subtree))))
+                                   (if (and (eq car (car subtree))
+                                            (eq cdr (cdr subtree)))
+                                       subtree
+                                       (cons car cdr))))))))
                (s tree)))
+           (eval-directives (tree)
+             (cond ((comma-p tree)
+                    (let ((new (eval-directives (comma-expr tree))))
+                      (if (eq tree new)
+                          tree
+                          (unquote new (comma-kind tree)))))
+                   ((atom tree) tree)
+                   (t (let ((car (car tree))
+                            (cdr (cdr tree)))
+                        (cond ((and (typep car '(cons symbol))
+                                    (string= (car car) "$WHEN"))
+                               (let ((car (eval-directives car))
+                                     (cdr (eval-directives cdr)))
+                                 (if (eval (second car))
+                                     (append (cddr car) cdr)
+                                     cdr)))
+                              ((and (typep car '(cons symbol))
+                                    (string= (car car) "$UNLESS"))
+                               (let ((car (eval-directives car))
+                                     (cdr (eval-directives cdr)))
+                                 (if (eval (second car))
+                                     cdr
+                                     (append (cddr car) cdr))))
+                              ((and (typep car '(cons symbol))
+                                    (string= (car car) "$IF"))
+                               (let ((car (eval-directives car))
+                                     (cdr (eval-directives cdr)))
+                                 (cons (if (eval (second car))
+                                           (third car)
+                                           (fourth car))
+                                       cdr)))
+                              ((and (typep car '(cons symbol))
+                                    (string= (car car) "$VALUE"))
+                               (let ((car (eval-directives car))
+                                     (cdr (eval-directives cdr)))
+                                 (cons (symbol-value (second car)) cdr)))
+                              (t
+                               (let ((new-car (eval-directives car))
+                                     (new-cdr (eval-directives cdr)))
+                                 (if (and (eq new-car car)
+                                          (eq new-cdr cdr))
+                                     tree
+                                     (cons new-car new-cdr)))))))))
+
            (test (pattern with)
              (lambda (x)
                (when (symbolp x)
@@ -1584,6 +1608,7 @@ NOTE: This interface is experimental and subject to change."
                                              with
                                              (subseq str (+ start (length pattern)))))))
                       t))))))
+
            (gen (vars body)
              (if vars
                  (loop for with in (cdar vars)
@@ -1597,7 +1622,7 @@ NOTE: This interface is experimental and subject to change."
                               (loop for (v . w) in patterns
                                     do (setf body (subst-if-with (test (string v) w) body)))
                               body)))
-                 body)))
+                 (eval-directives body))))
     `(progn ,@(gen vars body))))
 
 (defvar *top-level-form-p* nil)

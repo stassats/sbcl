@@ -38,21 +38,22 @@
 
 
 (defconstant-eqx +conditions+
-  '((:eq . 0)
-    (:ne . 1)
-    (:hs . 2) (:cs . 2)
-    (:lo . 3) (:cc . 3)
-    (:mi . 4)
-    (:pl . 5)
+  '((:eq . 0) (:none . 0)
+    (:ne . 1) (:any . 1)
+    (:hs . 2) (:cs . 2) (:nlast . 2)
+    (:lo . 3) (:cc . 3) (:last . 3)
+    (:mi . 4) (:first . 4)
+    (:pl . 5) (:nfrst . 5) (:nfirst . 5)
     (:vs . 6)
     (:vc . 7)
-    (:hi . 8)
-    (:ls . 9)
-    (:ge . 10)
-    (:lt . 11)
+    (:hi . 8) (:pmore . 8)
+    (:ls . 9) (:plast . 9)
+    (:ge . 10) (:tcont . 10)
+    (:lt . 11) (:tstop . 11)
     (:gt . 12)
     (:le . 13)
-    (:al . 14))
+    (:al . 14)
+    (:nv . 15))
   #'equal)
 
 (defconstant-eqx +condition-name-vec+
@@ -353,7 +354,7 @@
 
 ;;;; Data-processing instructions
 
-
+;;; define-bitfield-emitter with names and default values
 (defmacro def-emitter (name &body specs)
   (collect ((arg-names) (arg-types))
     (let* ((total-bits 32)
@@ -1056,32 +1057,6 @@
          (width ,width))
      (inst bfm rd rn (mod (- lsb) 64) (1- width))))
 
-(define-instruction-macro asr (rd rn shift)
-  `(let ((rd ,rd)
-         (rn ,rn)
-         (shift ,shift))
-     (if (integerp shift)
-         (inst sbfm rd rn shift 63)
-         (inst asrv rd rn shift))))
-
-(define-instruction-macro lsr (rd rn shift)
-  `(let ((rd ,rd)
-         (rn ,rn)
-         (shift ,shift))
-     (if (integerp shift)
-         (inst ubfm rd rn shift 63)
-         (inst lsrv rd rn shift))))
-
-(define-instruction-macro lsl (rd rn shift)
-  `(let ((rd ,rd)
-         (rn ,rn)
-         (shift ,shift))
-     (if (integerp shift)
-         (inst ubfm rd rn
-               (mod (- shift) 64)
-               (- 63 shift))
-         (inst lslv rd rn shift))))
-
 (define-instruction-macro ror (rd rs shift)
   `(let ((rd ,rd)
          (rs ,rs)
@@ -1394,6 +1369,28 @@
 (def-data-processing-2 lsrv #b001001 lsr)
 (def-data-processing-2 rorv #b001011 ror)
 
+(define-instruction asr (segment rd rn shift)
+  (:emitter
+   (assemble (segment)
+     (if (integerp shift)
+         (inst sbfm rd rn shift 63)
+         (inst asrv rd rn shift)))))
+
+(define-instruction lsr (segment rd rn shift)
+  (:emitter
+   (assemble (segment)
+     (if (integerp shift)
+         (inst ubfm rd rn shift 63)
+         (inst lsrv rd rn shift)))))
+
+(define-instruction lsl (segment rd rn shift)
+  (:emitter
+   (assemble (segment)
+     (if (integerp shift)
+         (inst ubfm rd rn
+               (mod (- shift) 64)
+               (- 63 shift))
+         (inst lslv rd rn shift)))))
 
 (def-data-processing-2 udiv #b00010)
 (def-data-processing-2 sdiv #b00011)
@@ -1929,11 +1926,11 @@
   (o2 :field (byte 1 23) :value 1)
   (l :field (byte 1 22))
   (o1 :field (byte 1 21) :value 1)
-  (rs :fields (list (byte 1 30) (byte 5 16)) :type 'sized-reg)
+  (rs :fields (list (byte 5 16) (byte 1 30)) :type 'sized-reg)
   (o0 :field (byte 1 15))
   (rt2 :field (byte 5 10) :value #b11111)
   (rn :field (byte 5 5) :type 'x-reg-sp)
-  (rt :fields (list (byte 1 30) (byte 5 0)) :type 'sized-reg))
+  (rt :fields (list (byte 5 0) (byte 1 30)) :type 'sized-reg))
 
 (define-instruction-format (casb 32)
   (size :field (byte 2 30))
@@ -2034,10 +2031,10 @@
   (a :field (byte 1 23))
   (r :field (byte 1 22))
   (o1 :field (byte 1 21) :value #b1)
-  (rs :fields (list (byte 1 30) (byte 5 16)) :type 'sized-reg)
+  (rs :fields (list (byte 5 16) (byte 1 30)) :type 'sized-reg)
   (opc :field (byte 6 10))
   (rn :field (byte 5 5) :type 'x-reg-sp)
-  (rt :fields (list (byte 1 30) (byte 5 0)) :type 'sized-reg))
+  (rt :fields (list (byte 5 0) (byte 1 30)) :type 'sized-reg))
 
 (defmacro def-ldatomic (name opc a r)
   `(define-instruction ,name (segment rs rt rn)
@@ -3840,7 +3837,7 @@
 (define-instruction-format (simd-copy-from-general 32
                             :include simd-copy
                             :default-printer '(:name :tab rd ", " rn))
-  (rn :fields (list (byte 1 30) (byte 5 5)) :type 'sized-reg)
+  (rn :fields (list (byte 5 5) (byte 1 30)) :type 'sized-reg)
   (rd :fields (list (byte 5 0) (byte 5 16)) :type 'simd-copy-reg))
 
 (define-instruction ins (segment rd index1 rn index2 size)
@@ -3870,7 +3867,7 @@
                             :include simd-copy
                             :default-printer '(:name :tab rd ", " rn))
   (rn :fields (list (byte 5 5) (byte 5 16)) :type 'simd-copy-reg)
-  (rd :fields (list (byte 1 30) (byte 5 0)) :type 'sized-reg))
+  (rd :fields (list (byte 5 0) (byte 1 30)) :type 'sized-reg))
 
 (define-instruction umov (segment rd rn index size)
   (:printer simd-copy-to-general ((op 0) (imm4 #b0111)))
@@ -3907,7 +3904,7 @@
 (define-instruction-format (simd-dup-from-general 32
                             :include simd-copy
                             :default-printer '(:name :tab rd ", " rn))
-  (rn :fields (list (byte 1 30) (byte 5 5)) :type 'sized-reg)
+  (rn :fields (list (byte 5 5) (byte 1 30)) :type 'sized-reg)
   (rd :fields (list (byte 5 0) (byte 1 30) (byte 5 16)) :type 'simd-dup-reg))
 
 (define-instruction-format (simd-dup 32

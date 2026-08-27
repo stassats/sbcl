@@ -1598,23 +1598,26 @@
 (defmacro inst (&whole whole mnemonic &rest args)
   "Emit the specified instruction to the current segment."
   (let* ((sym (find-symbol (string mnemonic) *backend-instruction-set-package*))
-         (definedp (nth-value 1 (gethash sym *inst-encoder*))))
-    (cond ((not definedp)
-           ;; INST* can not execute random forms, so MNEMONIC must be a literal to be
-           ;; recognized as a macro instruction. It's basically a lisp macro that can
-           ;; coexist with other identically-named lisp macros or functions.
-           ;; For example, arm64 has {ASR, LSR} as DEFUNs and macro instructions.
-           ;; By using an unusual convention of a symbol with #\: in its name,
-           ;; FIND-SYMBOL reliably tests whether a macro is defined without further
-           ;; using FBOUNDP or MACRO-FUNCTION.
-           (let ((macro (find-symbol (format nil "M:~A" mnemonic)
-                                     *backend-instruction-set-package*)))
-             (when macro
-               (return-from inst `(,macro ,@args))))
-           (warn "Undefined instruction: ~s in~% ~s" mnemonic whole)
-           `(error "Undefined instruction: ~s in~% ~s" ',mnemonic ',whole))
-          (t
-           `(inst* ',sym ,@args)))))
+         (intercept (get sym :intercept)))
+    (if intercept
+        `(intercept-inst* #',(car intercept) ',sym ',(cdr intercept) ,@args)
+        (let* ((definedp (nth-value 1 (gethash sym *inst-encoder*))))
+          (cond ((not definedp)
+                 ;; INST* can not execute random forms, so MNEMONIC must be a literal to be
+                 ;; recognized as a macro instruction. It's basically a lisp macro that can
+                 ;; coexist with other identically-named lisp macros or functions.
+                 ;; For example, arm64 has {ASR, LSR} as DEFUNs and macro instructions.
+                 ;; By using an unusual convention of a symbol with #\: in its name,
+                 ;; FIND-SYMBOL reliably tests whether a macro is defined without further
+                 ;; using FBOUNDP or MACRO-FUNCTION.
+                 (let ((macro (find-symbol (format nil "M:~A" mnemonic)
+                                           *backend-instruction-set-package*)))
+                   (when macro
+                     (return-from inst `(,macro ,@args))))
+                 (warn "Undefined instruction: ~s in~% ~s" mnemonic whole)
+                 `(error "Undefined instruction: ~s in~% ~s" ',mnemonic ',whole))
+                (t
+                 `(inst* ',sym ,@args)))))))
 
 ;;; Place INST in the current assembly section (or sometimes SEGMENT)
 ;;; based on *CURRENT-DESTINATION*. The latter occurs in two scenarios:
@@ -1653,6 +1656,21 @@
        (trace-inst dest mnemonic operands)
        (emit dest (cons mnemonic operands)))
       (segment ; streaming out of the assembler
+       (instruction-hooks dest)
+       (apply (the function (if (listp action) (car action) action))
+              dest (perform-operand-lowering operands))))))
+
+
+(defun intercept-inst* (interceptor mnemonic alternative &rest operands)
+  (setf mnemonic (apply interceptor mnemonic alternative operands))
+  (let ((action (gethash mnemonic *inst-encoder*))
+        (dest *current-destination*))
+    (when (listp action) (setq operands (extract-prefix-keywords operands)))
+    (typecase dest
+      (cons
+       (trace-inst dest mnemonic operands)
+       (emit dest (cons mnemonic operands)))
+      (segment
        (instruction-hooks dest)
        (apply (the function (if (listp action) (car action) action))
               dest (perform-operand-lowering operands))))))

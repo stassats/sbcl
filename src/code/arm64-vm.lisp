@@ -73,6 +73,24 @@
            (declare (type (complex double-float) value))
          (setf (sap-ref-double sap 0) (realpart value)
                (sap-ref-double sap 8) (imagpart value)))))))
+
+(defun sve-vector-size ()
+  (inline-vop ()
+      ((res any-reg positive-fixnum))
+    (inst rdvl res (ash 1 n-fixnum-tag-bits))))
+
+(defun context-predicate-register (context index)
+  #-linux (declare (ignore context index))
+  #+linux
+  (let ((sap (alien-sap
+              (alien-funcall (extern-alien "os_context_sve_predicate_register_addr" (function (* unsigned) (* os-context-t) int))
+                             context index))))
+    (unless (zerop (sap-int sap))
+      (case (sve-vector-size)
+        (16
+         (sap-ref-16 sap 0))
+        (32
+         (sap-ref-32 sap 0))))))
 
 ;;;; INTERNAL-ERROR-ARGS.
 

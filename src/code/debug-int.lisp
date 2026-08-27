@@ -2653,7 +2653,13 @@
       (#.immediate-sc-number
        (sb-c:sc+offset-offset sc+offset))
       (#.sb-vm::negative-immediate-sc-number
-       (- (sb-c:sc+offset-offset sc+offset))))))
+       (- (sb-c:sc+offset-offset sc+offset)))
+      #+arm64
+      (#.sb-vm::predicate-reg-sc-number
+       (if escaped
+           (sb-vm::context-predicate-register escaped
+                                       (sb-c:sc+offset-offset sc+offset))
+           :invalid-value-for-unescaped-register-storage)))))
 
 ;;; This stores value as the value of DEBUG-VAR in FRAME. In the
 ;;; COMPILED-DEBUG-VAR case, access the current value to determine if

@@ -210,7 +210,7 @@
 
 (defun print-sized-reg (value stream dstate)
   (declare (ignore dstate))
-  (destructuring-bind (size reg) value
+  (destructuring-bind (reg size) value
     (when (zerop size)
       (princ "W" stream))
     (princ (svref *register-names* reg) stream)))

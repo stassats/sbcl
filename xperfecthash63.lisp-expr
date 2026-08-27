@@ -1835,5 +1835,34 @@
 (#(A49305EF D0241AE7 E55E7F8C EE9A5410)
  "(SB-PCL::%CLASS SB-PCL::%PARAMETER SB-PCL::%VARIABLE-REBINDING SPECIAL)"
  "((& (>> val 8) 3))")
+(#(320B0948 4E3391D6 5256235A 6AC11619 A7D5BCEA CD145E2A ED8563BC)
+ "(SB-VM::PREDICATE-REGISTERS SB-VM::FLOAT-REGISTERS SB-VM::IMMEDIATE-CONSTANT CONSTANT SB-C:NON-DESCRIPTOR-STACK SB-VM::CONTROL-STACK SB-VM::REGISTERS)"
+ "((& (+ (>> val 1) (>> val 25)) 7))")
+(#(3049878 F14865E F98207A 20928514 361526D0 51996492 59B31785 5ECBF2E6 781488E5 7A2064FA 831D9492 8A059AB1 8A1D9F97 8A25EE5C
+   8CD5F0E4 9214B1D3 941DAF55 952EFA09 9A05B3E1 9A26078C 9E1DBF13 A42F11A6 C420397C C8198403 D519987A DB000A06 DC33E6FC
+   E12AF47F F604415D)
+ "((:EQ . 0) (:NONE . 0) (:NE . 1) (:ANY . 1) (:HS . 2) (:CS . 2) (:NLAST . 2) (:LO . 3) (:CC . 3) (:LAST . 3) (:MI . 4) (:FIRST . 4) (:PL . 5) (:NFRST . 5) (:NFIRST . 5) (:VS . 6) (:VC . 7) (:HI . 8) (:PMORE . 8) (:LS . 9) (:PLAST . 9) (:GE . 10) (:TCONT . 10) (:LT . 11) (:TSTOP . 11) (:GT . 12) (:LE . 13) (:AL . 14) (:NV . 15))"
+ "((let ((tab #a((16) (unsigned-byte 8) 31 13 1 14 0 15 31 12 13 18 31 0 0 0 22 16)))
+  (let ((b (& (>> val 8) #xf)))
+   (let ((a (>> (<< val 5) 28)))
+    (^ a (aref tab b))))))")
+(#(0 1 2 3 8 10 20 40 29F3ECDD 32F3FB08 38F4047A 3EF40DEC)
+ "(64 3 :D 32 2 :S 16 1 :H 8 0 :B)"
+ "((let ((tab #a((8) (unsigned-byte 8) 8 11 0 2 5 9 1 10)))
+  (+= val #x93cf3b74)
+  (^= val (>> val 16))
+  (+= val (<< val 8))
+  (^= val (>> val 4))
+  (let ((b (& (>> val 7) #x7)))
+   (let ((a (>> (u32+ val (<< val 5)) 29)))
+    (^ a (aref tab b))))))")
+(#(4 8 10 20 40 80)
+ "(2 4 8 16 32 64)"
+ "((let ((tab #a((4) (unsigned-byte 8) 2 7 3 0)))
+  (+= val #x281c4049)
+  (^= val (>> val 4))
+  (let ((b (& (>> val 2) #x3)))
+   (let ((a (>> (u32+ val (<< val 25)) 30)))
+    (^ a (aref tab b))))))")
 )
 ;; EOF

@@ -920,37 +920,45 @@
          (if (and (stringp source) (string= source ", "))
              `(local-print-arg-separator)
              `(local-princ ',source)))
-        ((eq (car source) 'quote)
-         `(,(if (symbolp (cadr source)) 'local-princ-symbol 'local-princ) ,source))
-        ((eq (car source) :using)
-         (let ((f (cadr source)))
-          (unless (typep f '(or string (cons (eql function) (cons symbol null))))
-            (pd-error "The first arg to :USING must be a string or #'function."))
-          (compile-print (caddr source) funstate f)))
-        ((eq (car source) :plus-integer)
-         ;; prints the given field proceed with a + or a -
-         (let ((form
-                (arg-value-form (arg-or-lose (cadr source) funstate)
-                                funstate
-                                :numeric)))
-           `(progn
-              (when (>= ,form 0)
-                (local-write-char #\+))
-              (local-princ ,form))))
-        ((eq (car source) 'function)
-         `(local-call-global-printer ,source))
-        ((eq (car source) :cond)
-         `(cond ,@(mapcar (lambda (clause)
-                            `(,(compile-test (find-first-field-name
-                                              (cdr clause))
-                                             (car clause)
-                                             funstate)
-                              ,@(compile-printer-list (cdr clause)
-                                                      funstate)))
-                          (cdr source))))
-        ;; :IF, :UNLESS, and :WHEN are replaced by :COND during preprocessing
         (t
-         `(progn ,@(compile-printer-list source funstate)))))
+         (case (car source)
+           (quote
+            `(,(if (symbolp (cadr source)) 'local-princ-symbol 'local-princ) ,source))
+           (:using
+            (let ((f (cadr source)))
+              (unless (typep f '(or string (cons (eql function) (cons symbol null))))
+                (pd-error "The first arg to :USING must be a string or #'function."))
+              (compile-print (caddr source) funstate f)))
+           (:plus-integer
+            ;; prints the given field proceed with a + or a -
+            (let ((form
+                    (arg-value-form (arg-or-lose (cadr source) funstate)
+                                    funstate
+                                    :numeric)))
+              `(progn
+                 (when (>= ,form 0)
+                   (local-write-char #\+))
+                 (local-princ ,form))))
+           (function
+            `(local-call-global-printer ,source))
+           (:cond
+             `(cond ,@(mapcar (lambda (clause)
+                                `(,(compile-test (find-first-field-name
+                                                  (cdr clause))
+                                                 (car clause)
+                                                 funstate)
+                                  ,@(compile-printer-list (cdr clause)
+                                                          funstate)))
+                              (cdr source))))
+           ((+ *)
+            (let ((form
+                    (arg-value-form (arg-or-lose (second source) funstate)
+                                    funstate
+                                    :numeric)))
+              `(local-princ (,(car source) ,form ,(third source)))))
+           ;; :IF, :UNLESS, and :WHEN are replaced by :COND during preprocessing
+           (t
+            `(progn ,@(compile-printer-list source funstate)))))))
 
 (defun compile-printer-list (sources funstate)
   (when sources

@@ -101,7 +101,7 @@
 (define-storage-base constant :non-packed)
 (define-storage-base immediate-constant :non-packed)
 (define-storage-base float-registers :finite :size 32)
-)
+(define-storage-base predicate-registers :finite :size 16))
 
 (!define-storage-classes
   ;; Non-immediate contstants in the constant pool
@@ -236,6 +236,10 @@
                    :constant-scs (fp-immediate)
                    :save-p t
                    :alternate-scs (single-neon-stack))
+  (predicate-reg predicate-registers
+                 :locations #.(loop for i to 15 collect i))
+  (sve-reg float-registers
+           :locations #.(loop for i to 31 collect i))
 
   (catch-block control-stack :element-size catch-block-size)
   (unwind-block control-stack :element-size unwind-block-size)
@@ -330,13 +334,13 @@
                (sc-case tn
                  (single-reg "S")
                  ((double-reg complex-single-reg) "D")
-                 ((#+sb-simd-pack neon-reg
-                   #+sb-simd-pack int-neon-reg
-                   #+sb-simd-pack double-neon-reg
-                   #+sb-simd-pack single-neon-reg
-                   complex-double-reg)
-                  "V"))
-               offset)))))
+                 (complex-double-reg "V")
+                 #+sb-simd-pack
+                 ((neon-reg int-neon-reg double-neon-reg single-neon-reg) "V")
+                 (sve-reg "Z"))
+               offset))
+      (predicate-registers
+       (format nil "P~D" offset)))))
 
 (defun primitive-type-indirect-cell-type (ptype)
   (declare (ignore ptype))

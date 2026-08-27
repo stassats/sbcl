@@ -94,6 +94,64 @@ os_context_float_register_addr(os_context_t *context, int offset)
         &((struct fpsimd_context *)((uintptr_t)&context->uc_mcontext + 288))->vregs[offset];
 }
 
+static struct sve_context *
+os_context_sve_context(os_context_t *context)
+{
+    struct _aarch64_ctx *head =
+        (struct _aarch64_ctx *)context->uc_mcontext.__reserved;
+
+    while (head->magic != 0) {
+        if (head->magic == SVE_MAGIC)
+            return (struct sve_context *)head;
+
+        head = (struct _aarch64_ctx *)((char *)head + head->size);
+    }
+
+    return NULL;
+}
+
+os_context_register_t *
+os_context_sve_register_addr(os_context_t *context, int offset)
+{
+    struct sve_context *sve = os_context_sve_context(context);
+    unsigned vq;
+
+    if (sve == NULL)
+        return NULL;
+
+    vq = sve->vl / 16;
+
+    return (os_context_register_t *) ((char *)sve + SVE_SIG_ZREG_OFFSET(vq, offset));
+}
+
+os_context_register_t *
+os_context_sve_predicate_register_addr(os_context_t *context, int offset)
+{
+    struct sve_context *sve = os_context_sve_context(context);
+    unsigned vq;
+
+    if (sve == NULL)
+        return NULL;
+
+    vq = sve->vl / 16;
+
+    return (os_context_register_t *) ((char *)sve + SVE_SIG_PREG_OFFSET(vq, offset));
+}
+
+os_context_register_t *
+os_context_sve_ffr_addr(os_context_t *context)
+{
+    struct sve_context *sve = os_context_sve_context(context);
+    unsigned vq;
+
+    if (sve == NULL)
+        return NULL;
+
+    vq = sve->vl / 16;
+
+    return (os_context_register_t *) ((char *)sve + SVE_SIG_FFR_OFFSET(vq));
+}
+
 void
 os_flush_icache(os_vm_address_t address, os_vm_size_t length)
 {
