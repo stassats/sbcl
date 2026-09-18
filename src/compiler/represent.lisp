@@ -1011,6 +1011,21 @@
             (setf (tn-kind (tn-ref-tn (tn-ref-across (vop-args vop))))
                   :unused)))))))
 
+(defun select-tagging (component)
+  (do-ir2-blocks (block component)
+    (do ((vop (ir2-block-start-vop block)
+              (vop-next vop)))
+        ((null vop))
+      (when (vop-group-p vop)
+        (emit-and-insert-vop (vop-node vop)
+                             block
+                             (car (vop-group-vops vop))
+                             (reference-tn-refs (vop-group-args vop) nil)
+                             (reference-tn-refs (vop-group-results vop) t)
+                             vop)
+        (delete-vop vop)
+        (:pab2)))))
+
 ;;; This is the entry to representation selection. First we select the
 ;;; representation for all normal TNs, setting the TN-SC. After
 ;;; selecting the TN representations, we set the SC for all :ALIAS TNs

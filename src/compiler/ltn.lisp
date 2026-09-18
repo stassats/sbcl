@@ -823,6 +823,13 @@
       (when (is-ok-template-use template call)
         (return (values template rejected (rest templates))))
       (setq rejected template))))
+(defvar *x* nil)
+
+(defun tagged-template-p (vop-info)
+  (and (loop for costs in (vop-info-arg-costs vop-info)
+             always (eql (svref costs sb-vm:any-reg-sc-number) 0))
+       (loop for costs in (vop-info-result-costs vop-info)
+             always (eql (svref costs sb-vm:any-reg-sc-number) 0))))
 
 ;;; Given a partially annotated known call and a translation policy,
 ;;; return the appropriate template, or NIL if none can be found. We
@@ -833,20 +840,40 @@
   (let ((current (fun-info-templates (basic-combination-fun-info call)))
         (fallback nil)
         (rejected nil))
-    (loop
-     (multiple-value-bind (template this-reject more) (find-template current call)
-       (unless rejected
-         (setq rejected this-reject))
-       (setq current more)
-       (unless template
-         (return (values fallback rejected)))
-       (ecase (template-ltn-policy template)
-         ;; handle :small :small-safe if they are ever used
-         ((:fast-safe :safe)
-          (return (values template rejected)))
-         (:fast
-          (when (policy call (zerop safety))
-            (return (values template rejected)))))))))
+    (if *x*
+        (let ((first (member-if (lambda (template)
+                                  (and (is-ok-template-use template call)
+                                       (ecase (template-ltn-policy template)
+                                         ((:fast-safe :safe) t)
+                                         (:fast (policy call (zerop safety))))))
+                                current)))
+
+          (when first
+            (if (tagged-template-p (car first))
+                (let ((untagged (find-if (lambda (template)
+                                           (and (not (tagged-template-p template))
+                                                (is-ok-template-use template call)
+                                                (ecase (template-ltn-policy template)
+                                                  ((:fast-safe :safe) t)
+                                                  (:fast (policy call (zerop safety))))))
+                                         (cdr first))))
+                  (if untagged
+                      (list (car first) untagged)))
+                (car first))))
+        (loop
+         (multiple-value-bind (template this-reject more) (find-template current call)
+           (unless rejected
+             (setq rejected this-reject))
+           (setq current more)
+           (unless template
+             (return (values fallback rejected)))
+           (ecase (template-ltn-policy template)
+             ;; handle :small :small-safe if they are ever used
+             ((:fast-safe :safe)
+              (return (values template rejected)))
+             (:fast
+              (when (policy call (zerop safety))
+                (return (values template rejected))))))))))
 
 (defvar *efficiency-note-limit* 2
   "This is the maximum number of possible optimization alternatives will be

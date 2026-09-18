@@ -552,6 +552,20 @@
   ;; when VOP-INFO-SAVE-P is non-null.
   (save-set nil :type (or local-tn-bit-vector null)))
 
+(defstruct tn-group
+  (tns nil :type list))
+(defstruct (vop-group (:include vop
+                       (info (car vops)))
+                      (:constructor make-vop-group (block node vops
+                                                     args results)))
+  (vops nil :type list)
+  (tn-group nil :type (or null tn-group)))
+
+(defprinter (vop-group)
+  (vops :prin1 (mapcar #'vop-info-name vops))
+  args
+  results)
+
 ;;; A TN-REF object contains information about a particular reference
 ;;; to a TN. The information in TN-REFs largely determines how TNs are
 ;;; packed.

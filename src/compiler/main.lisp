@@ -600,6 +600,7 @@ necessary, since type inference may take arbitrarily long to converge.")
   (find-dominators component)
 
   (ir2-convert component)
+  (select-tagging component)
 
   (when (policy *lexenv* (>= speed compilation-speed))
     (maybe-mumble "Copy ")

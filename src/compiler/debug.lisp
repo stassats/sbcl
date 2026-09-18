@@ -1192,44 +1192,46 @@
 ;;; Print the VOP, putting args, info and results on separate lines, if
 ;;; necessary.
 (defun print-vop (vop)
-  (pprint-logical-block (*standard-output* nil)
-    (princ (vop-name vop))
-    (princ #\space)
-    (let ((node (vop-node vop)))
-      (cond ((bind-p node)
-             (princ (functional-debug-name (bind-lambda node)))
-             (princ #\Space))
-            ((combination-p node)
-             (when (and (member (combination-info node) '(:local :full))
-                        (vop-info-save-p (vop-info vop)))
-               (princ (combination-fun-debug-name node))
-               (pprint-newline :linear)))))
-    (pprint-indent :current 0)
-    (print-operands (vop-args vop))
-    (when *debug-print-vop-temps*
-      (pprint-newline :linear)
-      (write-string "{temp: ")
-      (print-operands (vop-temps vop))
-      (princ #\}))
-    (pprint-newline :linear)
-    (when (vop-codegen-info vop)
-      (princ (%with-output-to-string (stream)
-               ;; Current print depth varies based on whether PRINT-VOP
-               ;; is called by DESCRIBE-IR2-COMPONENT or TRACE-INSTRUCTION,
-               ;; so any fixed value of *PRINT-LEVEL* changes its effect
-               ;; depending on the call context. Resetting depth to 0 seems
-               ;; like the best way to get consistent output.
-               ;; We shouldn't bind the printer limits to NIL, because
-               ;; hairy internal objects such as ENVIRONMENT can be printed.
-               ;; See also the comment above FUNCALL-WITH-DEBUG-IO-SYNTAX.
-               (let (#-sb-xc-host (*current-level-in-print* 0)
-                     (*print-level* 2)
-                     (*print-length* 15))
-                 (format stream "{~{~S~^ ~}} " (vop-codegen-info vop)))))
-      (pprint-newline :linear))
-    (when (vop-results vop)
-      (princ "=> ")
-      (print-operands (vop-results vop))))
+  (if (vop-group-p vop)
+      (princ vop)
+      (pprint-logical-block (*standard-output* nil)
+        (princ (vop-name vop))
+        (princ #\space)
+        (let ((node (vop-node vop)))
+          (cond ((bind-p node)
+                 (princ (functional-debug-name (bind-lambda node)))
+                 (princ #\Space))
+                ((combination-p node)
+                 (when (and (member (combination-info node) '(:local :full))
+                            (vop-info-save-p (vop-info vop)))
+                   (princ (combination-fun-debug-name node))
+                   (pprint-newline :linear)))))
+        (pprint-indent :current 0)
+        (print-operands (vop-args vop))
+        (when *debug-print-vop-temps*
+          (pprint-newline :linear)
+          (write-string "{temp: ")
+          (print-operands (vop-temps vop))
+          (princ #\}))
+        (pprint-newline :linear)
+        (when (vop-codegen-info vop)
+          (princ (%with-output-to-string (stream)
+                   ;; Current print depth varies based on whether PRINT-VOP
+                   ;; is called by DESCRIBE-IR2-COMPONENT or TRACE-INSTRUCTION,
+                   ;; so any fixed value of *PRINT-LEVEL* changes its effect
+                   ;; depending on the call context. Resetting depth to 0 seems
+                   ;; like the best way to get consistent output.
+                   ;; We shouldn't bind the printer limits to NIL, because
+                   ;; hairy internal objects such as ENVIRONMENT can be printed.
+                   ;; See also the comment above FUNCALL-WITH-DEBUG-IO-SYNTAX.
+                   (let (#-sb-xc-host (*current-level-in-print* 0)
+                         (*print-level* 2)
+                         (*print-length* 15))
+                     (format stream "{~{~S~^ ~}} " (vop-codegen-info vop)))))
+          (pprint-newline :linear))
+        (when (vop-results vop)
+          (princ "=> ")
+          (print-operands (vop-results vop)))))
   (pprint-newline :mandatory))
 
 ;;; Print the VOPs in the specified IR2 block.

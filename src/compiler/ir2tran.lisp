@@ -810,36 +810,75 @@
                          nil
                          call))))
 
+(defun reference-args-m (node block args)
+  (declare (type node node) (type ir2-block block) (list args))
+  (let ((last nil)
+        (first nil))
+    (do ((args args (cdr args)))
+        ((null args))
+      (let ((arg (first args)))
+        (let ((ref (reference-tn (lvar-tn node block arg) nil)))
+          (setf (tn-ref-type ref) (lvar-type arg))
+          (if last
+              (setf (tn-ref-across last) ref)
+              (setf first ref))
+          (setq last ref))))
+    (the (or tn-ref null) first)))
+
+(defun make-template-result-tns-m ( lvar)
+  (declare (type (or lvar null) lvar))
+  (let* ((2lvar (and lvar (lvar-info lvar)))
+         (locs (and 2lvar
+                    (ir2-lvar-locs 2lvar))))
+    (if (and 2lvar
+             (eq (ir2-lvar-kind 2lvar) :fixed))
+        locs
+        (bug "?"))))
+
 ;;; Get the operands into TNs, make TN-REFs for them, and then call
 ;;; the template emit function.
 (defun ir2-convert-template (call block)
   (declare (type combination call) (type ir2-block block))
   (let* ((template (combination-info call))
-         (lvar (node-lvar call))
-         (rtypes (template-result-types template)))
-    (multiple-value-bind (args info-args)
-        (reference-args call block (combination-args call) template)
-      (aver (not (template-more-results-type template)))
-      (if (template-conditional-p template)
-          (let ((dest (lvar-dest lvar)))
-            (cond ((when-vop-existsp (:named sb-vm::move-conditional-result)
-                     (unless (and (if-p dest)
-                                  (immediately-used-p (if-test dest) call))
-                       (ir2-convert-conditional-result call block template args info-args lvar)
-                       t)))
-                  (t
-                   (ir2-convert-conditional call block template args info-args
-                                            dest nil))))
-          (let* ((results (make-template-result-tns call lvar rtypes))
-                 (r-refs (reference-tn-list results t)))
-            (aver (= (length info-args)
-                     (template-info-arg-count template)))
-            (when (emit-step-p call)
-              (vop sb-vm::step-instrument-before-vop call block))
-            (if info-args
-                (emit-template call block template args r-refs info-args)
-                (emit-template call block template args r-refs))
-            (move-lvar-result call block results lvar)))))
+         (lvar (node-lvar call)))
+    (if (listp template)
+        (let* ((args (reference-args-m call block (combination-args call)))
+               (results (make-template-result-tns-m lvar))
+               (r-refs (reference-tn-list  results t)))
+          (let ((vop (make-vop-group block call template args r-refs)))
+            (flet ((set-vop (refs)
+                     (do ((ref refs (tn-ref-across ref)))
+                         ((null ref))
+                       (setf (tn-ref-vop ref) vop))))
+              (set-vop args)
+              (set-vop r-refs))
+            (insert-vop vop block nil)
+            vop)
+          (move-lvar-result call block results lvar))
+        (multiple-value-bind (args info-args)
+            (reference-args call block (combination-args call) template)
+          (aver (not (template-more-results-type template)))
+          (if (template-conditional-p template)
+              (let ((dest (lvar-dest lvar)))
+                (cond ((when-vop-existsp (:named sb-vm::move-conditional-result)
+                         (unless (and (if-p dest)
+                                      (immediately-used-p (if-test dest) call))
+                           (ir2-convert-conditional-result call block template args info-args lvar)
+                           t)))
+                      (t
+                       (ir2-convert-conditional call block template args info-args
+                                                dest nil))))
+              (let* ((results (make-template-result-tns call lvar
+                                                        (template-result-types template)))
+                     (r-refs (reference-tn-list results t)))
+                (aver (= (length info-args)
+                         (template-info-arg-count template)))
+                (when (emit-step-p call)
+                  (vop sb-vm::step-instrument-before-vop call block))
+                (if info-args
+                    (emit-template call block template args r-refs info-args)
+                    (emit-template call block template args r-refs))
+                (move-lvar-result call block results lvar))))))
   (values))
 
 ;;; We don't have to do much because operand count checking is done by
