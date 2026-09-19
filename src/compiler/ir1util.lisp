@@ -196,9 +196,10 @@
     (labels ((call (node lvar nth-value)
                (let ((continue (funcall function node lvar nth-value)))
                  (when continue
-                   (recurse node (if (eq continue t)
-                                     0
-                                     continue)))))
+                   (when (valued-node-p node)
+                     (recurse node (if (eq continue t)
+                                       0
+                                       continue))))))
              (recurse-node (node lvar nth-value)
                (cond ((and (combination-p node)
                            ;; Only the first value is used
