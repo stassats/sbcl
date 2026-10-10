@@ -358,7 +358,7 @@ deeply nested structures."
            (alien (&rest #1=#:initializers) &body #2=#:body)
          `(sb-alien:with-alien ((,alien ,',name))
             (alien-funcall (extern-alien "memset"
-                                         (function void system-area-pointer int sb-kernel::os-vm-size-t))
+                                         (function void system-area-pointer int sb-alien:size-t))
                            (sb-alien:alien-sap ,alien) 0 ,,size)
             (let ((,alien (cast ,alien (* ,',name))))
               (setf ,@(mapcan
@@ -376,7 +376,7 @@ deeply nested structures."
          (let ((sb-kernel:instance (sb-alien:make-alien ,name)))
            ;; The allocator returns 0-filled aliens. It's unknowable whether anyone cares.
            (alien-funcall (extern-alien "memset"
-                                        (function void system-area-pointer int sb-kernel::os-vm-size-t))
+                                        (function void system-area-pointer int sb-alien:size-t))
                           (sb-alien:alien-sap sb-kernel:instance) 0 ,size)
            sb-kernel:instance)))))
 
