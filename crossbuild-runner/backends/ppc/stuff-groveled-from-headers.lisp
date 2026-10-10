@@ -21,7 +21,6 @@
 (defconstant pollerr 8) ; #x8
 (define-alien-type nfds-t (unsigned 32))
 ;;; types, types, types
-(define-alien-type clock-t (signed 32))
 (define-alien-type dev-t (unsigned 64))
 (define-alien-type gid-t (unsigned 32))
 (define-alien-type ino-t (unsigned 32))

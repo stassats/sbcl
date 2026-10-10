@@ -37,7 +37,6 @@
 #else
   #include <poll.h>
   #include <sys/select.h>
-  #include <sys/times.h>
   #include <sys/wait.h>
   #include <sys/ioctl.h>
 #if defined __HAIKU__ || defined __DragonFly__ || defined LISP_FEATURE_ANDROID
@@ -189,7 +188,6 @@ main(int argc, char __attribute__((unused)) *argv[])
     defconstant("pollerr", POLLERR);
     DEFTYPE("nfds-t", nfds_t);
     printf(";;; types, types, types\n");
-    DEFTYPE("clock-t", clock_t);
     DEFTYPE("dev-t",   dev_t);
     DEFTYPE("gid-t",   gid_t);
     DEFTYPE("ino-t",   ino_t);
