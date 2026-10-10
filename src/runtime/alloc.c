@@ -673,7 +673,9 @@ alloc_thread_struct(void* spaces) {
      * it's better than memset() - it releases physical pages to the OS, clears stale
      * conservative roots across all three stacks, and lets us accurately track stack
      * high-water marks via mincore() or /proc/self/pagemap (PM_PRESENT) no matter
-     * whether this is recycled memory */
+     * whether this is recycled memory. See also os_alloc_gc_space where we advised
+     * NOHUGEPAGE - that advice survives across this call because the flag bits
+     * on the VMA remain, while this only discards pages */
         if (madvise(aligned_spaces, csp_page - aligned_spaces, MADV_DONTNEED) != 0)
             lose("madvise failed");
 #elif GENCGC_IS_PRECISE

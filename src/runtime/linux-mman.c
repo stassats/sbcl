@@ -78,7 +78,20 @@ os_alloc_gc_space(int space_id, int attributes, os_vm_address_t addr, os_vm_size
     attributes &= ~IS_GUARD_PAGE;
     int flags =  MAP_PRIVATE | MAP_ANONYMOUS | MAP_NORESERVE;
     os_vm_address_t actual;
+    /* We want NOHUGEPAGE for stacks because the thread will probably use at most a few small
+     * pages at the logical top of its control and alien stacks, and physical bottom of its
+     * binding stack. If the kernel has the setting "transparent hugepages = always", it could
+     * try to use 2MiB pages. But there is a higher cost in RSS and the time to zero-fill.
+     * The Linux devs came to the same conclusion.
+     * See https://github.com/torvalds/linux/commit/c4608d1bf7c6536d1a3d233eb21e50678681564e
+     * which did not help SBCL because we manage our own stacks.
+     * So MAP_STACK now implies NOHUGEPAGE, but only at kernel version 6.8 or later. */
+    int is_thread_memory = space_id == THREAD_STRUCT_CORE_SPACE_ID;
 
+#ifdef MAP_STACK
+    if (is_thread_memory)
+        flags |= MAP_STACK;
+#endif
 #ifdef MAP_32BIT
     if (attributes & ALLOCATE_LOW)
         flags |= MAP_32BIT;
@@ -108,6 +121,14 @@ os_alloc_gc_space(int space_id, int attributes, os_vm_address_t addr, os_vm_size
         dumpmaps();
         return 0;
     }
+
+#ifdef MADV_NOHUGEPAGE
+    /* In case the kernel does not infer NOHUGEPAGE from MAP_STACK, do it ourselves.
+     * Failure is harmless, e.g. EINVAL from a kernel built without CONFIG_TRANSPARENT_HUGEPAGE.
+     * This could be removed if we know that we're on Linux 6.8 or later. */
+    if (is_thread_memory)
+        ignore_value(madvise(actual, len, MADV_NOHUGEPAGE));
+#endif
 
     return actual;
 }
