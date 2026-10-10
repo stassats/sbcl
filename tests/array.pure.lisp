@@ -1198,3 +1198,9 @@
           (array-dimension xs 2))
        :allow-warnings t))))
 
+(with-test (:name :aref-type-derive-index)
+  (assert-type
+   (lambda (i)
+     (declare ((integer 2 5) i))
+     (aref #(0 0 1 2 3 4) i))
+   (integer 1 4)))

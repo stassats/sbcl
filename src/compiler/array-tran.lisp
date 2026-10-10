@@ -190,7 +190,7 @@
              (incf length))
     (values length list)))
 
-(defun constant-sequence-element-type (sequence &optional key)
+(defun constant-sequence-element-type (sequence &optional key index)
   (let (min
         max
         symbols
@@ -296,99 +296,122 @@
                                 (single-float
                                  (specifier-type 'single-float))
                                 (t (funcall give-up)))))
-            (loop for i below (if (arrayp sequence)
-                                  (array-total-size sequence)
-                                  (dotted-list-length sequence))
-                  for elt* = (if (arrayp sequence)
-                                 (row-major-aref sequence i)
-                                 (elt sequence i))
-                  for elt = (if key
-                                (handler-case (funcall key elt*)
-                                  (error ()
-                                    (return-from constant-sequence-element-type *universal-type*)))
-                                elt*)
-                  for type = (cond ((and conses
-                                         (consp elt))
-                                    (block nil
-                                      (let ((type (lower-type (car elt) car-min car-max
-                                                              (lambda (new)
-                                                                (setf car-min new))
-                                                              (lambda (new)
-                                                                (setf car-max new))
-                                                              car-symbols
-                                                              (lambda (new)
-                                                                (setf car-symbols new))
-                                                              (lambda ()
-                                                                (setf conses nil)
-                                                                (return (specifier-type 'cons))))))
-                                        (when type
-                                          (setf car-type (type-union type car-type))))
-                                      (let ((type (lower-type (cdr elt) cdr-min cdr-max
-                                                              (lambda (new)
-                                                                (setf cdr-min new))
-                                                              (lambda (new)
-                                                                (setf cdr-max new))
-                                                              cdr-symbols
-                                                              (lambda (new)
-                                                                (setf cdr-symbols new))
-                                                              (lambda ()
-                                                                (setf conses nil)
-                                                                (return (specifier-type 'cons))))))
-                                        (when type
-                                          (setf cdr-type (type-union type cdr-type))))
-                                      (setf any-conses t)
-                                      nil))
-                                   (t
-                                    (lower-type elt min max
-                                                (lambda (new)
-                                                  (setf min new))
-                                                (lambda (new)
-                                                  (setf max new))
-                                                symbols
-                                                (lambda (new)
-                                                  (setf symbols new))
-                                                (lambda ()
-                                                  (return)))))
-                  do (when type
-                       (setf union
-                             (if union
-                                 (type-union union type)
-                                 type)))
-                  finally
-                  (flet ((result (union symbols min max)
-                           (when symbols
-                             (let ((symbols (make-member-type symbols)))
-                               (setf union (if union
-                                               (type-union union symbols)
-                                               symbols))))
-                           (if min
-                               (let ((int (make-numeric-type 'integer min max)))
-                                 (if union
-                                     (type-union union int)
-                                     int))
-                               union)))
-                    (let ((union (result union symbols min max)))
-                      (return
-                        (if (and conses
-                                 any-conses)
-                            (type-union (or union *empty-type*)
-                                        (sb-c::make-cons-type (result car-type car-symbols car-min car-max)
-                                                              (result cdr-type cdr-symbols cdr-min cdr-max)))
-                            union))))))))))
+            (multiple-value-bind (start end)
+                (if index
+                    (values (car index) (cdr index))
+                    (values 0 (1- (if (arrayp sequence)
+                                      (array-total-size sequence)
+                                      (dotted-list-length sequence)))))
+              (loop for i from start to end
+                    for elt* = (if (arrayp sequence)
+                                   (row-major-aref sequence i)
+                                   (elt sequence i))
+                    for elt = (if key
+                                  (handler-case (funcall key elt*)
+                                    (error ()
+                                      (return-from constant-sequence-element-type *universal-type*)))
+                                  elt*)
+                    for type = (cond ((and conses
+                                           (consp elt))
+                                      (block nil
+                                        (let ((type (lower-type (car elt) car-min car-max
+                                                                (lambda (new)
+                                                                  (setf car-min new))
+                                                                (lambda (new)
+                                                                  (setf car-max new))
+                                                                car-symbols
+                                                                (lambda (new)
+                                                                  (setf car-symbols new))
+                                                                (lambda ()
+                                                                  (setf conses nil)
+                                                                  (return (specifier-type 'cons))))))
+                                          (when type
+                                            (setf car-type (type-union type car-type))))
+                                        (let ((type (lower-type (cdr elt) cdr-min cdr-max
+                                                                (lambda (new)
+                                                                  (setf cdr-min new))
+                                                                (lambda (new)
+                                                                  (setf cdr-max new))
+                                                                cdr-symbols
+                                                                (lambda (new)
+                                                                  (setf cdr-symbols new))
+                                                                (lambda ()
+                                                                  (setf conses nil)
+                                                                  (return (specifier-type 'cons))))))
+                                          (when type
+                                            (setf cdr-type (type-union type cdr-type))))
+                                        (setf any-conses t)
+                                        nil))
+                                     (t
+                                      (lower-type elt min max
+                                                  (lambda (new)
+                                                    (setf min new))
+                                                  (lambda (new)
+                                                    (setf max new))
+                                                  symbols
+                                                  (lambda (new)
+                                                    (setf symbols new))
+                                                  (lambda ()
+                                                    (return)))))
+                    do (when type
+                         (setf union
+                               (if union
+                                   (type-union union type)
+                                   type)))
+                    finally
+                    (flet ((result (union symbols min max)
+                             (when symbols
+                               (let ((symbols (make-member-type symbols)))
+                                 (setf union (if union
+                                                 (type-union union symbols)
+                                                 symbols))))
+                             (if min
+                                 (let ((int (make-numeric-type 'integer min max)))
+                                   (if union
+                                       (type-union union int)
+                                       int))
+                                 union)))
+                      (let ((union (result union symbols min max)))
+                        (return
+                          (if (and conses
+                                   any-conses)
+                              (type-union (or union *empty-type*)
+                                          (sb-c::make-cons-type (result car-type car-symbols car-min car-max)
+                                                                (result cdr-type cdr-symbols cdr-min cdr-max)))
+                              union)))))))))))
 (defun unwild (type)
   (if (eq type *wild-type*)
       *universal-type*
       type))
 
-(defun constant-array-element-type (constant key)
+(defun constant-array-element-type (constant key index)
   (when constant
-    (or (getf (leaf-info constant) key)
-        (let ((value (constant-value constant)))
-          (when (typep value '(or array list))
-            (setf (getf (leaf-info constant) key)
-                  (constant-sequence-element-type (constant-value constant) key)))))))
+    (let* ((index-key (and index
+                           (multiple-value-bind (low high) (integer-type-numeric-bounds index)
+                             (when (and low high)
+                               (let* ((seq (constant-value constant))
+                                      (seq-high (and (proper-sequence-p seq)
+                                                     (1- (length seq)))))
+                                 (when (and seq-high
+                                            (or (plusp low)
+                                                (< high seq-high)))
+                                   (cons (max low 0)
+                                         (min high seq-high))))))))
+           (cache-key (cond (index-key
+                             (if key
+                                 (cons index-key key)
+                                 index-key))
+                            (key))))
+      (declare (dynamic-extent cache-key index-key))
+      (or (cdr (find cache-key (leaf-info constant) :test #'equal :key #'car))
+          (let ((value (constant-value constant)))
+            (when (typep value '(or array list))
+              (let ((type (constant-sequence-element-type (constant-value constant) key index-key)))
+                (push (cons (copy-tree cache-key) type)
+                      (leaf-info constant))
+                type)))))))
 
-(defun sequence-elements-type (sequence &optional key (constants t))
+(defun sequence-elements-type (sequence index &optional key (constants t))
   (or (and constants
            (let ((uses (lvar-uses sequence)))
              (if (consp uses)
@@ -396,7 +419,7 @@
                        constant-types)
                    (loop for use in uses
                          do
-                         (let ((type (constant-array-element-type (node-constant use) key)))
+                         (let ((type (constant-array-element-type (node-constant use) key index)))
                            (if type
                                (push type constant-types)
                                (push (node-single-value-type use) other-types))))
@@ -407,7 +430,7 @@
                              (unless (eq element-type *wild-type*)
                                (type-union union element-type)))
                            union))))
-                 (constant-array-element-type (node-constant uses) key))))
+                 (constant-array-element-type (node-constant uses) key index))))
       (if key
           *universal-type*
           (unwild (type-array-element-type (lvar-type sequence))))))
@@ -496,11 +519,13 @@
                 t
                 (give-up))))))))
 
-(defoptimizer (aref derive-type) ((array &rest subscripts))
-  (sequence-elements-type array))
+(defoptimizer (aref derive-type) ((array &optional index &rest subscripts))
+  (sequence-elements-type array (when (and index
+                                           (not subscripts))
+                                  (lvar-type index))))
 
 (defoptimizer (elt derive-type) ((sequence index))
-  (sequence-elements-type sequence))
+  (sequence-elements-type sequence (lvar-type index)))
 
 (defoptimizer ((setf aref) derive-type) ((new-value array &rest subscripts))
   (new-value-type new-value array))
@@ -512,14 +537,23 @@
     (hairy-data-vector-ref hairy-data-vector-ref/check-bounds
      data-vector-ref)
     ((array index))
-  (sequence-elements-type array))
+  (sequence-elements-type array (lvar-type index)))
 
 #+(or x86 x86-64)
 (defoptimizer (data-vector-ref-with-offset derive-type) ((array index offset))
-  (sequence-elements-type array))
+  (sequence-elements-type array
+                          (when (constant-lvar-p array)
+                            (if (eq (lvar-type offset) (specifier-type '(eql 0)))
+                                (lvar-type index)
+                                (let* ((int1 (type-approximate-interval (lvar-type index)))
+                                       (int2 (type-approximate-interval (lvar-type offset)))
+                                       (sum (when (and int1 int2)
+                                              (interval-add int1 int2))))
+                                  (when sum
+                                    (interval-to-type sum 'integer)))))))
 
 (defoptimizer (vector-pop derive-type) ((array))
-  (sequence-elements-type array))
+  (sequence-elements-type array nil))
 
 (deftransform vector-push-extend ((element vector) * * :node node)
   (let* ((type (lvar-type vector))
@@ -633,7 +667,7 @@
   (derive-%with-array-data/mumble-type array))
 
 (defoptimizer (row-major-aref derive-type) ((array index))
-  (sequence-elements-type array))
+  (sequence-elements-type array (lvar-type index)))
 
 (defoptimizer (%set-row-major-aref derive-type) ((array index new-value))
   (new-value-type new-value array))

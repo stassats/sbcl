@@ -1935,7 +1935,7 @@
                                           type))
                        (return-from check-concatenate-sequence-type)))))
                constant)
-          (let ((element-type (sequence-elements-type sequence nil constants)))
+          (let ((element-type (sequence-elements-type sequence nil nil constants)))
             (when (and element-type
                        (not (eq element-type *wild-type*))
                        (not (types-equal-or-intersect element-type result-element-type)))
@@ -3111,7 +3111,7 @@
   (multiple-value-bind (constant-lvar value) (cons-var-type lvar)
     (when constant-lvar
       (if value
-          (let ((type (sequence-elements-type constant-lvar)))
+          (let ((type (sequence-elements-type constant-lvar nil)))
             (if (or (cdr (last value))
                     (csubtypep (lvar-type lvar) (specifier-type 'cons)))
                 type
@@ -3380,7 +3380,7 @@
                (if (constant-fold-arg-p name)
                    (setf key name)
                    (return-from sequence-element-type key-return-type))))))
-    (let ((type (sequence-elements-type sequence key)))
+    (let ((type (sequence-elements-type sequence nil key)))
       (if (or (eq type *universal-type*)
               (eq type *wild-type*))
           key-return-type
