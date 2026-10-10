@@ -9,7 +9,6 @@
 #include "thread.h"
 
 extern struct generation generations[];
-extern os_vm_size_t bytes_allocated;
 
 // Create a 2-word instance and a 6-word funcallable instance.
 // Ensure they are on different GC cards.

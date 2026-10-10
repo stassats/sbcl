@@ -185,4 +185,7 @@ extern lispobj permgen_remset[];
 extern void bindingstack_vals_visit(lispobj*, lispobj*, void(*)(lispobj));
 extern void bindingstack_syms_fix(void);
 
+extern size_t bytes_allocated;
+extern size_t auto_gc_trigger;
+
 #endif /* _GC_H_ */

@@ -15,7 +15,7 @@
 
 (declaim (inline dynamic-usage))
 (defun dynamic-usage ()
-  (extern-alien "bytes_allocated" os-vm-size-t))
+  (extern-alien "bytes_allocated" size-t))
 
 (defun static-space-usage ()
   (- (sap-int sb-vm:*static-space-free-pointer*) sb-vm:static-space-start))
@@ -341,7 +341,7 @@ Note that currently, changes to this value are lost when saving core."
   #+(or gencgc mark-region-gc)
   (let ((current (extern-alien "bytes_consed_between_gcs" os-vm-size-t)))
     (when (< val current)
-      (decf (extern-alien "auto_gc_trigger" os-vm-size-t) (- current val))))
+      (decf (extern-alien "auto_gc_trigger" size-t) (- current val))))
   (setf (extern-alien "bytes_consed_between_gcs" os-vm-size-t) val))
 
 ;;;; GENCGC specifics

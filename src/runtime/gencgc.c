@@ -72,10 +72,6 @@ int gencgc_verbose = 0;
  * GC structures and variables
  */
 
-/* the total bytes allocated. These are seen by Lisp DYNAMIC-USAGE. */
-os_vm_size_t bytes_allocated = 0;
-os_vm_size_t auto_gc_trigger = 0;
-
 /* the source and destination generations. These are set before a GC starts
  * scavenging. */
 generation_index_t from_space;

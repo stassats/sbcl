@@ -577,7 +577,6 @@ static inline os_vm_size_t npage_bytes(page_index_t npages)
     gc_assert(npages>=0);
     return ((os_vm_size_t)npages)*GENCGC_PAGE_BYTES;
 }
-extern os_vm_size_t auto_gc_trigger;
 
 typedef unsigned int page_bytes_t;
 #define page_words_used(index) page_table[index].words_used_
@@ -665,8 +664,6 @@ addr_diff(void *x, void *y)
     gc_assert(x >= y);
     return (uintptr_t)x - (uintptr_t)y;
 }
-
-extern os_vm_size_t bytes_allocated;
 
 extern void reset_page_flags(page_index_t page);
 

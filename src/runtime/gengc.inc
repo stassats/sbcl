@@ -1,5 +1,9 @@
 /* -*- Mode: C -*- */
 
+/* the total bytes allocated. These are seen by Lisp DYNAMIC-USAGE. */
+size_t bytes_allocated = 0;
+size_t auto_gc_trigger = 0;
+
 static void trigger_gc(__attribute__((unused)) struct thread* thread)
 {
         /* Don't flood the system with interrupts if the need to gc is
