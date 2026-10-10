@@ -189,6 +189,43 @@ variable: an unreadable object representing the error is printed instead.")
         (*print-readably* nil))
     (stringify-object object)))
 
+;;; Estimate the number of chars in the printed representation of OBJECT.
+;;; The answer must be an overestimate or exact; never an underestimate.
+(declaim (inline approx-chars-in-repr))
+(defun approx-chars-in-repr (object base radix)
+  (declare (integer object)
+           ((integer 2 36) base))
+  ;; Round *PRINT-BASE* down to the nearest lower power-of-2, call that N,
+  ;; and "guess" that the one character can represent N bits.
+  ;; This is exact for bases which are exactly a power-of-2, or an overestimate
+  ;; otherwise, as mandated by the finite output stream.
+  (let* ((length (if radix 4 0))        ; #rNN or trailing decimal
+         (bits
+           (cond ((zerop object)
+                  (return-from approx-chars-in-repr (1+ length)))
+                 ((fixnump object)
+                  (cond ((minusp object) ; sign
+                         (incf length)
+                         ;; Do integer-length separately, on some
+                         ;; backends integer-length is better for
+                         ;; positive values
+                         (integer-length (- object)))
+                        (t
+                         (integer-length object))))
+                 (t
+                  (when (minusp object)
+                    (incf length))
+                  (* (%bignum-length object) sb-bignum::digit-size)))))
+    (+ length
+       (ceiling bits (aref #.(coerce
+                              ;; base 2 or base 3  = 1 bit per character
+                              ;; base 4 .. base 7  = 2 bits per character
+                              ;; base 8 .. base 15 = 3 bits per character, etc
+                              #(0 0 1 1 2 2 2 2 3 3 3 3 3 3 3 3
+                                4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 5 5 5 5 5)
+                              '(vector (unsigned-byte 8)))
+                           base)))))
+
 ;;; This produces the printed representation of an object as a string.
 ;;; The few ...-TO-STRING functions above call this.
 (defun stringify-object (object)
@@ -199,13 +236,15 @@ variable: an unreadable object representing the error is printed instead.")
        (if pretty
            (%with-output-to-string (stream)
               (sb-pretty:output-pretty-object stream fun object))
-           (let ((buffer-size (approx-chars-in-repr object)))
+           (let* ((radix *print-radix*)
+                  (base *print-base*)
+                  (buffer-size (approx-chars-in-repr object base radix)))
              (let* ((string (make-string buffer-size :element-type 'base-char
-                                         :initial-element (code-char 0)))
+                                                     :initial-element (code-char 0)))
                     (stream (%make-finite-base-string-output-stream string)))
                (declare (inline %make-finite-base-string-output-stream))
                (declare (dynamic-extent stream))
-               (output-integer object stream *print-base* *print-radix*)
+               (output-integer object stream base radix)
                ;; ASSUMPTION: we use pre-zeroed memory for unboxed objects.
                ;; So we can avoid calling %SHRINK-VECTOR, and instead directly
                ;; set the length.
@@ -216,33 +255,6 @@ variable: an unreadable object representing the error is printed instead.")
     (t
      (%with-output-to-string (stream)
        (output-object object stream)))))
-
-;;; Estimate the number of chars in the printed representation of OBJECT.
-;;; The answer must be an overestimate or exact; never an underestimate.
-(defun approx-chars-in-repr (object)
-  (declare (integer object))
-  ;; Round *PRINT-BASE* down to the nearest lower power-of-2, call that N,
-  ;; and "guess" that the one character can represent N bits.
-  ;; This is exact for bases which are exactly a power-of-2, or an overestimate
-  ;; otherwise, as mandated by the finite output stream.
-  (let ((bits-per-char
-         (aref #.(coerce
-                  ;; base 2 or base 3  = 1 bit per character
-                  ;; base 4 .. base 7  = 2 bits per character
-                  ;; base 8 .. base 15 = 3 bits per character, etc
-                  #(1 1 2 2 2 2 3 3 3 3 3 3 3 3
-                    4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 4 5 5 5 5 5)
-                  '(vector (unsigned-byte 8)))
-               (- *print-base* 2))))
-    (+ (if (minusp object) 1 0) ; leading sign
-       (if *print-radix* 4 0) ; #rNN or trailing decimal
-       ;; N-FIXNUM-BITS, not N-POSITIVE-FIXNUM-BITS: the magnitude of
-       ;; MOST-NEGATIVE-FIXNUM takes one more bit than any positive fixnum,
-       ;; which in base 2 or 4 is one more character.
-       (ceiling (if (fixnump object)
-                    sb-vm:n-fixnum-bits
-                    (* (%bignum-length object) sb-bignum::digit-size))
-                bits-per-char))))
 
 ;;;; support for the PRINT-UNREADABLE-OBJECT macro
 
