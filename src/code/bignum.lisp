@@ -312,6 +312,25 @@
               result))
         result)))
 
+;;; Return T if the least significant N-BITS bits of BIGNUM are all
+;;; zero, else NIL. If the integer-length of BIGNUM is less than N-BITS,
+;;; the result is NIL, too.
+(declaim (inline bignum-lower-bits-zero-p))
+(defun bignum-lower-bits-zero-p (bignum n-bits length)
+  (declare (type bignum bignum)
+           ((and (integer 1) bignum-length) length)
+           (type bit-index n-bits))
+  (multiple-value-bind (n-full-digits n-bits-partial-digit)
+      (floor n-bits digit-size)
+    (declare (type bignum-length n-full-digits))
+    (when (> length n-full-digits)
+      (dotimes (index n-full-digits)
+        (declare (type bignum-index index))
+        (unless (zerop (%bignum-ref bignum index))
+          (return-from bignum-lower-bits-zero-p nil)))
+      (zerop (logand (1- (ash 1 n-bits-partial-digit))
+                     (%bignum-ref bignum n-full-digits))))))
+
 (declaim (inline bignum-buffer-integer-length))
 (defun bignum-buffer-integer-length (bignum len)
   (declare (type bignum bignum))
@@ -321,6 +340,20 @@
              (type bignum-element-type digit))
     (+ (integer-length (%fixnum-digit-with-correct-sign digit))
        (* len-1 digit-size))))
+
+(defun negative-bignum-abs-integer-length (bignum)
+  (declare (type bignum bignum)
+           (optimize speed))
+  (let* ((len (%bignum-length bignum))
+         (len-1 (1- len))
+         (digit (%bignum-ref bignum len-1)))
+    (declare (type bignum-length len len-1)
+             (type bignum-element-type digit))
+    (let ((signed-len (+ (integer-length (%fixnum-digit-with-correct-sign digit))
+                         (* len-1 digit-size))))
+      (if (bignum-lower-bits-zero-p bignum signed-len len)
+          (1+ signed-len)
+          signed-len))))
 
 ;;;; addition
 
@@ -1383,25 +1416,6 @@
           (t (if a-plusp -1 1)))))
 
 ;;;; float conversion
-
-;;; Return T if the least significant N-BITS bits of BIGNUM are all
-;;; zero, else NIL. If the integer-length of BIGNUM is less than N-BITS,
-;;; the result is NIL, too.
-(declaim (inline bignum-lower-bits-zero-p))
-(defun bignum-lower-bits-zero-p (bignum n-bits length)
-  (declare (type bignum bignum)
-           ((and (integer 1) bignum-length) length)
-           (type bit-index n-bits))
-  (multiple-value-bind (n-full-digits n-bits-partial-digit)
-      (floor n-bits digit-size)
-    (declare (type bignum-length n-full-digits))
-    (when (> length n-full-digits)
-      (dotimes (index n-full-digits)
-        (declare (type bignum-index index))
-        (unless (zerop (%bignum-ref bignum index))
-          (return-from bignum-lower-bits-zero-p nil)))
-      (zerop (logand (1- (ash 1 n-bits-partial-digit))
-                     (%bignum-ref bignum n-full-digits))))))
 
 (declaim (inline bignum-negate-last-two))
 (defun bignum-negate-last-two (bignum &optional (len (%bignum-length bignum)))

@@ -213,9 +213,11 @@ variable: an unreadable object representing the error is printed instead.")
                         (t
                          (integer-length object))))
                  (t
-                  (when (minusp object)
-                    (incf length))
-                  (* (%bignum-length object) sb-bignum::digit-size)))))
+                  (cond ((minusp object) ; sign
+                         (incf length)
+                         (sb-bignum::negative-bignum-abs-integer-length object))
+                        (t
+                         (sb-bignum:bignum-integer-length object)))))))
     (+ length
        (ceiling bits (aref #.(coerce
                               ;; base 2 or base 3  = 1 bit per character
