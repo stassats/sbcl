@@ -668,7 +668,15 @@ alloc_thread_struct(void* spaces) {
     th->control_stack_end = th->binding_stack_start;
 
     if (is_recycled) {
-#if GENCGC_IS_PRECISE
+#ifdef LISP_FEATURE_LINUX
+    /* Regardless of GC preciseness, if we can blast the whole range with one syscall,
+     * it's better than memset() - it releases physical pages to the OS, clears stale
+     * conservative roots across all three stacks, and lets us accurately track stack
+     * high-water marks via mincore() or /proc/self/pagemap (PM_PRESENT) no matter
+     * whether this is recycled memory */
+        if (madvise(aligned_spaces, csp_page - aligned_spaces, MADV_DONTNEED) != 0)
+            lose("madvise failed");
+#elif GENCGC_IS_PRECISE
     /* Clear the entire control stack. Without this I was able to induce a GC failure
      * in a test which hammered on thread creation for hours. The control stack is
      * scavenged before the heap, so a stale word could point to the start (or middle)
