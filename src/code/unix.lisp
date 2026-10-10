@@ -559,16 +559,6 @@ avoiding `atexit(3)` hooks, etc. Otherwise `exit(2)` is called."
 (defun unix-setsid ()
   (int-syscall ("setsid")))
 
-;;;; sys/ioctl.h
-
-;;; UNIX-IOCTL performs a variety of operations on open i/o
-;;; descriptors. See the UNIX Programmer's Manual for more
-;;; information.
-#-win32
-(defun unix-ioctl (fd cmd arg)
-  (declare (type unix-fd fd)
-           (type word cmd))
-  (void-syscall ("ioctl" int unsigned-long &optional (* char)) fd cmd arg))
 
 ;;;; sys/resource.h
 

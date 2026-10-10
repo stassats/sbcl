@@ -87,9 +87,6 @@
 (defconstant wnohang 1) ; #x1
 (defconstant wuntraced 2) ; #x2
 
-;;; various ioctl(2) flags
-(defconstant tiocgpgrp 1074033783) ; #x40047477
-
 ;;; signals
 (defconstant sizeof-sigset_t 128) ; #x80
 (defconstant sig_block 0) ; #x0

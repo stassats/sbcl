@@ -38,12 +38,6 @@
   #include <poll.h>
   #include <sys/select.h>
   #include <sys/wait.h>
-  #include <sys/ioctl.h>
-#if defined __HAIKU__ || defined __DragonFly__ || defined LISP_FEATURE_ANDROID
-  #include <termios.h>
-#else
-  #include <sys/termios.h>
-#endif
   #include <sys/time.h>
   #include <dlfcn.h>
 #endif
@@ -273,10 +267,6 @@ main(int argc, char __attribute__((unused)) *argv[])
 
     defconstant("wnohang", WNOHANG);
     defconstant("wuntraced", WUNTRACED);
-    printf("\n");
-
-    printf(";;; various ioctl(2) flags\n");
-    defconstant("tiocgpgrp",  TIOCGPGRP);
     printf("\n");
 
     printf(";;; signals\n");
