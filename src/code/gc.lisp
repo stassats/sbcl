@@ -375,12 +375,12 @@ statistics are appended to it."
 ;;; OAOOMiness -- this duplicates the struct definition in gencgc.c.
 (define-alien-type generation
     (struct generation
-            (bytes-allocated os-vm-size-t)
-            (gc-trigger os-vm-size-t)
-            (bytes-consed-between-gcs os-vm-size-t)
+            (bytes-allocated size-t)
+            (gc-trigger size-t)
+            (bytes-consed-between-gcs size-t)
             (number-of-gcs int)
             (number-of-gcs-before-promotion int)
-            (cum-sum-bytes-allocated os-vm-size-t)
+            (cum-sum-bytes-allocated size-t)
             (minimum-age-before-gc double)))
 
 (define-alien-variable generations

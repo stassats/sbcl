@@ -186,13 +186,13 @@ enum {
  */
 struct generation {
     /* the bytes allocated to this generation */
-    os_vm_size_t bytes_allocated;
+    size_t bytes_allocated;
 
     /* the number of bytes at which to trigger a GC */
-    os_vm_size_t gc_trigger;
+    size_t gc_trigger;
 
     /* to calculate a new level for gc_trigger */
-    os_vm_size_t bytes_consed_between_gc;
+    size_t bytes_consed_between_gc;
 
     /* the number of GCs since the last raise */
     int num_gc;
@@ -206,7 +206,7 @@ struct generation {
      * objects are added from a GC of a younger generation. Dividing by
      * the bytes_allocated will give the average age of the memory in
      * this generation since its last GC. */
-    os_vm_size_t cum_sum_bytes_allocated;
+    size_t cum_sum_bytes_allocated;
 
     /* a minimum average memory age before a GC will occur helps
      * prevent a GC when a large number of new live objects have been
