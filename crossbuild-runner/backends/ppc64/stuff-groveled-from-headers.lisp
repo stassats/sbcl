@@ -166,6 +166,3 @@
 ;;; GENCGC related
 (define-alien-type page-index-t (signed 64))
 (define-alien-type generation-index-t (signed 8))
-
-;;; Our runtime types
-(define-alien-type os-vm-size-t (unsigned 64))

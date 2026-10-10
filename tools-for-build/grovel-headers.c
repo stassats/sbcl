@@ -72,7 +72,7 @@
 
 #include "wrap.h"
 #include "gc-typedefs.h" // for page_index_t
-#include "os.h" // for os_vm_size_t
+#include "os.h"
 
 #ifdef HAVE_LIBUNWIND
 #include <libunwind.h>
@@ -438,11 +438,7 @@ main(int argc, char __attribute__((unused)) *argv[])
     printf(";;; GENCGC related\n");
     DEFTYPE("page-index-t", page_index_t);
     DEFTYPE("generation-index-t", generation_index_t);
-    printf("\n");
 #endif
-
-    printf(";;; Our runtime types\n");
-    DEFTYPE("os-vm-size-t", os_vm_size_t);
 
     return 0;
 }
