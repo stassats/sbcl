@@ -14,24 +14,24 @@
 ;;; Declare each of the free space pointers (except dynamic) as an alien var
 ;;; with darwin-jit, READ-ONLY-SPACE-START is a constant from genesis
 ;;; Maybe this whole file should go in sb-kernel to avoid sb-kernel::
-(define-alien-variable ("READ_ONLY_SPACE_START" sb-vm:read-only-space-start) sb-kernel::os-vm-size-t)
+(define-alien-variable ("READ_ONLY_SPACE_START" sb-vm:read-only-space-start) word)
 (define-alien-variable ("read_only_space_free_pointer"
                         sb-vm:*read-only-space-free-pointer*)
     system-area-pointer)
 
 #+permgen
 (progn
-(define-alien-variable ("permgen_bounds" sb-vm:permgen-space-start) sb-kernel::os-vm-size-t)
+(define-alien-variable ("permgen_bounds" sb-vm:permgen-space-start) word)
 (define-alien-variable ("permgen_space_free_pointer" sb-vm:*permgen-space-free-pointer*)
     system-area-pointer))
 
 #+relocatable-static-space
-(define-alien-variable ("STATIC_SPACE_START" sb-vm:static-space-start) sb-kernel::os-vm-size-t)
+(define-alien-variable ("STATIC_SPACE_START" sb-vm:static-space-start) word)
 ;;; STATIC-SPACE-START is a constant from genesis
 (define-alien-variable ("static_space_free_pointer" sb-vm:*static-space-free-pointer*)
   system-area-pointer)
 
-(define-alien-variable ("DYNAMIC_SPACE_START" sb-vm:dynamic-space-start) sb-kernel::os-vm-size-t)
+(define-alien-variable ("DYNAMIC_SPACE_START" sb-vm:dynamic-space-start) word)
 ;;; Dynamic doesn't really have a "free pointer" but it's the upper bound on space usage.
 (declaim (inline dynamic-space-free-pointer))
 (defun dynamic-space-free-pointer ()
@@ -65,7 +65,7 @@
            ;; in terms of their governance of a pending allocation going to the heap.
            (read-only-space-obj-p x)))))
 
-(define-alien-variable ("TEXT_SPACE_START" sb-vm:text-space-start) sb-kernel::os-vm-size-t)
+(define-alien-variable ("TEXT_SPACE_START" sb-vm:text-space-start) word)
 
 #+(or x86-64 immobile-space)
 (define-symbol-macro sb-vm:alien-linkage-space-start
