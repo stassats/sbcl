@@ -38,7 +38,7 @@ struct ndir_entry {
 #define RUNTIME_OPTIONS_WORDS (1 + 1 + 3)
 
 struct memsize_options {
-    os_vm_size_t dynamic_space_size;
+    size_t dynamic_space_size;
     os_vm_size_t thread_control_stack_size;
     os_vm_size_t thread_tls_bytes;
     int present_in_core;

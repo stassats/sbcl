@@ -36,7 +36,7 @@ void gc_heap_exhausted_error_or_lose (sword_t available, sword_t requested) neve
 extern bool gc_active_p;
 extern int sb_sprof_enabled;
 
-extern os_vm_size_t bytes_consed_between_gcs;
+extern size_t bytes_consed_between_gcs;
 
 // flags passed to verify_heap().
 // The low 4 bits supply the generation number and 'raise' flag

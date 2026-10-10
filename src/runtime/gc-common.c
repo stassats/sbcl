@@ -51,7 +51,7 @@
 #include "murmur_hash.h"
 #include "incremental-compact.h"
 
-os_vm_size_t dynamic_space_size = DEFAULT_DYNAMIC_SPACE_SIZE;
+size_t dynamic_space_size = DEFAULT_DYNAMIC_SPACE_SIZE;
 os_vm_size_t thread_control_stack_size = DEFAULT_CONTROL_STACK_SIZE;
 
 sword_t (*const scavtab[256])(lispobj *where, lispobj object);
@@ -79,7 +79,7 @@ sword_t (*sizetab[256])(lispobj *where);
 struct weak_pointer *weak_pointer_chain = WEAK_POINTER_CHAIN_END;
 struct cons *weak_vectors;
 
-os_vm_size_t bytes_consed_between_gcs = 12*1024*1024;
+size_t bytes_consed_between_gcs = 12*1024*1024;
 
 #ifdef LISP_FEATURE_PPC64
 // unevenly spaced pointer lowtags

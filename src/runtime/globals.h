@@ -48,7 +48,7 @@ extern int foreign_function_call_active;
     foreign_function_call_active
 #endif
 
-extern os_vm_size_t dynamic_space_size;
+extern size_t dynamic_space_size;
 extern os_vm_size_t thread_control_stack_size;
 
 #ifdef LISP_FEATURE_RELOCATABLE_STATIC_SPACE

@@ -96,7 +96,7 @@ run in any thread.")
 (declaim (inline dynamic-space-size))
 (defun dynamic-space-size ()
   "Size of the dynamic space in bytes."
-  (extern-alien "dynamic_space_size" os-vm-size-t))
+  (extern-alien "dynamic_space_size" size-t))
 
 ;;;; SUB-GC
 
@@ -334,15 +334,15 @@ On GENCGC platforms this is the nursery size, and defaults to 5% of dynamic
 space size.
 
 Note that currently, changes to this value are lost when saving core."
-  (extern-alien "bytes_consed_between_gcs" os-vm-size-t))
+  (extern-alien "bytes_consed_between_gcs" size-t))
 
 (defun (setf bytes-consed-between-gcs) (val)
   (declare (type (and fixnum unsigned-byte) val))
   #+(or gencgc mark-region-gc)
-  (let ((current (extern-alien "bytes_consed_between_gcs" os-vm-size-t)))
+  (let ((current (extern-alien "bytes_consed_between_gcs" size-t)))
     (when (< val current)
       (decf (extern-alien "auto_gc_trigger" size-t) (- current val))))
-  (setf (extern-alien "bytes_consed_between_gcs" os-vm-size-t) val))
+  (setf (extern-alien "bytes_consed_between_gcs" size-t) val))
 
 ;;;; GENCGC specifics
 ;;;;
