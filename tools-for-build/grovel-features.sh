@@ -43,8 +43,6 @@ featurep os-provides-dladdr
 
 featurep os-provides-blksize-t
 
-featurep os-provides-suseconds-t
-
 featurep os-provides-getprotoby-r
 
 featurep os-provides-poll

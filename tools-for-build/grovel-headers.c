@@ -187,12 +187,6 @@ main(int argc, char __attribute__((unused)) *argv[])
     DEFTYPE("size-t",  size_t);
     DEFTYPE("ssize-t", ssize_t);
     DEFTYPE("time-t",  time_t);
-#if !defined(LISP_FEATURE_OS_PROVIDES_SUSECONDS_T)
-    /* Similar kludge in sb-posix. */
-    DEFTYPE("suseconds-t", long);
-#else
-    DEFTYPE("suseconds-t", suseconds_t);
-#endif
     printf(";; Types in src/runtime/wrap.h. See that file for explantion.\n");
     printf(";; Don't use these types for anything other than the stat wrapper.\n");
     DEFTYPE("wst-ino-t", wst_ino_t);

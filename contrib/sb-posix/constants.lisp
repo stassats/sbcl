@@ -435,12 +435,6 @@
               (tcflag-t lflag "tcflag_t" "c_lflag")
               ((array cc-t) cc "cc_t" "c_cc")))
 
- ;; utime(), utimes()
- #-win32
- (:type suseconds-t ; OAOOM warning: similar kludge in tools-for-build
-        #+os-provides-suseconds-t "suseconds_t"
-        #-os-provides-suseconds-t "long")
-
  #-win32
  (:structure alien-utimbuf
              ("struct utimbuf"
