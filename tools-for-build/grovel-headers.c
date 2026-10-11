@@ -182,11 +182,7 @@ main(int argc, char __attribute__((unused)) *argv[])
     defconstant("pollerr", POLLERR);
     DEFTYPE("nfds-t", nfds_t);
     printf(";;; types, types, types\n");
-    DEFTYPE("dev-t",   dev_t);
-    DEFTYPE("gid-t",   gid_t);
-    DEFTYPE("ino-t",   ino_t);
     DEFTYPE("mode-t",  mode_t);
-    DEFTYPE("nlink-t", nlink_t);
     DEFTYPE("off-t",   off_t);
     DEFTYPE("size-t",  size_t);
     DEFTYPE("ssize-t", ssize_t);
@@ -197,7 +193,6 @@ main(int argc, char __attribute__((unused)) *argv[])
 #else
     DEFTYPE("suseconds-t", suseconds_t);
 #endif
-    DEFTYPE("uid-t",   uid_t);
     printf(";; Types in src/runtime/wrap.h. See that file for explantion.\n");
     printf(";; Don't use these types for anything other than the stat wrapper.\n");
     DEFTYPE("wst-ino-t", wst_ino_t);

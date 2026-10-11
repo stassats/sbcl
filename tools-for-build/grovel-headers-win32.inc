@@ -205,7 +205,6 @@
     defconstant("s-ifdir", S_IFDIR);
     defconstant("s-ifreg", S_IFREG);
 
-    DEFTYPE("ino-t",  ino_t);
     DEFTYPE("time-t", time_t);
     DEFTYPE("off-t",  off_t);
     DEFTYPE("size-t", size_t);

@@ -21,17 +21,12 @@
 (defconstant pollerr 8) ; #x8
 (define-alien-type nfds-t (unsigned 32))
 ;;; types, types, types
-(define-alien-type dev-t (unsigned 64))
-(define-alien-type gid-t (unsigned 32))
-(define-alien-type ino-t (unsigned 64))
 (define-alien-type mode-t (unsigned 32))
-(define-alien-type nlink-t (unsigned 32))
 (define-alien-type off-t (signed 64))
 (define-alien-type size-t (unsigned 32))
 (define-alien-type ssize-t (signed 32))
 (define-alien-type time-t (signed 32))
 (define-alien-type suseconds-t (signed 32))
-(define-alien-type uid-t (unsigned 32))
 ;; Types in src/runtime/wrap.h. See that file for explantion.
 ;; Don't use these types for anything other than the stat wrapper.
 (define-alien-type wst-ino-t (unsigned 64))

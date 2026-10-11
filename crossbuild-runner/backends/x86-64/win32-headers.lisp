@@ -173,7 +173,6 @@
 (defconstant s-ifmt 61440) ; #xf000
 (defconstant s-ifdir 16384) ; #x4000
 (defconstant s-ifreg 32768) ; #x8000
-(define-alien-type ino-t (unsigned 16))
 (define-alien-type time-t (signed 64))
 (define-alien-type off-t (signed 32))
 (define-alien-type size-t (unsigned 64))
