@@ -664,7 +664,7 @@ avoiding `atexit(3)` hooks, etc. Otherwise `exit(2)` is called."
 ;;;; sys/select.h
 
 (defmacro with-fd-setsize ((n) &body body)
-  `(let ((,n (if (<= -1 ,n fd-setsize)
+  `(let ((,n (if (<= 0 ,n fd-setsize)
                  ,n
                  (error "Cannot select(2) on ~D: above FD_SETSIZE limit."
                         (1- ,n)))))
