@@ -967,7 +967,7 @@ avoiding `atexit(3)` hooks, etc. Otherwise `exit(2)` is called."
             (slot (slot itvn 'it-interval) 'tv-usec) int-usec
             (slot (slot itvn 'it-value   ) 'tv-sec ) val-secs
             (slot (slot itvn 'it-value   ) 'tv-usec) val-usec)
-      (syscall* ("sb_setitimer" int (* (struct timeval)) (* (struct timeval)))
+      (syscall* ("sb_setitimer" int (* (struct itimerval)) (* (struct itimerval)))
                 (values t
                         (slot (slot itvo 'it-interval) 'tv-sec)
                         (slot (slot itvo 'it-interval) 'tv-usec)
