@@ -228,7 +228,7 @@ corresponds to NAME, or NIL if there is none. See `getenv(3)`."
         (if (minusp fd)
             (values nil (get-errno))
             (values #-win32 fd #+win32 (sb-win32::duplicate-and-unwrap-fd fd)
-                    (octets-to-string template-buffer)))))))
+                    (octets-to-string template-buffer :end (1- (length template-buffer)))))))))
 
 ;;;; resourcebits.h
 
