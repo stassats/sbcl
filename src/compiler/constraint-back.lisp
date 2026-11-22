@@ -207,7 +207,12 @@
              (t
               (numeric-contagion-constraint-back x y gen constraint consequent alternative
                                                  :integer t
-                                                 :same-leaf-not-complex t)))))))
+                                                 :same-leaf-not-complex t)))))
+    (<
+     (when (and (lvar-subtypep x (integer 0))
+                (lvar-subtypep y (integer 0)))
+       (add-if-constraint '< x constraint gen consequent)
+       (add-if-constraint '< y constraint gen consequent)))))
 
 (defun -constraint-propagate-back (x y x-type y-type kind constraint gen consequent alternative)
   (case kind
@@ -412,7 +417,19 @@
                                  (interval-low c-interval) (interval-high c-interval)
                                  (interval-low d-interval) (interval-high d-interval))
                         (let ((m (interval-untruncate c-interval d-interval)))
-                          (add x (interval-to-type m 'integer)))))))))))))
+                          (add x (interval-to-type m 'integer))))))))))
+      ((and (or (not nth-value)
+                (eql nth-value 0))
+            (lvar-subtypep x (integer 0))
+            (lvar-subtypep d (integer 0)))
+       (case kind
+         ((eq eql)
+          (when (constant-p constraint)
+            (let ((val (constant-value constraint)))
+              ;; if the quotient is zero than the number is less than the divisor
+              (cond ((eql val 0)
+                     (when consequent
+                       (add-if-constraint '< x d gen consequent alternative))))))))))))
 
 (defoptimizer (unary-truncate constraint-propagate-back) ((x) node nth-value kind constraint gen consequent alternative)
   (case kind

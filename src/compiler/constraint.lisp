@@ -950,6 +950,75 @@
         (process-node use))
       (values consequent-constraints alternative-constraints))))
 
+;;; Like add-test-constraints but already has a name
+(defun add-if-constraint (name x y gen consequent &optional alternative)
+  (labels ((add (fun x y not-p &optional lvar)
+             (cond (alternative
+                    (add-complement-constraints nil
+                                                fun x y not-p
+                                                gen
+                                                consequent
+                                                alternative)
+                    (when lvar
+                      (constraint-propagate-back lvar fun y gen consequent alternative)))
+                   (t
+                    (add-no-complement fun x y not-p lvar))))
+           (add-no-complement (fun x y not-p &optional lvar)
+             (when x
+               (add-test-constraint nil fun x y not-p gen consequent))
+             (when lvar
+               (constraint-propagate-back lvar fun y gen consequent nil))))
+    (unless (eq name 'typep)
+      (add-equality-constraint name x y gen consequent alternative))
+    (case name
+      (typep
+       (multiple-value-bind (ctype complement) (type-for-constraints-p y)
+         (when ctype
+           (let ((var (ok-lvar-lambda-var x gen)))
+             (if complement
+                 (add 'typep var ctype nil x)
+                 (add-no-complement 'typep var ctype nil x))))))
+      ((eq eql)
+       (let* ((var1 (ok-lvar-lambda-var x gen))
+              (var2 (ok-lvar-lambda-var y gen)))
+         (cond ((not var1)
+                (when var2
+                  (add-no-complement 'typep var2 (lvar-type x) nil)))
+               (var2
+                (if (or (eq name 'eql)
+                        (eq-comparable-type-p (lvar-type y)))
+                    (add 'eql var1 var2 nil)
+                    (add-no-complement 'eql var1 var2 nil)))
+               ((constant-lvar-p y)
+                (multiple-value-bind (value constant) (lvar-value y)
+                  (if (or (eq name 'eql)
+                          (ctypep value (specifier-type 'eq-comparable-type)))
+                      (add 'eql var1 constant nil x)
+                      (add-no-complement 'eql var1 constant nil x))))
+               (t
+                (add-no-complement 'typep var1 (lvar-type y) nil)))))
+      ((< >)
+       (let ((var1 (ok-lvar-lambda-var x gen))
+             (var2 (ok-lvar-lambda-var y gen)))
+         (when var1
+           (add name var1 (lvar-type y) nil))
+         (when var2
+           (add (if (eq name '<) '> '<) var2 (lvar-type x) nil))))
+      ((<= >=)
+       (let ((var1 (ok-lvar-lambda-var x gen))
+              (var2 (ok-lvar-lambda-var y gen)))
+         (when var1
+           (add name var1 (lvar-type y) nil))
+         (when var2
+           (add (if (eq name '<=) '>= '<=) var2 (lvar-type x) nil))))
+      (=
+       (let ((var1 (ok-lvar-lambda-var x gen))
+              (var2 (ok-lvar-lambda-var y gen)))
+         (when var1
+           (add name var1 (lvar-type y) nil))
+         (when var2
+           (add name var2 (lvar-type x) nil)))))))
+
 ;;;; Applying constraints
 
 ;;; Return true if X is an integer NUMERIC-TYPE.
