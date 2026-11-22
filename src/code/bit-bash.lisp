@@ -254,14 +254,12 @@
                 ,(unless (= bytes-per-word 1)
                   `(unless (zerop length)
                      (%set-vector-raw-bits dst dst-word-offset
-                              (if (>= length ,bytes-per-word)
-                                  value
-                                  (let ((mask (shift-towards-end
-                                               (start-mask (* length ,bitsize))
-                                               (* dst-byte-offset ,bitsize))))
-                                    (word-logical-or (word-logical-and value mask)
-                                                     (word-logical-andc2 (%vector-raw-bits dst dst-word-offset)
-                                                                         mask)))))))
+                                           (let ((mask (shift-towards-end
+                                                        (start-mask (* length ,bitsize))
+                                                        (* dst-byte-offset ,bitsize))))
+                                             (word-logical-or (word-logical-and value mask)
+                                                              (word-logical-andc2 (%vector-raw-bits dst dst-word-offset)
+                                                                                  mask))))))
                 (let ((interior (floor (- length final-bytes) ,bytes-per-word)))
                   ,@(unless (= bytes-per-word 1)
                      `((unless (zerop dst-byte-offset)
