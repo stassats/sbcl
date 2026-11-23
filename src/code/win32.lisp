@@ -464,8 +464,8 @@ UNIX epoch: January 1st 1970."
             (ctime filetime-member)
             (atime filetime-member)
             (mtime filetime-member)
-            (size-low dword)
             (size-high dword)
+            (size-low dword)
             (reserved0 dword)
             (reserved1 dword)
             (long-name (array tchar #.max_path))
@@ -477,8 +477,8 @@ UNIX epoch: January 1st 1970."
             (ctime filetime-member)
             (atime filetime-member)
             (mtime filetime-member)
-            (size-low dword)
-            (size-high dword)))
+            (size-high dword)
+            (size-low dword)))
 
 (define-alien-routine ("FindClose" find-close) lispbool
   (handle handle))
@@ -668,7 +668,7 @@ absense."
   (desired-access dword)
   (offset-high dword)
   (offset-low dword)
-  (size dword))
+  (size size-t))
 
 (define-alien-routine ("UnmapViewOfFile" unmap-view-of-file) bool
   (address (* t)))
@@ -852,9 +852,10 @@ absense."
 ;;; but it also have some problems...
 
 (defun unixlike-close (fd)
-  (if (or (zerop (close-socket fd))
-          (close-handle fd))
-      t (values nil ebadf)))
+  (if (or (= (close-socket fd) 0)
+          (/= (close-handle fd) 0))
+      (values t 0)
+      (values nil ebadf)))
 
 (defconstant +std-input-handle+ -10)
 (defconstant +std-output-handle+ -11)
