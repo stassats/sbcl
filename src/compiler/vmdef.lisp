@@ -195,7 +195,7 @@
                                    :key #'template-name))
                      #'string<
                      :key #'template-name)
-               #'<=
+               #'<
                :key #'template-cost))
 
 ;;; Return a function type specifier describing TEMPLATE's type computed

@@ -392,8 +392,7 @@ uncalled profiled functions are listed."
                   time-info-list))))
 
     (let ((times
-           (sort time-info-list
-                 #'>=
+           (sort time-info-list #'>
                  :key #'time-info-seconds)))
       (print-profile-table
        (if (and limit (> (length times) limit))

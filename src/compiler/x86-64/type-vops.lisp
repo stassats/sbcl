@@ -301,7 +301,7 @@
   (:translate fixnump)
   (:temporary (:sc unsigned-reg :from (:argument 0)) tmp)
   (:conditional :z)
-  (:generator 3
+  (:generator 2
     (move tmp value)
     (inst shr tmp n-positive-fixnum-bits)))
 
@@ -311,7 +311,7 @@
   (:temporary (:sc unsigned-reg :from (:argument 0)) temp)
   (:arg-types signed-num)
   (:translate fixnump)
-  (:generator 3
+  (:generator 2
     (move temp value)
     ;; The overflow flag will be set if the reg's sign bit changes.
     (inst shl temp 1)))

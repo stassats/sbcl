@@ -204,7 +204,7 @@
       `(lambda (p1 p4)
          (declare (vector p1)
                   ((member ,#'car "x" cdr) p4))
-         (stable-sort p1 #'<= :key p4))
+         (stable-sort p1 #'< :key p4))
     (((vector '(2) '(3) '(1)) #'car) #((1) (2) (3)) :test #'equalp)))
 
 (with-test (:name :functional-may-escape-p
