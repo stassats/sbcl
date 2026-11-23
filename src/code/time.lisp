@@ -103,6 +103,7 @@ format."
 
 (defun years-since-mar-2000 (utime)
   "Return number of complete years since March 1st 2000, and remainder in seconds"
+  (declare (integer utime))
   (let* ((days-in-year (* 86400 365))
          (days-in-4year (+ (* 4 days-in-year) 86400))
          (days-in-100year (- (* 25 days-in-4year) 86400))
@@ -110,7 +111,7 @@ format."
          (offset (- utime +mar-1-2000+))
          (year 0))
     (labels ((whole-num (x y inc max)
-               (let ((w (truncate x y)))
+               (let ((w (floor x y)))
                  (when (and max (> w max)) (setf w max))
                  (incf year (* w inc))
                  (* w y))))
@@ -121,6 +122,7 @@ format."
       (values year offset))))
 
 (defun truncate-to-unix-range (utime)
+  (declare (integer utime))
   (let ((unix-time (- utime unix-to-universal-time)))
     (cond
       ((< unix-time (- (ash 1 31)))
