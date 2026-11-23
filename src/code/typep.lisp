@@ -64,7 +64,7 @@
                     (let ((dim (car want)))
                       (and (or (eq dim '*) (eq dim (length object)))
                            (not (cdr want)))))))
-          (if (unknown-type-p (array-type-element-type type))
+          (if (contains-unknown-type-p (array-type-element-type type))
               ;; better to fail this way than to get bogosities like
               ;;   (TYPEP (MAKE-ARRAY 11) '(ARRAY SOME-UNDEFINED-TYPE)) => T
               (error "~@<unknown element type in array type: ~2I~_~S~:>"
