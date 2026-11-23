@@ -143,7 +143,7 @@
          (= (length words1) (length words2))
          (= 0 (alien-funcall
                (extern-alien "memcmp"
-                (function int system-area-pointer system-area-pointer long))
+                (function int system-area-pointer system-area-pointer size-t))
                (vector-sap words1)
                (vector-sap words2)
                (* (length words1) n-word-bytes))))))

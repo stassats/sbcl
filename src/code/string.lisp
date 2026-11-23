@@ -111,7 +111,7 @@
                 (with-pinned-objects (string1 string2)
                   (zerop (alien-funcall
                           (extern-alien "memcmp"
-                                        (function int (* char) (* char) long))
+                                        (function int (* char) (* char) size-t))
                           (sap string1 start1) (sap string2 start2)
                           (scale len))))))
            (char-loop (type1 type2)
