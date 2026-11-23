@@ -462,7 +462,7 @@ comments from CMUCL:
           (/ total-count compare-total-count)
           (/ total-cost compare-total-cost))
   (flet ((frob (a b sign wot)
-           (multiple-value-bind (cost count)
+           (multiple-value-bind (count cost)
                (cost-summary (hash-difference a b))
              (unless (zerop count)
                (format t "~30<~A~>: ~13:D ~9,2F  ~5,2,2F%~%"
