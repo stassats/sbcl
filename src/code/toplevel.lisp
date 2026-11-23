@@ -196,16 +196,17 @@ means to wait indefinitely.")
   (declare (muffle-conditions compiler-note))
   ;; KLUDGE: This whole thing to avoid consing floats
   (flet ((split-float ()
-           (let ((whole-seconds (truly-the fixnum (%unary-truncate seconds))))
+           (let ((whole-seconds (truncate seconds)))
              (values whole-seconds
-                     (truly-the (integer 0 #.(expt 10 9))
-                                (%unary-truncate (* (- seconds (float whole-seconds seconds))
-                                                    1f9)))))))
+                     (truncate (* (- seconds (float whole-seconds seconds))
+                                  1f9))))))
     (declare (inline split-float))
     (typecase seconds
-      ((single-float 0f0 #.(float most-positive-fixnum 1f0))
+      (fixnum
+       (values seconds 0))
+      ((single-float 0f0 #.sb-kernel::most-positive-fixnum-single-float)
        (split-float))
-      ((double-float 0d0 #.(float most-positive-fixnum 1d0))
+      ((double-float 0d0 #.sb-kernel::most-positive-fixnum-double-float)
        (split-float))
       (ratio
        (split-ratio-for-sleep seconds))
