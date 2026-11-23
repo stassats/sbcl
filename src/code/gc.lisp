@@ -345,8 +345,7 @@ Note that currently, changes to this value are lost when saving core."
                                    :as-file t))))
         (old %gc-logfile))
     (setf %gc-logfile new)
-    (when old
-      (free-alien old))
+    (free-alien old)
     pathname))
 (defun gc-logfile ()
     "Return the pathname used to log garbage collections. SETFable.
