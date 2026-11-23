@@ -55,7 +55,10 @@ darwin_reinit() {
 
 void darwin_init(void)
 {
-
+    /* Reset mach exceptions inherited from the parent or it will be catching
+       sigtraps */
+    task_set_exception_ports(mach_task_self(), EXC_MASK_ALL, MACH_PORT_NULL,
+                             EXCEPTION_DEFAULT, THREAD_STATE_NONE);
 }
 
 
