@@ -808,7 +808,7 @@
                       (if (> pexp set)
                           (%make-ratio (ash int (- set))
                                        (let ((shift (- pexp set)))
-                                         (if (< shift sb-vm:n-fixnum-bits)
+                                         (if (< shift sb-vm:n-positive-fixnum-bits)
                                              (ash 1 shift)
                                              (bignum-ashift-left-fixnum 1 shift))))
                           (ash int exp))))
