@@ -424,8 +424,7 @@
          (parent (aref (layout-inherits new-layout) (1- (length (layout-inherits new-layout))))))
     (aver (eq (aref (layout-inherits layout) (1- (length (layout-inherits layout))))
               parent))
-    (aver (= (dd-length (layout-dd new-layout))
-             len))
+    (aver (= (dd-length (layout-dd layout)) len))
     #+(or x86 x86-64)
     (let ((res (%new-instance* new-layout len)))
       (fast-loop res))
@@ -660,11 +659,6 @@
       (declare (index i))
       (when (eq (svref mapper i) slot-name)
         (return (svref mapper (truly-the index (+ i nsymbols))))))))
-
-(defun make-second-stage-slot-mapper (vector)
-  (declare (sb-c::tlab :system))
-  (lambda (symbol)
-    (sb-pcl::search-struct-slot-name-vector vector symbol)))
 
 (defun install-hash-based-slot-mapper (layout pairs unique-hashes fun-name)
   (declare (sb-c::tlab :system))
