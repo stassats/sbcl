@@ -322,10 +322,10 @@
                  (type array-range sstart send astart aend)
                  (function mapper))
         (loop for spos from sstart below send
-           for apos from astart below aend
-           do (setf (char string spos)
-                    (code-char (funcall mapper (,accessor array apos))))
-           finally (return (values string spos apos)))))))
+              for apos from astart below aend
+              do (setf (char string spos)
+                       (code-char (funcall mapper (,accessor array apos)))))
+        string))))
 (instantiate-octets-definition define-latin->string*)
 
 (defmacro define-latin->string (accessor type)
@@ -338,9 +338,9 @@
                  (type array-range astart aend)
                  (type function mapper))
         (let ((length (the array-range (- aend astart))))
-          (values (,(make-od-name 'latin->string* accessor) (make-string length) 0 length
-                                                            array astart aend
-                                                            mapper)))))))
+          (,(make-od-name 'latin->string* accessor) (make-string length) 0 length
+                                                    array astart aend
+                                                    mapper))))))
 (instantiate-octets-definition define-latin->string)
 
 ;;;; external formats
