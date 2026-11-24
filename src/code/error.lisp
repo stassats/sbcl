@@ -306,7 +306,7 @@ specification."
            (let* ((slot (or (find-condition-class-slot classoid name)
                             (return-from %get
                               (values (slot-missing (classoid-pcl-class classoid)
-                                                    condition name 'slot-value)))))
+                                                    condition name operation)))))
                   (val (initval condition slot classoid operation)))
              (loop
                (let ((old (atomic-acons condition name val alist)))

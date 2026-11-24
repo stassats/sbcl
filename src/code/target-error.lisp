@@ -337,9 +337,7 @@ with that condition (or with no condition) will be returned."
 
 (defun find-condition-class-slot (condition-class slot-name)
   (dolist (sclass
-           (condition-classoid-cpl condition-class)
-           (error "There is no slot named ~S in ~S."
-                  slot-name condition-class))
+           (condition-classoid-cpl condition-class))
     (dolist (slot (condition-classoid-slots sclass))
       (when (eq (condition-slot-name slot) slot-name)
         (return-from find-condition-class-slot slot)))))
