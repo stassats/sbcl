@@ -395,6 +395,8 @@
         (key-fun (when (and key (neq key #'identity))
                    (%coerce-callable-to-fun key))))
     (cond
+      ((eq type *empty-type*)
+       (bad-sequence-type-error result-type))
       ((csubtypep type (specifier-type 'list))
        ;; the VECTOR clause, below, goes through MAKE-SEQUENCE, so
        ;; benefits from the error checking there. Short of
@@ -406,8 +408,6 @@
              (key-fun (or key-fun #'identity)))
          (when (type= type (specifier-type 'list))
            (return-from merge (merge-lists s1 s2 pred-fun key-fun)))
-         (when (eq type *empty-type*)
-           (bad-sequence-type-error type))
          (when (type= type (specifier-type 'null))
            (if (and (null s1) (null s2))
                (return-from merge 'nil)
