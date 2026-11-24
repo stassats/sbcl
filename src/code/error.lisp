@@ -305,8 +305,12 @@ specification."
            ;; find the slot definition or else signal an error
            (let* ((slot (or (find-condition-class-slot classoid name)
                             (return-from %get
-                              (values (slot-missing (classoid-pcl-class classoid)
-                                                    condition name operation)))))
+                              (let ((r (slot-missing (classoid-pcl-class classoid)
+                                                     condition name operation)))
+                                (if (eq operation 'slot-boundp)
+                                    (or r
+                                        (make-unbound-marker))
+                                    r)))))
                   (val (initval condition slot classoid operation)))
              (loop
                (let ((old (atomic-acons condition name val alist)))
