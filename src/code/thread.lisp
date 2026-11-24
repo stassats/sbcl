@@ -350,15 +350,15 @@ held mutex, WITH-RECURSIVE-LOCK allows recursive lock attempts to succeed."
                `(defun ,name ,args
                   (declare (function function))
                   (declare (dynamic-extent function))
-                  (let ((had-it (holding-mutex-p mutex))
-                        (got-it nil))
-                    (without-interrupts
-                        (unwind-protect
-                             (when (or had-it
-                                       (setf got-it (allow-with-interrupts ,grab)))
-                               (with-local-interrupts (funcall function)))
-                          (when got-it
-                            (release-mutex mutex))))))))
+                  (without-interrupts
+                    (let ((had-it (holding-mutex-p mutex))
+                          (got-it nil))
+                      (unwind-protect
+                           (when (or had-it
+                                     (setf got-it (allow-with-interrupts ,grab)))
+                             (with-local-interrupts (funcall function)))
+                        (when got-it
+                          (release-mutex mutex))))))))
 
     ;; These are the analogous entry points to CALL-WITH-MUTEX variants
     ;; but allow for recursive use of the mutex.
