@@ -73,17 +73,17 @@
                             (car point) (cdr point)
                             (or pathname stream)))))
               (eval-form (form index)
-               (with-simple-restart (continue "Ignore error and continue ~A file ~S."
-                                              context native)
-                 (loop
-                  (handler-bind ((serious-condition #'condition-herald))
-                   (with-simple-restart (retry "Retry EVAL of current toplevel form.")
-                     (if print
-                         (let ((results (multiple-value-list (eval-tlf form index))))
-                           (load-fresh-line)
-                           (format t "~{~S~^, ~}~%" results))
-                         (eval-tlf form index)))
-                    (return))))))
+                (with-simple-restart (continue "Ignore error and continue ~A file ~S."
+                                               context native)
+                  (loop
+                   (handler-bind ((serious-condition #'condition-herald))
+                     (with-simple-restart (retry "Retry EVAL of current toplevel form.")
+                       (if print
+                           (let ((results (multiple-value-list (eval-tlf form index))))
+                             (load-fresh-line)
+                             (format t "~{~S~^, ~}~%" results))
+                           (eval-tlf form index))
+                       (return)))))))
        (let ((sb-c::*current-path* nil)
              (sb-impl::*eval-source-info* nil)
              (sb-impl::*eval-tlf-index* nil)
