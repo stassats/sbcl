@@ -26,7 +26,7 @@
 ;;; Cout:               Stream, Character
 ;;; Bout:               Stream, Integer
 ;;; Sout:               Stream, String, Start, End
-;;; Misc:               Stream, Operation, &Optional Arg1, Arg2
+;;; Misc:               Stream, Operation, Arg1
 ;;;
 ;;; In order to save space, some of the less common stream operations
 ;;; are handled by just one function, the MISC method. This function
@@ -370,8 +370,8 @@
       ,@clauses)))
 
 (defmacro call-ansi-stream-misc (stream operation &optional (arg nil argp))
-  ;; Never stuff in a placeholder in the three operations that take an argument.
-  (aver (or argp (not (memq operation '(:set-file-position :file-string-length :unread)))))
+  ;; Never stuff in a placeholder in the operations that take an argument.
+  (aver (or argp (not (memq operation '(:set-file-position :file-string-length :unread :close)))))
   `(funcall (ansi-stream-misc ,stream) ,stream
             ;; If operation is a literal keyword, translate it, otherwise
             ;; it is a variable whose values is the opcode for passthru.
