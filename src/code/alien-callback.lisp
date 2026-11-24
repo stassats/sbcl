@@ -436,13 +436,13 @@ function value."
 
 (in-package "SB-THREAD")
 #+sb-thread
-(defun enter-foreign-callback (index return arguments)
+(defun enter-foreign-callback (index arguments return)
   (declare (inline !make-foreign-thread make-mutex))
   (dx-let ((startup-info (vector nil ; trampoline is not applicable
                                  nil ; cell in *STARTING-THREADS* is not applicable
                                  nil ; *SESSION* is not applicable
                                  #'sb-alien::enter-alien-callback
-                                 (list index return arguments)
+                                 (list index arguments return)
                                  nil nil))) ; sigmask + fpu state bits
     ;; Must not try to update consing histogram since *CURRENT-THREAD* is unbound
     (declare (optimize (sb-c::instrument-consing 0)))
