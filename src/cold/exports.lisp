@@ -1712,7 +1712,7 @@ is a good idea, but see SB-SYS re. blurring of boundaries.")
            "COERCE-SYMBOL-TO-FUN"
            "COERCE-TO-EXTENDED-SEQUENCE"
            "COERCE-TO-FUN" "COERCE-TO-LEXENV" "COERCE-TO-LIST"
-           "COERCE-TO-VALUES" "COERCE-TO-VECTOR"
+           "COERCE-TO-VALUES"
            "COMPLEX-DOUBLE-FLOAT" "COMPLEX-DOUBLE-FLOAT-P"
            "COMPLEX-FLOAT-P"
            #+long-float ("COMPLEX-LONG-FLOAT" "COMPLEX-LONG-FLOAT-P")

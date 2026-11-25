@@ -63,7 +63,6 @@
 ;;; argument type is known. It might be better to do this with
 ;;; DEFTRANSFORMs, though.
 (declaim (inline coerce-to-list))
-(declaim (inline coerce-to-vector))
 
 (defun coerce-to-extended-sequence (object class)
   (let ((prototype (sb-mop:class-prototype
@@ -106,11 +105,6 @@
                 object
                 (vector-to-list object)
                 (sequence-to-list object)))
-
-(defun coerce-to-vector (object output-type-spec)
-  (etypecase object
-    (list (list-to-vector object output-type-spec))
-    (vector (vector-to-vector object output-type-spec))))
 
 ;;; old working version
 (defun coerce (object output-type-spec)
