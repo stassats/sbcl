@@ -209,7 +209,7 @@
   #+system-tlabs
   (named-let copy ((n n))
     (if (or (typep n '(or fixnum #+64-bit single-float))
-            (and (typep n '(or bignum double-float (complex float)))
+            (and (typep n '(or bignum float (complex float)))
                  (dynamic-space-obj-p n)))
         n
         (typecase n
@@ -219,6 +219,9 @@
                     new))
           (double-float
            (%make-double-float (double-float-bits n)))
+          #-64-bit
+          (single-float
+           (make-single-float (single-float-bits n)))
           ;; ratio is dynspace-p only if both parts are. copy everything to be safe
           (ratio (%make-ratio (truly-the integer (copy (%numerator n)))
                               (truly-the integer (copy (%denominator n)))))
