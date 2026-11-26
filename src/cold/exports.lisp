@@ -2996,7 +2996,6 @@ structure representations")
            "COPY-NUMBER-TO-HEAP"
            #+sb-safepoint "CSP-SAFEPOINT-TRAP"
            "*CURRENT-CATCH-BLOCK*"
-           "CURRENT-FLOAT-TRAP"
            "DESCRIPTOR-REG-SC-NUMBER"
            "DO-REFERENCED-OBJECT"
            "DOUBLE-FLOAT-BIAS"

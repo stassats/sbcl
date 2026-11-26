@@ -174,12 +174,6 @@ sets the floating point modes to their current values (and thus is a no-op)."
 (defun float-deinit ()
   (setf *saved-floating-point-modes* (get-floating-point-modes)))
 
-;;; Return true if any of the named traps are currently trapped, false
-;;; otherwise.
-(defmacro current-float-trap (&rest traps)
-  `(logtest ,(dpb (float-trap-mask traps) float-traps-byte 0)
-            (floating-point-modes)))
-
 ;;; SIGFPE code to floating-point error
 #-win32
 (defconstant-eqx +sigfpe-code-error-alist+
