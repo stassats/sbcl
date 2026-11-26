@@ -249,10 +249,11 @@ sets the floating point modes to their current values (and thus is a no-op)."
                          float-exceptions-byte #xffffffff))
         (orig-modes (gensym)))
     #+ppc64
-    (unless (logbitp float-invalid-trap-bit (ldb float-sticky-bits exception-mask))
-      ;; float-invalid-trap-bit is just a summary of this bits which
-      ;; all have to be cleared invidually.
-      (setf (ldb float-invalid-byte exception-mask) 0))
+    (unless (logtest float-invalid-trap-bit (ldb float-sticky-bits exception-mask))
+      ;; float-invalid-trap-bit is just a summary of these bits which
+      ;; all have to be cleared and restored individually.
+      (setf (ldb float-invalid-byte exception-mask) 0
+            (ldb float-invalid-byte exceptions) -1))
     `(let ((,orig-modes (floating-point-modes)))
        (unwind-protect
             (progn
