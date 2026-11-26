@@ -167,14 +167,13 @@ unspecified."
   `(sb-thread:with-recursive-lock ((hash-table-lock ,hash-table))
      ,@body))
 
-(defmacro find-package-restarts ((package-designator &optional reader)
-                                 &body body)
+(defmacro find-package-restarts ((package-designator &optional reader) form)
   (let ((package `(or ,(if reader
                            '*reader-package*
                            '*package*)
                       (sane-package))))
     `(locally
-       (restart-case ,@body
+       (restart-case ,form
          (continue ()
            :report (lambda (stream)
                      (format stream "Use the current package, ~a."
