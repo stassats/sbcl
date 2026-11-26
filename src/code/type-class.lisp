@@ -33,8 +33,8 @@
   ;; It's quasi-bogus that these can be NULL - it occurs when and only when parsing
   ;; a structure type that involves self-recursion I think. The :type option is inadequate
   ;; to enforce that atoms like {SINGLE,DOUBLE-}FLOAT always have an integer here.
-  (bits nil :type (or null unsigned-byte))
-  (alignment nil :type (or null unsigned-byte)))
+  (bits nil :type (or null (and unsigned-byte fixnum)))
+  (alignment nil :type (or null (and unsigned-byte fixnum))))
 
 (in-package "SB-KERNEL")
 
