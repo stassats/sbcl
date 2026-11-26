@@ -15,6 +15,9 @@
 ;;; package? That would let us get rid of a whole lot of stupid
 ;;; prefixes..
 
+(deftype trace-report-type ()
+  '(or symbol function))
+
 (defvar *trace-indentation-step* 2
   "The increase in trace indentation at each call level.")
 
@@ -28,6 +31,16 @@ at 0.")
 (defvar *trace-report-default* 'trace
   "The default value for the :REPORT option to TRACE.")
 
+;;; This variable is used to discourage infinite recursions when some
+;;; trace action invokes a function that is itself traced. In this
+;;; case, we quietly ignore the inner tracing.
+(defvar *in-trace* nil)
+
+(declaim (fixnum *trace-indentation-step* *max-trace-indentation*)
+         (trace-report-type *trace-report-default*)
+         (always-bound *trace-indentation-step* *max-trace-indentation*
+                       *trace-encapsulate-default* *trace-report-default*
+                       *in-trace*))
 
 ;;;; internal state
 
@@ -44,8 +57,7 @@ at 0.")
 (define-load-time-global *traced-locals*
     (make-hash-table :test 'equal :synchronized t))
 
-(deftype trace-report-type ()
-  '(or symbol function))
+(declaim (hash-table *traced-funs* *traced-locals*))
 
 ;;; A TRACE-INFO object represents all the information we need to
 ;;; trace a given function.
@@ -91,10 +103,6 @@ at 0.")
   (print-after () :type list))
 (!set-load-form-method trace-info (:target))
 
-;;; This variable is used to discourage infinite recursions when some
-;;; trace action invokes a function that is itself traced. In this
-;;; case, we quietly ignore the inner tracing.
-(defvar *in-trace* nil)
 
 ;;;; utilities
 
@@ -172,25 +180,19 @@ at 0.")
 
 ;;; When a function name is redefined, and we were tracing that name,
 ;;; then untrace the old definition and trace the new one.
-(defun maybe-retrace (name new-value)
-  (let ((info (gethash name *traced-funs*)))
-    (when info
-      (untrace-1 name)
-      (trace-1 name info new-value))
-    (retrace-local-funs name new-value)))
-
 (defun maybe-retrace-function (name new-value)
-  (when (fboundp name)
-    (maybe-retrace name new-value)))
+  (flet ((maybe-retrace (name new-value)
+           (let ((info (gethash name *traced-funs*)))
+             (when info
+               (untrace-1 name)
+               (trace-1 name info new-value))
+             (retrace-local-funs name new-value))))
+    (when (fboundp name)
+      (maybe-retrace name new-value))
+    (when (compiler-macro-function name)
+      (maybe-retrace `(compiler-macro ,name) new-value))))
 
 (push #'maybe-retrace-function *setf-fdefinition-hook*)
-(push #'maybe-retrace-function *setf-macro-function-hook*)
-
-(defun maybe-retrace-compiler-macro (name new-value)
-  (when (compiler-macro-function name)
-    (maybe-retrace `(compiler-macro ,name) new-value)))
-
-(push #'maybe-retrace-compiler-macro *setf-compiler-macro-function-hook*)
 
 ;;; Annotate a FORM to evaluate with pre-converted functions. FORM is
 ;;; really a cons (EXP . FUNCTION). LOC is the code location to use

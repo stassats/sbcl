@@ -356,10 +356,6 @@
   (or (and (symbolp name) (%symbol-function name))
       (%coerce-name-to-fun name)))
 
-(define-load-time-global *setf-fdefinition-hook* nil
-  "A list of functions that (SETF FDEFINITION) invokes before storing the
-  new value. The functions take the function name and the new value.")
-
 ;; Reject any "object of implementation-dependent nature" that
 ;; so happens to be a function in SBCL, but which must not be
 ;; bound to a function-name by way of (SETF FEDFINITION).

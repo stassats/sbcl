@@ -30,10 +30,6 @@ only."
            (when (typep def '(cons (eql macro))) (cdr def)))))))
   (values (info :function :macro-function symbol)))
 
-(defvar *setf-macro-function-hook* nil
-  "A list of functions that (SETF MACRO-FUNCTION) invokes before storing the new
-   value. The functions take the macro name and the new value.")
-
 (defun (setf macro-function) (function symbol &optional environment)
   (declare (symbol symbol) (type function function))
   (when environment
@@ -47,10 +43,10 @@ only."
            symbol environment))
   (when (eq (info :function :kind symbol) :special-form)
     (error "~S names a special operator." symbol))
-  (when (boundp '*setf-macro-function-hook*) ; unbound during cold init
-    (dolist (f *setf-macro-function-hook*)
-      (funcall f symbol function)))
   (with-single-package-locked-error (:symbol symbol "setting the macro-function of ~S")
+    #-sb-xc-host
+    (dolist (f *setf-fdefinition-hook*)
+      (funcall f symbol function))
     (clear-info :function :type symbol)
     (setf (info :function :kind symbol) :macro)
     (setf (info :function :macro-function symbol) function)

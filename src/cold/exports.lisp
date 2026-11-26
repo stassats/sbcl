@@ -571,9 +571,7 @@ possibly temporarily, because it might be used internally.")
    "%MACROEXPAND"
    "%MACROEXPAND-1"
 
-   "*SETF-COMPILER-MACRO-FUNCTION-HOOK*"
    "*SETF-FDEFINITION-HOOK*"
-   "*SETF-MACRO-FUNCTION-HOOK*"
 
    ;; error-reporting facilities
 

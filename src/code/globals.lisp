@@ -133,6 +133,11 @@
 
 (define-load-time-global sb-vm::*tls-symbol-map* 0)
 
+(define-load-time-global *setf-fdefinition-hook* nil
+  "A list of functions that (SETF FDEFINITION), (SETF MACRO-FUNCTION),
+  (SETF COMPILER-MACRO-FUNCTION) invoke before storing the
+  new value. The functions take the function name and the new value.")
+
 (in-package "SB-DEBUG")
 
 ;;; This is a list of conses (fun-end-cookie . condition-satisfied),
