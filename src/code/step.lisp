@@ -26,6 +26,7 @@
       (setf *step-out* nil))
     (step-out ()
       :report "Resume stepping after returning from this function"
+      :test (lambda (c) (declare (ignore c)) *step-out*)
       (ecase *step-out*
         ((nil)
          (error "Can't STEP-OUT: No STEP-IN on the call-stack"))
@@ -104,6 +105,6 @@ to be at least partially steppable."
             (with-stepping-enabled
               (multiple-value-prog1
                   (locally (declare (optimize (sb-c:insert-step-conditions 3)))
-                    ,form)
-                (step-finished)))))))
+                    ,form)))
+         (step-finished)))))
 

@@ -30,9 +30,9 @@
 ;;;    has created the WARNING and STYLE-WARNING classoids
 ;;;  - even if this were loaded no earlier than the classoid definitions,
 ;;;    the entirety of condition handling doesn't work soon enough in cold-init.
-(flet ((%warn (datum super default-type &rest arguments)
+(flet ((%warn (datum super default-type caller &rest arguments)
          (infinite-error-protect
-          (let ((condition (apply #'coerce-to-condition datum default-type 'warn
+          (let ((condition (apply #'coerce-to-condition datum default-type caller
                                   arguments))
                 (superclassoid-name (classoid-name super)))
             ;; CONDITION is necessarily an INSTANCE,
@@ -61,7 +61,7 @@
     ;; never need to go through the classoid-cell indirection,
     ;; as the classoid object itself is essentially permanent.
     (apply #'%warn datum (load-time-value (find-classoid 'warning) t)
-           'simple-warning arguments))
+           'simple-warning 'warn arguments))
 
   ;; But we would warn about redefinition of STYLE-WARN.
   ;; Do a "gentle" fmakunbound, because real FMAKUNBOUND removes
@@ -72,4 +72,4 @@
   (defun style-warn (datum &rest arguments)
     (declare (explicit-check))
     (apply #'%warn datum (load-time-value (find-classoid 'style-warning) t)
-           'simple-style-warning arguments)))
+           'simple-style-warning 'style-warn arguments)))
