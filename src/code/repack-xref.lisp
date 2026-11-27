@@ -88,7 +88,7 @@
           (pprint-logical-block (*standard-output* new-names :per-line-prefix ";   ")
             (format t "~:[no cross references~;~:*~
                        ~{~/sb-ext:print-symbol-with-prefix/~^ ~:_~}~]"
-                    (coerce new-names 'list)))
+                    new-names))
           (terpri))
         (setf **most-common-xref-names-by-index** (coerce new-names 'vector))
         (let ((table **most-common-xref-names-by-name**))

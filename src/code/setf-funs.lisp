@@ -92,7 +92,7 @@
                     instance-pointer-lowtag))
            (type (dsd-type dsd)))
       (declare (ignorable disp type))
-      (when (or #+(or riscv64 x86-64) t
+      (when (or #+(or riscv x86-64) t
                 #+arm64 (member :arm-v8.1 *backend-subfeatures*))
         (return-from %atomic-exchange
           (multiple-value-bind (sc primtype)

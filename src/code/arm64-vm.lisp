@@ -84,24 +84,23 @@
   (declare (type (alien (* os-context-t)) context))
   (let* ((pc (context-pc context))
          (instruction (sap-ref-32 pc 0))
-         (trap-number (ldb (byte 8 5) instruction))
-         (error-number (cond
-                         ((>= trap-number sb-vm:error-trap)
-                          (prog1
-                              (- trap-number sb-vm:error-trap)
-                            (setf trap-number sb-vm:error-trap)))
-                         (t
-                          (prog1 (sap-ref-8 pc 4)
-                            (setf pc (sap+ pc 1))))))
-         (first-arg (ldb (byte 8 13) instruction))
-         (first-offset (ldb (byte 5 0) first-arg))
-         (first-sc (ldb (byte 2 5) first-arg)))
-    (declare (type system-area-pointer pc))
+         (trap-number (ldb (byte 8 5) instruction)))
     (if (= trap-number invalid-arg-count-trap)
         (values #.(error-number-or-lose 'invalid-arg-count-error)
                 '(#.arg-count-sc)
                 trap-number)
-        (let ((length (sb-kernel::error-length error-number)))
+        (let* ((error-number (cond
+                               ((>= trap-number sb-vm:error-trap)
+                                (prog1
+                                    (- trap-number sb-vm:error-trap)
+                                  (setf trap-number sb-vm:error-trap)))
+                               (t
+                                (prog1 (sap-ref-8 pc 4)
+                                  (setf pc (sap+ pc 1))))))
+               (first-arg (ldb (byte 8 13) instruction))
+               (first-offset (ldb (byte 5 0) first-arg))
+               (first-sc (ldb (byte 2 5) first-arg))
+               (length (sb-kernel::error-length error-number)))
           (declare (type (unsigned-byte 8) length))
           (unless (or (= first-arg zr-offset)
                       (zerop length))
@@ -154,7 +153,7 @@
     void
     (dst (* char))
     (src (* char))
-    (char signed))
+    (n size-t))
 
   (define-alien-routine jit-copy-code-constants
     void
