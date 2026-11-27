@@ -78,12 +78,9 @@
 
 (defun decompose-string (string compatibility filter)
   (let (chars
-        (length 0)
         (previous-combining-class 0))
-    (declare (type index length))
     (dx-flet ((callback (char)
                         (let ((combining-class (combining-class char)))
-                          (incf length)
                           (cond ((< 0 combining-class previous-combining-class)
                                  ;; Ensure it's sorted
                                  (loop for cons on chars
