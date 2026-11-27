@@ -1,4 +1,4 @@
-"Line: 8, Column: 23, File-Position: 108" ; expect this
+"Line: 8, Column: 22, File-Position: 108" ; expect this
 #|
  More randomness
 |#

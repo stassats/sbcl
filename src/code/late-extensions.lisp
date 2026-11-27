@@ -36,7 +36,10 @@
 
 (defun stream-error-position-info (stream &optional position)
   (when (and (not position) (form-tracking-stream-p stream))
-    (let ((line/col (line/col-from-charpos stream)))
+    (let* ((charpos (form-tracking-stream-current-char-pos stream))
+           (line/col (when charpos
+                       (line/col-from-charpos
+                        stream (if (plusp charpos) (1- charpos) charpos)))))
       (return-from stream-error-position-info
         `((:line ,(car line/col))
           (:column ,(cdr line/col))
@@ -71,14 +74,14 @@ lines and columns."
          (line (string)
            (1+ (count #\Newline string)))
          (column (string position)
-           (- position (or (position #\Newline string :from-end t) 0))))
-   (let* ((stream-position (file-position-or-nil-for-error stream))
-          (position (or position
-                        ;; FILE-POSITION is the next character --
-                        ;; error is at the previous one.
-                        (and stream-position (plusp stream-position)
-                             (1- stream-position))))
-          (content (read-content stream-position position)))
-     `(,@(when content `((:line ,(line content))
-                         (:column ,(column content position))))
-       ,@(when position `((:file-position ,position)))))))
+           (- position (1+ (or (position #\Newline string :from-end t) -1)))))
+    (let* ((stream-position (file-position-or-nil-for-error stream))
+           (position (or position
+                         ;; FILE-POSITION is the next character --
+                         ;; error is at the previous one.
+                         (and stream-position (plusp stream-position)
+                              (1- stream-position))))
+           (content (read-content stream-position position)))
+      `(,@(when content `((:line ,(line content))
+                          (:column ,(column content position))))
+        ,@(when position `((:file-position ,position)))))))

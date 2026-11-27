@@ -42,6 +42,7 @@
   (def-stub sb-c::make-form-tracking-stream-observer)
   (def-stub form-tracking-stream-form-start-char-pos)
   (def-stub form-tracking-stream-form-start-byte-pos)
+  (def-stub sb-impl::form-tracking-stream-current-char-pos)
   (def-stub line/col-from-charpos)
   (def-stub (setf form-tracking-stream-form-start-char-pos))
   (def-stub (setf form-tracking-stream-observer)))

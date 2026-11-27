@@ -103,7 +103,5 @@
              (assert (equal start (aref actual 0)))
              (assert (equal end (aref actual 1))))))
     (assert-line/col-is 0 '(88 . 4) '(93 . 16))
-    ;; Somehow we can't figure out where annotation 1 ends precisely
-    ;; but we do see that newlines occurred.
-    (assert-line/col-is 1 '(88 . 20) '(92 . -1))
+    (assert-line/col-is 1 '(88 . 20) '(91 . 45))
     (assert-line/col-is 2 '(92 . 18) '(92 . 44))))

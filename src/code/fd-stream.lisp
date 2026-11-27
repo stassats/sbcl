@@ -223,7 +223,7 @@
   (track-newlines stream)
   (let ((newlines (form-tracking-stream-newlines stream)))
     (if charpos
-        (let ((index (position charpos newlines :test #'>= :from-end t)))
+        (let ((index (position charpos newlines :test #'> :from-end t)))
           ;; Line numbers traditionally begin at 1, columns at 0.
           (if index
               ;; INDEX is 1 less than the number of newlines seen

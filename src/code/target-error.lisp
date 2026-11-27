@@ -1020,8 +1020,7 @@ with that condition (or with no condition) will be returned."
        (format stream "~S cannot be printed readably." obj)))))
 
 (define-condition reader-error (parse-error stream-error) ()
-  (:report (lambda (condition stream)
-             (%report-reader-error condition stream))))
+  (:report %report-reader-error))
 
 ;;; a READER-ERROR whose REPORTing is controlled by FORMAT-CONTROL and
 ;;; FORMAT-ARGS (the usual case for READER-ERRORs signalled from
@@ -1038,13 +1037,13 @@ with that condition (or with no condition) will be returned."
 (define-condition simple-reader-error (reader-error simple-condition)
   ()
   (:report (lambda (condition stream)
-             (%report-reader-error condition stream :simple t))))
+             (%report-reader-error condition stream t))))
 
 ;;; base REPORTing of a READER-ERROR
 ;;;
 ;;; When SIMPLE, we expect and use SIMPLE-CONDITION-ish FORMAT-CONTROL
 ;;; and FORMAT-ARGS slots.
-(defun %report-reader-error (condition stream &key simple position)
+(defun %report-reader-error (condition stream &optional simple)
   (let ((error-stream (stream-error-stream condition)))
     (pprint-logical-block (stream nil)
       (if simple
@@ -1053,7 +1052,7 @@ with that condition (or with no condition) will be returned."
                  (simple-condition-format-arguments condition))
           (prin1 (class-name (class-of condition)) stream))
       (format stream "~2I~@[~:@_ ~:@_~:{~:(~A~): ~S~:^, ~:_~}~]~:@_ ~:@_Stream: ~S"
-              (stream-error-position-info error-stream position)
+              (stream-error-position-info error-stream)
               error-stream))))
 
 ;;;; special SBCL extension conditions
