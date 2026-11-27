@@ -883,10 +883,6 @@ fractional bits."
   (assert (= (integer-decode-float (scale-float (opaque-identity 0.7836354097202904d0) -1032))
              (opaque-identity 3446464979698))))
 
-(with-test (:name :rationalize-denormals)
-  (assert (= (rationalize (opaque-identity 1.4012985e-45))
-             (opaque-identity 1/713623803817686610712884392543280002697789472))))
-
 (with-test (:name :bignum-float-overflow)
   (assert (= (sb-int:with-float-traps-masked (:overflow)
                (coerce (opaque-identity (expt 10 1000)) 'double-float))
@@ -1072,3 +1068,39 @@ fractional bits."
 (with-test (:name :bignum-to-double-sticky-bits)
   (assert (= (float (opaque-identity (+ (expt 2 118) (expt 2 65) (expt 2 32))) 1d0)
              (opaque-identity 3.3230699894622904d35))))
+
+(with-test (:name :rationalize)
+  (let ((*random-state* (make-random-state t)))
+    (labels ((mod-inverse (a m)
+               (let ((old-r a) (r m) (old-s 1) (s 0))
+                 (loop until (zerop r)
+                       do (multiple-value-bind (q rem) (floor old-r r)
+                            (psetf old-r r r rem
+                                   old-s s s (- old-s (* q s)))))
+                 (mod old-s m)))
+             (check (f)
+               (let* ((r (rationalize f))
+                      (p (numerator r))
+                      (q (denominator r)))
+                 (assert (= f (float r f)))
+                 (when (and (plusp f)
+                            (not (integerp r)))
+                   (if (= q 1)
+                       (assert (/= f (float (1- p) f)))
+                       (let* ((q-l (mod-inverse p q))
+                              (p-l (/ (1- (* p q-l)) q))
+                              (q-r (- q q-l))
+                              (p-r (- p p-l)))
+                         (assert (/= f (float (/ p-l q-l) f)) ()
+                                 "~D/~D also rounds to ~S (got ~S)"
+                                 p-l q-l f r)
+                         (assert (/= f (float (/ p-r q-r) f)) ()
+                                 "~D/~D also rounds to ~S (got ~S)"
+                                 p-r q-r f r))))
+                 r)))
+      (loop repeat 500
+            for exp = (- (random (+ 100 149)) 149)
+            for r = (scale-float 1.0 exp)
+            do
+            (loop repeat 200
+                  do (check (random r)))))))
