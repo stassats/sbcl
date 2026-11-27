@@ -47,22 +47,19 @@
 (defconstant +stdio-handle+ -10)
 
 (defun loadlibrary-without-stdio (namestring)
-  (flet ((loadlibrary (namestring)
-           (loadlibrary namestring)))
-   (if *reset-stdio-on-dlopen*
-       (let ((stdio (get-std-handle +stdio-handle+)))
-         (unwind-protect
-              (progn
-                (set-std-handle +stdio-handle+ -1)
-                (loadlibrary namestring))
-           (set-std-handle +stdio-handle+ stdio)))
-       (loadlibrary namestring))))
+  (if *reset-stdio-on-dlopen*
+      (let ((stdio (get-std-handle +stdio-handle+)))
+        (unwind-protect
+             (progn
+               (set-std-handle +stdio-handle+ -1)
+               (loadlibrary namestring))
+          (set-std-handle +stdio-handle+ stdio)))
+      (loadlibrary namestring)))
 
 (defun dlopen-or-lose (&optional obj)
   (if obj
-      (let* ((namestring (shared-object-namestring obj))
+      (let* ((namestring (the string (shared-object-namestring obj)))
              (handle (loadlibrary-without-stdio namestring)))
-        (aver namestring)
         (when (zerop handle)
           (setf (shared-object-handle obj) nil)
           (error "Error opening shared object ~S:~% ~A"
@@ -73,7 +70,7 @@
 
 (defun dlclose-or-lose (&optional (obj nil objp))
   (when (and objp (shared-object-handle obj))
-    (unless (freelibrary (shared-object-handle obj))
+    (when (zerop (freelibrary (shared-object-handle obj)))
       (cerror "Ignore the error and continue as if closing succeeded."
               "FreeLibrary() caused an error while trying to close ~
                shared object ~S:~% ~A"
