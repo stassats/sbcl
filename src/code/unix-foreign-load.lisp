@@ -31,7 +31,7 @@
   (when objp
     (dlclose-or-lose obj))
   (dlerror) ; clear errors
-  (let* ((namestring (and obj (shared-object-namestring obj)))
+  (let* ((namestring (and objp (shared-object-namestring obj)))
          (sap (dlopen namestring (logior rtld-global rtld-now))))
     (when (zerop (sap-int sap))
       (if objp
