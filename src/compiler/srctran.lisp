@@ -8798,7 +8798,6 @@
      (delay-ir1-transform node :ir1-phases)
      `(sb-impl::length-delete-duplicates ,@args))
     ((length (intersection &rest args))
-     (delay-ir1-transform node :ir1-phases)
      `(sb-impl::length-intersection ,@args))))
 
 ;;; ENDP, NULL and NOT -> %REST-NULL

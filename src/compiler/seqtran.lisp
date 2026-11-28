@@ -4363,10 +4363,17 @@
 
 (deftransform union ((list1 list2 &key key test test-not))
   (let ((null-type (specifier-type 'null)))
-    (flet ((to-adjoin (a b)
+    (flet ((to-adjoin (a b &optional swap)
              (when (constant-lvar-p a)
                (let ((value (lvar-value a)))
-                 (when (typep value '(cons * null))
+                 (when (and (typep value '(cons * null))
+                            (or (not swap)
+                                ;; test is (test elements-of-list1 elements-of-list2)
+                                (let ((test (or test test-not)))
+                                  (or (not test)
+                                      (lvar-fun-is test '(eq eql equal equalp = /=
+                                                          string= string-equal string/= string-not-equal
+                                                          char= char/= char-equal char-not-equal))))))
                    `(adjoin ',(car value) ,b
                             ,@(and test '(:test test))
                             ,@(and test-not '(:test-not test-not))))))))
@@ -4382,7 +4389,7 @@
              'list1)
             ((and (not key)
                   (or (to-adjoin list1 'list2)
-                      (to-adjoin list2 'list1))))
+                      (to-adjoin list2 'list1 t))))
             (t
              (give-up-ir1-transform))))))
 

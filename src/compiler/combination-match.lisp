@@ -472,7 +472,7 @@
                  (dolist (clause clauses)
                    (destructuring-bind (spec &body body) clause
                      (cond ((eq spec t)
-                            (setf otherwise body))
+                            (setf otherwise (or body '(t))))
                            (t
                             (setf bound-vars nil)
                             (multiple-value-bind (parsed-combs this-level) (parse-cm-spec spec unravel-casts)
